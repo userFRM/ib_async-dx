@@ -3,16 +3,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ib-async-dx"
+name = "ib_async-dx"
 version = "0.1.0"
-description = "ib_async without the gateway: the ib_async API on the IBKR-DX engine."
+description = "ib_async without the gateway: the ib_async API on the ibkr-dx engine."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "AGPL-3.0-only"
-dependencies = ["ibkr-dx>=0.1"]
+dependencies = ["ibkr-dx>=0.1", "ib_async>=2.1,<2.2", "aeventkit>=2.1,<3"]
 
-[project.optional-dependencies]
-bridge = ["ib_async>=2.1", "eventkit"]
+[project.urls]
+Homepage = "https://github.com/userFRM/ib_async-dx"
+Documentation = "https://userfrm.github.io/ib_async-dx/"
+Repository = "https://github.com/userFRM/ib_async-dx"
+Issues = "https://github.com/userFRM/ib_async-dx/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["python/ib_async_dx"]

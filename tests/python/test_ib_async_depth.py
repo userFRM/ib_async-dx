@@ -9,18 +9,15 @@ surface and not the other is invisible to a test that only asks one.
 Needs no session: the level is pushed into the same place the engine pushes it.
 """
 
-import pytest
+from ib_async import IB, Stock
 
-ib_async = pytest.importorskip("ib_async")
-
-from ib_async import IB, Stock  # noqa: E402
-
-import ib_async_dx.bridge  # noqa: E402
+import ib_async_dx.bridge
 
 
 def _attached():
     ib = ib_async_dx.attach(IB(), username="u", password="p")
     ib.client._client._test_connect("DU000000", False)
+    ib.client.connState = ib.client.CONNECTED
     return ib
 
 
@@ -103,11 +100,11 @@ def test_a_seeded_order_id_is_the_next_one_their_client_issues():
     not seeded numbers the first order from one, which is the duplicate the
     counter exists to prevent.
     """
-    pytest.importorskip("ib_async")
     import ib_async_dx.bridge
 
-    client = ib_async_dx.IbkrDxClient.__new__(ib_async_dx.IbkrDxClient)
+    client = ib_async_dx.bridge.IbkrDxClient.__new__(ib_async_dx.bridge.IbkrDxClient)
     client._reqIdSeq = 1
+    client.connState = client.CONNECTED
 
     client.updateReqId(1_700_000_000)
     assert client.getReqId() == 1_700_000_000, "the seeded id is issued, not the one after it"
@@ -125,7 +122,6 @@ def test_a_historical_tick_is_handed_over_as_their_own_record():
     the other way — and `tick.time` was a number where their record declares a
     datetime.
     """
-    pytest.importorskip("ib_async")
     from ib_async.objects import HistoricalTickBidAsk, HistoricalTickLast
 
     import ibkr_dx

@@ -1,9 +1,9 @@
 """An order's life on the paper account: placed, changed, withdrawn.
 
-The paper suite's order phases name US shares, so they wait for the New York
-session and skip outside it — which is most of the hours anyone works in. This
-asks the same question of a contract that trades nearly around the clock, so
-the order path can be checked at three in the morning as well as at noon.
+US shares trade only in and around the New York session, which is most of
+the hours anyone works in. This asks of a contract that trades nearly around
+the clock, so the order path can be checked at three in the morning as well as
+at noon.
 
 A limit far below the market, so it rests and never trades. What is checked is
 the round trip: that the venue takes each step, and that this client's record
@@ -18,13 +18,12 @@ import os
 import sys
 import time
 
-import ibkr_dx
 import ib_async_dx
-from ibkr_dx import Contract, Order
+from ib_async_dx import Contract, Order
 
 #: The front month of the smaller S&P future, which trades nearly around the
-#: clock. Rolled by hand: a contract that has expired is refused by name, which
-#: is a clear failure rather than a quiet one.
+#: clock. Rolled by hand: a contract that has expired qualifies to nothing, and
+#: the check says so and stops rather than going on.
 #:
 #: A share can be named instead, which is worth doing during a session or in the
 #: hours either side of one — the order path is the same and the venues are not:
@@ -50,7 +49,7 @@ OUTSIDE_RTH = os.environ.get("IBKR_DX_RT_OUTSIDE_RTH", "") not in ("", "0")
 ANSWER = 20
 
 
-def settle(trade, what, wanted):
+def settle(ib, trade, what, wanted):
     """Wait for the order to reach one of `wanted`, and say what happened."""
     deadline = time.time() + ANSWER
     while time.time() < deadline:
@@ -58,7 +57,7 @@ def settle(trade, what, wanted):
         if status in wanted:
             print(f"{what}: {status}", flush=True)
             return status
-        time.sleep(0.2)
+        ib.sleep(0.2)
     print(f"{what}: nothing within {ANSWER}s, still {trade.orderStatus.status}", flush=True)
     return None
 
@@ -71,17 +70,19 @@ def main() -> int:
         return 2
 
     ib = ib_async_dx.IB()
-    ib.connect(
-        os.environ.get("IB_HOST", "cdc1.ibllc.com"), 0, clientId=1,
-        username=username, password=password, paper=True,
-    )
+    ib.connect(clientId=1, username=username, password=password, paper=True)
 
     contract = Contract()
     contract.symbol, contract.secType, contract.exchange = SYMBOL, SEC_TYPE, EXCHANGE
     contract.currency = "USD"
     if SEC_TYPE == "FUT":
         contract.lastTradeDateOrContractMonth = EXPIRY
-    (contract,) = ib.qualifyContracts(contract)
+    (qualified,) = ib.qualifyContracts(contract)
+    if qualified is None:
+        print(f"contract: {SYMBOL} {SEC_TYPE} {EXPIRY} qualifies to nothing", flush=True)
+        ib.disconnect()
+        return 1
+    contract = qualified
     print(f"contract: conId={contract.conId} {contract.localSymbol}", flush=True)
 
     order = Order()
@@ -90,7 +91,7 @@ def main() -> int:
     order.outsideRth = OUTSIDE_RTH
     trade = ib.placeOrder(contract, order)
 
-    placed = settle(trade, "placed   ", {"Submitted", "PreSubmitted"})
+    placed = settle(ib, trade, "placed   ", {"Submitted", "PreSubmitted"})
     if placed is None:
         ib.disconnect()
         return 1
@@ -100,12 +101,12 @@ def main() -> int:
     moved_to = RESTS_AT - 1.0
     order.lmtPrice = moved_to
     ib.placeOrder(contract, order)
-    time.sleep(5)
+    ib.sleep(5)
     held = trade.order.lmtPrice
     print(f"changed  : this client holds {held}, asked for {moved_to}", flush=True)
 
     ib.cancelOrder(order)
-    withdrawn = settle(trade, "withdrawn", {"Cancelled", "ApiCancelled"})
+    withdrawn = settle(ib, trade, "withdrawn", {"Cancelled", "ApiCancelled"})
 
     # Nothing of it is left working at the venue, which is the half a status
     # does not answer.

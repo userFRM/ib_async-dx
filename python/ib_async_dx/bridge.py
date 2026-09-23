@@ -6,7 +6,8 @@ socket to a gateway on localhost. This replaces that one layer with this
 engine. Everything above it — the events, the async variants, the notebooks —
 runs unchanged, from the copy of `ib_async` already installed.
 
-No part of `ib_async` is copied or modified: install it as usual, and attach.
+No part of `ib_async` is copied or modified. `ib_async_dx.IB` attaches itself
+when it connects; `attach` is for an `ib_async.IB` a program already holds.
 
     from ib_async import IB, Stock
     import ib_async_dx
@@ -19,8 +20,9 @@ No part of `ib_async` is copied or modified: install it as usual, and attach.
     print(ib.reqHistoricalData(spy, "", "2 D", "1 hour", "TRADES", useRTH=True))
 
 `IB.connect` takes a host, a port and a client id because it was written for a
-gateway. They are accepted and ignored. The credentials are given to `attach`,
-or left to `IB_USERNAME` and `IB_PASSWORD`.
+gateway. The host and port are accepted and ignored; the client id keys this
+session's orders. The credentials are given to `attach`, or left to
+`IB_USERNAME` and `IB_PASSWORD`.
 """
 
 import asyncio
@@ -32,7 +34,22 @@ import time
 from eventkit import Event
 
 import ibkr_dx as _ibkr_dx
-from ._ib import _refuse_options
+
+
+def _refuse_options(named: str, given) -> None:
+    """A free-form option list this request cannot carry.
+
+    Accepted and dropped, a caller who tuned a request with one would be
+    answered by an untuned request and have no way to tell. Empty or absent is
+    what every ordinary call passes, and that is taken; anything in it is said
+    out loud.
+    """
+    if given:
+        raise NotImplementedError(
+            f"{named}={given!r} is not carried here: this request has no "
+            "free-form option list to send it under, so the request would go "
+            "out without it and answer something other than what was asked"
+        )
 
 
 #: The widest number this protocol carries on a request.
@@ -87,14 +104,15 @@ class IbkrDxClient:
         # client already resolves a callback under the reference client's
         # spelling, which is the spelling ib_async's wrapper uses.
         self._callbacks = _LoopBound(wrapper)
+        self._callbacks.connectionClosed = self._session_ended
         self._client = _ibkr_dx.EClient(self._callbacks)
 
         # Where this session is kept between runs. The venue answers a request
         # that names a session it still holds with a challenge rather than a
-        # whole handshake, so a program that starts often is not a new login
-        # every time — and does not ask a person to approve each one. Owner
-        # only, sealed with the password, and refused if it names another
-        # account. Pass session_file=False to attach() to keep nothing.
+        # whole handshake. It lets a session go soon after the process holding
+        # it ends, so this covers a quick restart, not a later one. Owner only,
+        # sealed with the password, and refused if it names another account.
+        # Pass session_file=False to attach() to keep nothing.
         self._session_file = session_file
         # Which counter this session counts on. Their own connect names one
         # too; stated here it is what the counter is keyed by before that call
@@ -178,22 +196,40 @@ class IbkrDxClient:
         self.connState = IbkrDxClient.DISCONNECTED
         self._stop.set()
         self._client.disconnect()
+
+    def _session_ended(self):
+        """The engine ended the session: what ib_async's client does when its
+        socket closes. Waiting requests fail, and ``apiEnd`` fires, which
+        their ``IB`` hears as ``disconnectedEvent``."""
+        self.connState = IbkrDxClient.DISCONNECTED
+        self._stop.set()
+        self.wrapper.setEventsDone()
+        self.wrapper.connectionClosed()
         self.apiEnd.emit()
 
     def _pass_once(self):
         """One dispatch, then the boundary ib_async flushes on.
 
         Their wrapper holds ticker updates until the batch of messages ends,
-        and emits their events there. Their own transport calls this after
-        each socket read; here it is after each pass of dispatch.
+        and emits their events there. Their own transport marks a batch only
+        when data arrives; here a batch is what was delivered since the last
+        pass, including an answer given inside a request call. A pass with
+        nothing delivered leaves their clock alone, so ``timeoutEvent`` fires,
+        and emits no ``updateEvent``.
+
+        A pass the pump queued before the caller disconnected does nothing:
+        run later, on the loop the next connect drives, it would tell their
+        wrapper the session had dropped, and their global error event would
+        cancel that connect.
         """
-        arrived = getattr(self.wrapper, "tcpDataArrived", None)
-        if arrived:
-            arrived()
+        if self.connState == IbkrDxClient.DISCONNECTED:
+            return
         self._client.poll()
-        processed = getattr(self.wrapper, "tcpDataProcessed", None)
-        if processed:
-            processed()
+        if self._callbacks.arrived:
+            self._callbacks.arrived = False
+            processed = getattr(self.wrapper, "tcpDataProcessed", None)
+            if processed:
+                processed()
 
     def _start_pump(self):
         """Drive dispatch, and land every callback on ib_async's own loop.
@@ -214,20 +250,13 @@ class IbkrDxClient:
     # ── what IB reads directly ──
 
     def isConnected(self):
-        """Whether a session is open, not whether one was opened.
+        """Whether a session is open, as ib_async's client answers it.
 
-        ``connState`` records what this shim was told to do — it moves on
-        connect and on disconnect and nothing else touches it. The engine
-        underneath knows when the venue took the session away or a reconnect
-        gave up, and the sibling facade already asks it. Reading the flag alone
-        answered True for a session that could carry nothing, so a watchdog
-        written the ordinary way never fired and every request made after the
-        loss waited on an answer that was not coming.
+        An outage the engine is still mending (1100 until 1102) leaves the
+        session open, as a gateway's does. A session the engine ends is
+        closed by ``_session_ended``.
         """
-        return (
-            self.connState == IbkrDxClient.CONNECTED
-            and self._client.is_connected()
-        )
+        return self.connState == IbkrDxClient.CONNECTED
 
     def isReady(self):
         return self.isConnected()
@@ -239,6 +268,8 @@ class IbkrDxClient:
         return list(self._accounts)
 
     def getReqId(self):
+        if not self.isConnected():
+            raise ConnectionError("Not connected")
         # Hands out the current value and then advances, as their own client
         # does, so an id seeded by `updateReqId` is the next one issued rather
         # than the one after it.
@@ -275,12 +306,19 @@ class IbkrDxClient:
     def setConnectOptions(self, options):
         self.connectOptions = options.encode()
 
+    def _connected(self):
+        """The engine, to send on. Like ib_async's client, nothing is sent
+        while not connected."""
+        if not self.isConnected():
+            raise ConnectionError("Not connected")
+        return self._client
+
     # ── requests: the same shape, all the way down ──
 
     def reqMktData(self, reqId, contract, genericTickList, snapshot,
                    regulatorySnapshot, mktDataOptions):
         _refuse_options("mktDataOptions", mktDataOptions)
-        self._client.req_mkt_data(
+        self._connected().req_mkt_data(
             reqId, _as_ours(contract), genericTickList, snapshot,
             regulatorySnapshot,
         )
@@ -289,7 +327,7 @@ class IbkrDxClient:
                           barSizeSetting, whatToShow, useRTH, formatDate,
                           keepUpToDate, chartOptions):
         _refuse_options("chartOptions", chartOptions)
-        self._client.req_historical_data(
+        self._connected().req_historical_data(
             reqId, _as_ours(contract), endDateTime, durationStr,
             barSizeSetting, whatToShow, 1 if useRTH else 0, formatDate,
             keepUpToDate, [],
@@ -299,10 +337,10 @@ class IbkrDxClient:
     # through `_as_ours`, which turns None into an empty list — right for an
     # options list and wrong for a string, which is what these carry.
     def reqAccountUpdates(self, subscribe, acctCode):
-        self._client.req_account_updates(subscribe, acctCode)
+        self._connected().req_account_updates(subscribe, acctCode)
 
     def reqAccountSummary(self, reqId, groupName, tags):
-        self._client.req_account_summary(reqId, groupName, tags)
+        self._connected().req_account_summary(reqId, groupName, tags)
 
     def __getattr__(self, name):
         """Every other request, under the name this engine carries it by.
@@ -324,6 +362,7 @@ class IbkrDxClient:
             return missing
 
         def forwarding(*args):
+            self._connected()
             return carried(*(_as_ours(a) for a in args))
 
         return forwarding
@@ -427,9 +466,9 @@ def _as_theirs(value):
     Both sides carry the reference client's own field names, so the conversion
     is driven by the `ib_async` dataclass rather than written out per type or
     per callback: a field only `ib_async` declares keeps its default, and
-    neither side needs editing when the other gains one. Anything with no
-    counterpart there — a number, a string, an ibkr-dx-only type — is handed over
-    as it is.
+    neither side needs editing when the other gains one. Anything with no type
+    of that name in ib_async — a number, a string, an ibkr-dx-only type — is
+    handed over as it is.
     """
     import dataclasses
 
@@ -481,6 +520,17 @@ class _LoopBound:
         self._wrapper = wrapper
         self._client_id = client_id
         self._quotes: dict[int, dict[int, float]] = {}
+        #: Whether anything was delivered since the last pass ended a batch.
+        self.arrived = False
+
+    def _arrive(self):
+        """Start their batch on the first callback since the last one ended,
+        where their own transport starts one when data arrives."""
+        if not self.arrived:
+            self.arrived = True
+            arrived = getattr(self._wrapper, "tcpDataArrived", None)
+            if arrived:
+                arrived()
 
     def histogram_data(self, req_id, items):
         """The spread of trades across prices, in their own type.
@@ -490,6 +540,7 @@ class _LoopBound:
         """
         from ib_async.objects import HistogramData
 
+        self._arrive()
         # Built as theirs either way. This engine states a bucket the way the
         # reference client does — `price` and `size` — and their wrapper reads
         # `price` and `count`, so an entry passed straight through carries a
@@ -515,6 +566,7 @@ class _LoopBound:
         it up the same way; stamped with a client the session never used, the
         status reaches nothing.
         """
+        self._arrive()
         self._wrapper.orderStatus(
             order_id, status, filled, remaining, avg_fill_price, perm_id,
             parent_id, last_fill_price, self._client_id, why_held,
@@ -529,6 +581,7 @@ class _LoopBound:
         size is zero, so the two are paired here rather than each arrival
         wiping the other half.
         """
+        self._arrive()
         held = self._quotes.setdefault(req_id, {})
         held[tick_type] = price
         size = held.get(self._SIZE_OF.get(tick_type, -1), 0.0)
@@ -542,6 +595,7 @@ class _LoopBound:
         "no price" is what is sent: a zero there is a market quoted at
         nothing, which is a different thing from a market not yet quoted.
         """
+        self._arrive()
         held = self._quotes.setdefault(req_id, {})
         held[tick_type] = size
         price_type = self._PRICE_OF.get(tick_type)
@@ -580,6 +634,7 @@ class _LoopBound:
         or notice of the session, and a callback that raises here closes the
         session — which turned any refusal at all into a disconnection.
         """
+        self._arrive()
         self._wrapper.error(req_id, code, text, advanced)
 
     def __getattr__(self, name):
@@ -604,6 +659,7 @@ class _LoopBound:
             raise AttributeError(name)
 
         def carrying(*args):
+            self._arrive()
             return method(*(_as_theirs(a) for a in args))
 
         return carrying
@@ -714,10 +770,10 @@ def attach(ib, username="", password="", paper=True, session_file=None,
 
     The session is kept between runs, under this account's own file in
     ``~/.ibkr_dx``. A venue answers a request that names a session it still holds
-    with a challenge rather than a whole handshake, so a program that starts
-    often is one login rather than one per start, and needs a person to approve
-    far fewer of them. Name another path to move it, or pass ``False`` to keep
-    nothing and log in fully every time.
+    with a challenge rather than a whole handshake. It lets a session go soon
+    after the process holding it ends, so this covers a quick restart; a program
+    started again later logs in afresh. Name another path to move it, or pass
+    ``False`` to keep nothing and log in fully every time.
 
     Order ids are counted from what the account is working, which the venue
     names at every connect, so nothing about them is kept between runs.
@@ -731,17 +787,20 @@ def attach(ib, username="", password="", paper=True, session_file=None,
     ib.client = IbkrDxClient(ib.wrapper, username, password, paper, session_file,
                           client_id, readonly)
     ib.wrapper.client = ib.client
+    # ib_async's IB ties this to the client it builds for itself.
+    ib.client.apiEnd += ib.disconnectedEvent
 
     # An order they leave unnumbered is numbered from what the account has
     # used, rather than from the counter their requests come out of. The venue
     # refuses an order id a fill has spent, and their counter knows nothing
-    # about which those are.
-    placing = ib.placeOrder
+    # about which those are. Wrapped from the class, so attaching again (every
+    # `ib_async_dx.IB.connect` does) does not wrap the wrapper.
+    placing = type(ib).placeOrder
 
     def place_order(contract, order):
         if not getattr(order, "orderId", 0):
             order.orderId = ib.client.next_order_id()
-        return placing(contract, order)
+        return placing(ib, contract, order)
 
     ib.placeOrder = place_order
     return ib

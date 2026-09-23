@@ -44,6 +44,7 @@ class Sent:
 def _client():
     ib = ib_async.IB()
     c = IbkrDxClient(ib.wrapper)
+    c.connState = c.CONNECTED
     c._client = Sent()
     return c
 

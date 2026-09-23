@@ -19,8 +19,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      # The engine is built from source with its test hooks: three suites drive
-      # a session without a venue, and a released wheel does not carry them.
+      # The engine is built from source with its test hooks: the suites drive a
+      # session without a venue, and a released wheel does not carry them.
       - uses: actions/checkout@v4
         with:
           repository: userFRM/ibkr-dx
@@ -38,6 +38,6 @@ jobs:
           maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
           pip install dist/*.whl
       - name: Install this package
-        run: pip install -e ".[bridge]" pytest pytest-asyncio
+        run: pip install -e . pytest pytest-asyncio
       - name: Test
         run: pytest tests/python -q

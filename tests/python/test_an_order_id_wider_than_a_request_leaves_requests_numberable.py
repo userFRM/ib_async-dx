@@ -18,7 +18,9 @@ from ib_async_dx.bridge import WIDEST_REQUEST_ID, IbkrDxClient
 
 
 def _client():
-    return IbkrDxClient(ib_async.IB().wrapper)
+    c = IbkrDxClient(ib_async.IB().wrapper)
+    c.connState = c.CONNECTED
+    return c
 
 
 def test_a_raise_past_what_a_request_carries_is_let_go_of():

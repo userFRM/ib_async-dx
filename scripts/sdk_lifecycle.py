@@ -3,8 +3,8 @@
 
 `sdk_sweep.py` asks the venue for things. This tells it to do one: place an
 order, change it, and withdraw it — the three a trading program does, in the
-order it does them, through the same calls a program written against the
-reference client uses.
+order it does them, through the same calls a program written against ib_async
+uses.
 
 The order is a buy far under the market on a paper account, so it rests and
 nothing trades. It is withdrawn before this returns.
@@ -15,11 +15,9 @@ nothing trades. It is withdrawn before this returns.
 import os
 import pathlib
 import sys
-import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "python"))
 
-import ibkr_dx  # noqa: E402
 import ib_async_dx  # noqa: E402
 
 
@@ -31,20 +29,20 @@ def main() -> int:
         paper=True,
     )
     said: list[str] = []
-    ib.wrapper.error = lambda r, when, code, m, a="": (
+    ib.errorEvent += lambda r, code, m, contract: (
         said.append(f"{code}: {m[:70]}") if code not in (2104, 2106, 2158, 2100) else None
     )
 
     spy = ib.reqContractDetails(
-        ibkr_dx.Contract(symbol="SPY", secType="STK", exchange="SMART", currency="USD")
+        ib_async_dx.Contract(symbol="SPY", secType="STK", exchange="SMART", currency="USD")
     )[0].contract
 
     def settle(seconds=3.0):
-        time.sleep(seconds)
+        ib.sleep(seconds)
         heard, said[:] = list(said), []
         return heard
 
-    order = ibkr_dx.Order(action="BUY", orderType="LMT", totalQuantity=10, lmtPrice=100.0)
+    order = ib_async_dx.Order(action="BUY", orderType="LMT", totalQuantity=10, lmtPrice=100.0)
     trade = ib.placeOrder(spy, order)
     try:
         return _through(ib, spy, order, trade, settle)

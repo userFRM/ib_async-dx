@@ -2,19 +2,16 @@
 
 ib_async is the client most Python programs for this venue are written
 against. What this proves is that such a program runs here with one line
-changed — the attach — and no gateway process anywhere.
-
-Skipped where ib_async is not installed: it is not a dependency of this
-package, and is not vendored. The live parts need credentials.
+changed — the attach — and no gateway process anywhere. The live parts need
+credentials.
 """
 
 import os
 
+import ib_async
 import pytest
 
-ib_async = pytest.importorskip("ib_async")
-
-import ib_async_dx.bridge  # noqa: E402
+import ib_async_dx.bridge
 
 LIVE = bool(os.environ.get("IB_USERNAME") and os.environ.get("IB_PASSWORD"))
 needs_venue = pytest.mark.skipif(not LIVE, reason="IB_USERNAME/IB_PASSWORD not set")
@@ -25,24 +22,33 @@ def test_attach_replaces_only_the_transport():
     # Their object, their wrapper, their events — this client underneath.
     assert isinstance(ib, ib_async.IB)
     assert isinstance(ib.wrapper, ib_async.wrapper.Wrapper)
-    assert ib.client.__class__ is ib_async_dx.IbkrDxClient
+    assert ib.client.__class__ is ib_async_dx.bridge.IbkrDxClient
     assert not ib.isConnected()
 
 
-def test_a_session_the_engine_lost_is_not_reported_as_connected():
-    """The shim's own flag records what it was asked to do, not what holds.
-
-    It moves on connect and on disconnect and nothing else touches it, so a
-    session the venue took away or a reconnect gave up on left it saying
-    connected. A watchdog written the ordinary way never fired, and every
-    request made afterwards waited on an answer that was not coming.
-    """
+def test_an_outage_leaves_the_session_open_and_an_end_closes_it():
+    """As over a gateway: a 1100 leaves ib_async connected, and a session that
+    ends fires `disconnectedEvent` once, fails what was waiting, stops the
+    delivery and refuses further requests."""
     ib = ib_async_dx.attach(ib_async.IB())
     client = ib.client
+    client._client._test_connect("DU000000", False)
     client.connState = client.CONNECTED
-    assert not client.isConnected(), (
-        "the engine underneath holds no session, so neither does this"
-    )
+    heard = []
+    ib.disconnectedEvent += lambda: heard.append("disconnected")
+
+    client._client._test_push_disconnect_event()
+    client._client.poll()
+    assert client.isConnected(), "an outage the engine is mending is a 1100, not an end"
+
+    client._client._test_end_session()
+    client._client.poll()
+    assert not client.isConnected() and client._stop.is_set()
+    assert heard == ["disconnected"]
+    with pytest.raises(ConnectionError, match="Not connected"):
+        client.getReqId()
+    with pytest.raises(ConnectionError, match="Not connected"):
+        client.reqCurrentTime()
 
 
 def test_a_request_their_client_carries_and_this_one_does_not_says_so():
@@ -125,7 +131,7 @@ def test_ending_a_session_is_not_a_session_that_went_away():
     caller who asked to stop, and their own client does not call it here."""
     import inspect
 
-    from ib_async_dx import IbkrDxClient
+    from ib_async_dx.bridge import IbkrDxClient
 
     ends = inspect.getsource(IbkrDxClient.disconnect)
     assert "connectionClosed" not in ends.split('"""')[-1]
@@ -149,7 +155,7 @@ def test_every_call_their_library_makes_is_carried():
     called = sorted(set(re.findall(r"self\.client\.(\w+)\(", src)))
     assert len(called) > 50, "their transport surface should be substantial"
 
-    spelled_out = {n for n in dir(ib_async_dx.IbkrDxClient) if not n.startswith("_")}
+    spelled_out = {n for n in dir(ib_async_dx.bridge.IbkrDxClient) if not n.startswith("_")}
     unrouted = [
         name for name in called
         if name not in spelled_out
@@ -237,14 +243,15 @@ def test_a_field_that_cannot_be_carried_is_refused():
 def test_readonly_reaches_the_session_through_the_adapter():
     """A read-only connection through this adapter is read-only.
 
-    The flag was accepted by the facade and dropped by the adapter, so a
-    program that asked ib_async for a read-only session got one that could
-    place orders. It is carried now, and `attach` takes one for a caller that
-    sets it before connecting.
+    Dropped by the adapter, a program that asked ib_async for a read-only
+    session would get one that could place orders. It is carried to the
+    session, and `attach` takes one for a caller that sets it before
+    connecting.
     """
     import inspect
 
-    from ib_async_dx import IbkrDxClient, attach
+    from ib_async_dx import attach
+    from ib_async_dx.bridge import IbkrDxClient
 
     sig = inspect.signature(IbkrDxClient.connectAsync)
     assert "readonly" in sig.parameters, "the adapter takes it"
