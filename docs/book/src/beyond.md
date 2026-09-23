@@ -1,23 +1,25 @@
 # Beyond ib_async
 
-`ib_async_dx.IB` is ib_async's `IB` with three kinds of addition: two of
+`ib_async_dx.IB` is ib_async's `IB` with three kinds of addition: four of
 ib_async's bugs fixed, the engine's calls beyond the documented API, and a
 warning at connect. No field is added to an ib_async class, so ib_async's
 objects, their reprs, `util.df`'s columns and equality stay ib_async's.
 
 ## ib_async's bugs, fixed
 
-Each fix is a small override on `IB`, and each has a test that runs ib_async's
-own `IB` beside it, so the difference is shown rather than described.
+Each fix is a small override on `IB`, with a test. The fixes are on
+`ib_async_dx.IB`: an `ib_async.IB` given to `attach` is ib_async's own, and
+keeps its behaviour, bugs included.
 
-| In ib_async 2.1 | Here |
-| --- | --- |
-| `reqUserInfo()` returns `[]`. Its wrapper's `userInfo` ends the request without the White Branding ID it was answered with | `reqUserInfo()` returns the White Branding ID, as its docstring says |
-| `connect` asks for positions whatever `fetchFields` says | Left out of `fetchFields`, `StartupFetch.POSITIONS` means that request is not made, so `positions()` stays empty until `reqPositions()`, which asks as usual |
+| In ib_async 2.1 | Here | Test |
+| --- | --- | --- |
+| `reqUserInfo()` returns `[]`. Its wrapper's `userInfo` ends the request without the White Branding ID it was answered with | `reqUserInfo()` returns the White Branding ID, as its docstring says | `test_reqUserInfo_answers_the_white_branding_id`, beside ib_async's own answer |
+| `connect` asks for positions whatever `fetchFields` says | Left out of `fetchFields`, `StartupFetch.POSITIONS` means the connect's own request is not made, so `positions()` stays empty until `reqPositions()`, which asks as usual. Any other request, made while the connect runs among them, is the program's own | `test_fetchFields_without_positions_asks_for_no_positions`, beside ib_async's own answer; `test_only_the_connects_own_startup_request_for_positions_is_skipped` |
+| Error 321 is a warning, which never ends what it is about. A what-if refused with it never resolves, and a new order refused with it stays `ValidationError`, open for good. ib_async's own test expects a `RequestError` carrying 321, and its wrapper notes that a new order refused with 321 should probably be deleted | ib_async's own rule for 110 applied to 321: a request waiting under the number ends with the refusal, raised as `RequestError` where `RaiseRequestErrors` is set, and a new order still `PendingSubmit` is cancelled. On an order already working, 321 stays a warning, since a refused change leaves the order live | `test_a_what_if_refused_with_321_ends_with_the_refusal`, `test_a_refused_new_order_reaches_its_trade`, `test_321_on_an_order_already_working_stays_a_warning` |
+| `disconnect()` does nothing while a connect is under way, and the connect then opens the session the program asked to close | The connect ends with `ConnectionError`, and the engine drops the session its login opens | `test_a_disconnect_during_the_login_ends_it` |
 
-The tests are `test_reqUserInfo_answers_the_white_branding_id` and
-`test_fetchFields_without_positions_asks_for_no_positions`, in
-`tests/python/test_ib_runs_on_the_engine.py`.
+The tests are in `tests/python/test_ib_runs_on_the_engine.py` and
+`tests/python/test_a_session_opens_and_closes_on_the_loop.py`.
 
 ## The engine's calls beyond the documented API
 
@@ -53,8 +55,10 @@ connected")`, as ib_async's client does.
 
 **A warning at connect.** When another session held the account as this one
 connected, `connect` logs it at `WARNING` on this package's `ib_async_dx.ib`
-logger, with what `competingSession()` answers. ib_async's own loggers carry
-only what ib_async says.
+logger: where the other session connected from, when it logged in as the venue
+states it, and whether it holds the account. It is said only of a session still
+open, and never fails a connect that has completed. ib_async's own loggers
+carry only what ib_async says.
 
 > [!TIP]
 > These calls are one-way. A program that uses one cannot move back to a

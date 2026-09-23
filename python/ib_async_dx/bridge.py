@@ -21,17 +21,21 @@ when it connects; `attach` is for an `ib_async.IB` a program already holds.
 
 `IB.connect` takes a host, a port and a client id because it was written for a
 gateway. The host and port are accepted and ignored; the client id keys this
-session's orders. The credentials are given to `attach`, or left to
-`IB_USERNAME` and `IB_PASSWORD`.
+session's orders. The credentials are given to `attach`, or left to an `IBC`
+started in the same context, or to `IB_USERNAME` and `IB_PASSWORD`.
 """
 
 import asyncio
 import collections
+import contextvars
+import dataclasses
+import inspect
 import logging
 import os
 import pathlib
 import threading
 import time
+import weakref
 
 from eventkit import Event
 from ib_async.client import Client as _TheirClient
@@ -44,20 +48,68 @@ from . import _messages
 _logger = logging.getLogger(__name__)
 
 
-def _refuse_options(named: str, given) -> None:
-    """A free-form option list this request cannot carry.
+#: The requests a gateway reads a free-form option list on: the argument
+#: their client carries it in, the gateway's name for the message, and the
+#: keys it takes there. An order carries its own, `orderMiscOptions`. The two
+#: option computations take no key at all.
+MISC_OPTIONS = {
+    "reqMktData": ("mktDataOptions", "ReqMktData(1)", ("manual",)),
+    "placeOrder": ("orderMiscOptions", "PlaceOrder(3)", ("manual",)),
+    "reqMktDepth": ("mktDepthOptions", "ReqMktDepth(10)", ("manual",)),
+    "reqHistoricalData": ("chartOptions", "ReqHistoricalData(20)", ("manual",)),
+    "reqScannerSubscription": (
+        "scannerSubscriptionOptions", "ReqScannerSubscription(22)", ("manual",)
+    ),
+    "reqRealTimeBars": ("realTimeBarsOptions", "ReqRealTimeBars(50)", ("manual",)),
+    "calculateImpliedVolatility": ("implVolOptions", "ReqCalcImpliedVolatility(54)", ()),
+    "calculateOptionPrice": ("optPrcOptions", "ReqCalcOptionPrice(55)", ()),
+    "reqNewsArticle": ("newsArticleOptions", "ReqNewsArticle(84)", ("manual",)),
+    "reqHistoricalNews": ("historicalNewsOptions", "ReqHistoricalNews(86)", ("manual",)),
+    "reqHistoricalTicks": ("miscOptions", "ReqHistoricalTicks(96)", ("manual",)),
+}
 
-    Accepted and dropped, a caller who tuned a request with one would be
-    answered by an untuned request and have no way to tell. Empty or absent is
-    what every ordinary call passes, and that is taken; anything in it is said
-    out loud.
+
+def _misc_options_refusal(request, options):
+    """How a gateway refuses an option list on ``request``, or None.
+
+    A gateway refuses a key the request does not take with 10337, and a value
+    of ``manual`` other than 0 or 1 with 10338.
     """
-    if given:
-        raise NotImplementedError(
-            f"{named}={given!r} is not carried here: this request has no "
-            "free-form option list to send it under, so the request would go "
-            "out without it and answer something other than what was asked"
-        )
+    _, named, keys = MISC_OPTIONS[request]
+    for option in options or []:
+        key, value = str(option.tag), str(option.value)
+        if key not in keys:
+            return 10337, (
+                f"Misc options key={key} is invalid in {named} request. "
+                f"Valid keys are: {', '.join(keys)}"
+            )
+        if value not in ("0", "1"):
+            return 10338, (
+                f"Misc options value={value} is invalid for key={key} in {named} "
+                "request. Valid values are: 0, 1"
+            )
+    return None
+
+
+@dataclasses.dataclass
+class IbcLogin:
+    """The login an ``IBC`` was started with, as a gateway it launched would
+    hold it, the clients whose sessions it opened, and whether the ``IBC``
+    has been terminated."""
+
+    userid: str
+    password: str
+    paper: bool
+    clients: "weakref.WeakSet[IbkrDxClient]" = dataclasses.field(default_factory=weakref.WeakSet)
+    ended: bool = False
+
+
+#: The login the last ``IBC`` started in this context holds, for a connect
+#: in the same context that names none. A ``Watchdog`` runs in a task of its
+#: own, so each one's is its own.
+IBC_LOGIN: contextvars.ContextVar[IbcLogin | None] = contextvars.ContextVar(
+    "ib_async_dx_ibc_login", default=None
+)
 
 
 #: The widest number this protocol carries on a request.
@@ -69,8 +121,8 @@ def _refuse_options(named: str, given) -> None:
 WIDEST_REQUEST_ID = 0xC000_0000 - 1
 
 
-#: How often the pump makes a pass: the finest step at which anything the
-#: engine holds reaches ib_async.
+#: How long after one pass the next is made: the finest step at which
+#: anything the engine holds reaches ib_async.
 PASS_INTERVAL = 0.01
 
 
@@ -84,12 +136,20 @@ class IbkrDxClient:
     DISCONNECTED, CONNECTING, CONNECTED = range(3)
     MinClientVersion = 157
     MaxClientVersion = 178
+    #: Their client's, and not applied: nothing between the program and the
+    #: venue paces requests, so there is nothing for these to set.
+    MaxRequests = _TheirClient.MaxRequests
+    RequestsInterval = _TheirClient.RequestsInterval
+    events = _TheirClient.events
 
     def __init__(self, wrapper, username="", password="", paper=True,
-                 session_file=None, client_id=None, readonly=False):
+                 session_file=None, readonly=False):
         self.wrapper = wrapper
-        self._username = username or os.environ.get("IB_USERNAME", "")
-        self._password = password or os.environ.get("IB_PASSWORD", "")
+        # As given: what is left empty is settled when the session opens (see
+        # `_login`), from an IBC started in the same context or the
+        # environment.
+        self._username = username
+        self._password = password
         self._paper = paper
         # Where a caller said so before connecting. `connectAsync` takes one of
         # its own; unstated there, this is what stands.
@@ -109,8 +169,15 @@ class IbkrDxClient:
         self._reqIdSeq = 1
         self._accounts: list[str] = []
         self._loop = None
-        self._pump = None
-        self._stop = threading.Event()
+        #: Which session, or attempt at one, is the current one. Every
+        #: connect and every end counts one, so a pass, a login or a step of a
+        #: connect that belongs to an earlier one finds it is not current.
+        self._generation = 0
+        #: The login a connect is waiting on, the thread it runs on, and the
+        #: next pass.
+        self._logging_in = None
+        self._login_thread = None
+        self._pass = None
         #: When the session started, and the requests sent on it.
         self._since = time.time()
         self._sent = 0
@@ -129,99 +196,284 @@ class IbkrDxClient:
         # sealed with the password, and refused if it names another account.
         # Pass session_file=False to attach() to keep nothing.
         self._session_file = session_file
-        # Which counter this session counts on. Their own connect names one
-        # too; stated here it is what the counter is keyed by before that call
-        # is ever made.
-        if client_id is not None:
-            self.clientId = int(client_id)
 
     # ── connection ──
+
+    #: Their client's own: `connect` runs `connectAsync` to the end, and `run`
+    #: runs the loop. The engine has methods of both names that do otherwise.
+    connect = _TheirClient.connect
+    run = _TheirClient.run
 
     async def connectAsync(self, host, port, clientId, timeout=2.0, readonly=None,
                            account=""):
         """Open the session. Host and port name a gateway; there is none.
 
+        The login is the engine's, and runs off the loop, which keeps turning
+        while it waits. Neither ``timeout`` nor a cancel stops it in the
+        engine: a paper login presents no second factor, and a live one waits
+        on it for as long as the engine lets it, as a gateway's login is made
+        before a program connects. The engine's wait for the venue to name the
+        orders already working, three seconds at most, is part of the login.
+        ``timeout`` (0 or None: no limit) is ib_async's, which bounds each
+        request of its startup sync with it.
+
+        A connect that is cancelled, or overtaken by a ``disconnect()`` or by
+        another connect, ends at once, and the engine drops the session its
+        login opens rather than keep it. The login itself runs on until the
+        engine returns, on a thread that does not hold the program open. A
+        failed login raises ``ConnectionError``, and ``apiError`` says why, as
+        their client says.
+
         ``readonly`` is carried to the session, which refuses to send anything
         that places, changes or withdraws an order. Accepted and dropped, a
         program that asked for a read-only connection got one that could trade.
         """
+        # Their own client closes the session it holds before it opens
+        # another. One still logging in is let go of the same way.
+        if self.isConnected():
+            self.wrapper.ib.disconnect()
+        elif self.connState == IbkrDxClient.CONNECTING:
+            self.disconnect()
+        self._retire()
+        attempt = self._generation
         readonly = self._readonly if readonly is None else bool(readonly)
         self.host, self.port, self.clientId = host, int(port), int(clientId)
         self.connState = IbkrDxClient.CONNECTING
         self._since, self._sent = time.time(), 0
         self._callbacks.reset()
         self._loop = asyncio.get_running_loop()
-        self.wrapper.__dict__.setdefault("clientId", self.clientId)
+        self._callbacks.thread = threading.get_ident()
+        self.wrapper.clientId = self.clientId
+        username, password, paper, session_file = self._login()
+        client_id = self.clientId
+        if self._login_thread is not None and self._login_thread.is_alive():
+            # The last login is still inside its engine, which drops what it
+            # opens. This one gets an engine of its own, so neither can end
+            # the other's session.
+            self._client = _ibkr_dx.EClient(self._callbacks)
+        engine = self._client
 
-        # Blocking, so it runs off the loop: everything else here has to stay
-        # able to answer while the session opens.
-        await self._loop.run_in_executor(
-            None,
-            lambda: self._client.connect(
-                username=self._username,
-                password=self._password,
-                paper=self._paper,
-                client_id=self.clientId,
+        def login():
+            engine.connect(
+                username=username,
+                password=password,
+                paper=paper,
+                client_id=client_id,
                 readonly=readonly,
-                session_file=self._session_file,
-            ),
-        )
+                session_file=session_file,
+            )
+            # A disconnect that reached the engine while it was installing the
+            # session can leave that session open. One no longer wanted is
+            # closed here, by the login that opened it.
+            if attempt != self._generation:
+                engine.disconnect()
+
+        try:
+            # Blocking, so it runs off the loop. What the engine announces
+            # from inside it reaches nothing (see `_LoopBound._deliver`): that
+            # is the login's thread, not the loop's. The same three are said
+            # below, on the loop.
+            self._logging_in = self._off_loop(login)
+            await self._logging_in
+            self._still(attempt)
+            self._logging_in = None
+            self._callbacks.connectAck()
+            self._still(attempt)
+
+            # What the handshake tells ib_async before it considers the API
+            # ready. Asked for rather than composed: the client answers this
+            # with every account the login holds, and the default account read
+            # off it is the first one — so an advisor with several saw one,
+            # standing for all of them. Answered on the next pass, as every
+            # request is: one pass here, so the answer is in hand.
+            self._client.req_managed_accts()
+            self._pass_once()
+            self._still(attempt)
+            self._accounts = list(getattr(self.wrapper, "accounts", []))
+            # The number their client counts on, which numbers its requests
+            # and the orders it places alike, as a gateway announces it when
+            # the API starts: their client takes it as the next id to hand
+            # out, and their wrapper hears it. The engine's is the first number
+            # past every order id the account has used that a request can also
+            # carry, so no id this counter hands out names an order the venue
+            # already holds. The engine's login has already waited for the
+            # venue to name the orders working, so this answers at once; the
+            # bound and the cancel are a guard.
+            self._logging_in = self._loop.run_in_executor(None, self._client.next_shared_id)
+            next_valid = await asyncio.wait_for(self._logging_in, timeout or None)
+            self._logging_in = None
+            self._still(attempt)
+            self.updateReqId(next_valid)
+            self.wrapper.nextValidId(next_valid)
+            self._still(attempt)
+        except BaseException as e:
+            overtaken = attempt != self._generation
+            if not overtaken:
+                self.disconnect()
+            msg = f"API connection failed: {e!r}"
+            _logger.error(msg)
+            self.apiError.emit(msg)
+            if isinstance(e, RuntimeError):
+                raise ConnectionError(str(e)) from e
+            if overtaken and isinstance(e, asyncio.CancelledError) and not (
+                asyncio.current_task().cancelling()
+            ):
+                raise ConnectionError(
+                    "Connection abandoned: disconnect() or another connect was "
+                    "called while it was still logging in"
+                ) from None
+            raise
         self.connState = IbkrDxClient.CONNECTED
-
-        # What the handshake tells ib_async before it considers the API
-        # ready. Asked for rather than composed: the client answers this with
-        # every account the login holds, and the default account read off it
-        # is the first one — so an advisor with several saw one, standing for
-        # all of them.
-        self._client.req_managed_accts()
-        # Answered on the next pass of dispatch, as every request is, and the
-        # pump that makes those passes is not running yet: one pass here, so
-        # the answer is in hand before it is read.
-        self._pass_once()
-        self._accounts = list(getattr(self.wrapper, "accounts", []))
-        # The number their client counts on, which numbers its requests and
-        # the orders it places alike, as a gateway announces it when the API
-        # starts: their client takes it as the next id to hand out, and their
-        # wrapper hears it. The engine's is the first number past every order
-        # id the account has used that a request can also carry, so no id this
-        # counter hands out names an order the venue already holds, and one
-        # counter means an order never takes the number of a request that is
-        # still waiting.
-        next_valid = self._client.next_shared_id()
-        self.updateReqId(next_valid)
-        self.wrapper.nextValidId(next_valid)
-
-        self._start_pump()
+        self._pass = self._loop.call_later(PASS_INTERVAL, self._next_pass, attempt)
         self.apiStart.emit()
 
+    def _off_loop(self, call):
+        """``call`` on a thread of its own, awaited on the loop.
+
+        A daemon thread, where the loop's executor was used: the executor's
+        workers are waited for as the program exits, so a live login given up
+        on while it waited on its second factor held the program open until
+        the engine gave up too.
+        """
+        loop, done = self._loop, self._loop.create_future()
+
+        def settle(error):
+            if done.done():
+                return
+            if error is None:
+                done.set_result(None)
+            else:
+                done.set_exception(error)
+
+        def run():
+            error = None
+            try:
+                call()
+            except BaseException as e:
+                error = e
+            try:
+                loop.call_soon_threadsafe(settle, error)
+            except RuntimeError:
+                pass  # the loop has closed, and nothing waits on this
+
+        self._login_thread = threading.Thread(target=run, name="ib_async_dx login", daemon=True)
+        self._login_thread.start()
+        return done
+
+    def _login(self):
+        """The login this session opens with, and where it is kept.
+
+        The one given to `attach` or `connect`; where they name none, the one
+        an ``IBC`` was started with in this context; and what that leaves
+        empty, ``IB_USERNAME`` and ``IB_PASSWORD``.
+        """
+        username, password, paper = self._username, self._password, self._paper
+        started = IBC_LOGIN.get()
+        if started is not None and not started.ended and not (username or password):
+            username, password, paper = started.userid, started.password, started.paper
+            started.clients.add(self)
+        username = username or os.environ.get("IB_USERNAME", "")
+        password = password or os.environ.get("IB_PASSWORD", "")
+        session_file = self._session_file
+        if session_file is None:
+            kind = "paper" if paper else "live"
+            session_file = str(pathlib.Path.home() / ".ibkr_dx" / f"session-{username}-{kind}")
+        elif session_file is False:
+            session_file = None
+        return username, password, paper, session_file
+
+    def _still(self, attempt):
+        """Raise unless this connect is still the current one: a disconnect,
+        another connect, or the engine ending the session has overtaken it."""
+        if attempt != self._generation or self.connState == IbkrDxClient.DISCONNECTED:
+            raise ConnectionError("The session was closed while it was opening")
+
     def disconnect(self):
-        """End the session, as ib_async's own client ends one.
+        """End the session, or the login still running for one, as ib_async's
+        own client ends one.
 
         `connectionClosed` is not called here. Their wrapper treats it as a
         session that went away underneath them: it fails every request still
         waiting and raises on their global error event, which is right for a
         socket that dropped and wrong for a caller who asked to stop.
         """
-        self.connState = IbkrDxClient.DISCONNECTED
-        self._stop.set()
+        self._retire()
         self._client.disconnect()
+
+    #: Their client's `reset` forgets the session. A session here is the
+    #: engine's, logged in until it is ended, so forgetting it is ending it.
+    reset = disconnect
+
+    def _retire(self):
+        """Nothing held for the current session or attempt goes on: its next
+        pass is not made, and a connect waiting on its login stops waiting."""
+        self._generation += 1
+        self.connState = IbkrDxClient.DISCONNECTED
+        # Held for the end of a pass a handler has just ended the session in:
+        # their wrapper has been cleared, as their client's buffer is.
+        self._callbacks._priced.clear()
+        self._callbacks.refused.clear()
+        if self._pass is not None:
+            self._pass.cancel()
+            self._pass = None
+        if self._logging_in is not None:
+            self._logging_in.cancel()
+            self._logging_in = None
 
     def _session_ended(self):
         """The engine ended the session: what ib_async's client does when its
         socket closes. Waiting requests fail, and ``apiEnd`` fires, which
-        their ``IB`` hears as ``disconnectedEvent``.
+        their ``IB`` hears as ``disconnectedEvent``. Said once; and of a
+        session still opening, not at all: the connect fails instead, as
+        their client says nothing of a socket that closed before the API was
+        ready.
 
         The prices this pass stated before the end reach their tickers first,
         as what a socket carried before it closed is read before the close.
         Held to the end of the pass, they reached a wrapper the close had
         already cleared, which logged each as a request it did not know.
         """
+        if self.connState == IbkrDxClient.DISCONNECTED:
+            return
+        if not self.isConnected():
+            # Still opening: the connect sees it, fails, and lets it go.
+            self.connState = IbkrDxClient.DISCONNECTED
+            return
         self._callbacks.end_pass()
-        self.connState = IbkrDxClient.DISCONNECTED
-        self._stop.set()
+        self._retire()
         self.wrapper.setEventsDone()
         self.wrapper.connectionClosed()
         self.apiEnd.emit()
+
+    def _ended_underneath(self):
+        """The session ends as one does when the gateway a program is
+        connected to is stopped: as `_session_ended` says it. A login still
+        running is let go of."""
+        if self.isConnected():
+            self._client.disconnect()
+            self._session_ended()
+        else:
+            self.disconnect()
+
+    def _next_pass(self, attempt):
+        """A pass, on the loop, and the next one after it, for as long as the
+        session it was made for is the current one.
+
+        A pass that raises ends the session, as their transport closes a
+        socket whose data it could not handle: once, with every waiting
+        request failed.
+        """
+        if attempt != self._generation:
+            return
+        try:
+            self._pass_once()
+        except Exception:
+            _logger.exception("The session's delivery failed, and the session is ended")
+            self._client.disconnect()
+            self._session_ended()
+        finally:
+            if attempt == self._generation:
+                self._pass = self._loop.call_later(PASS_INTERVAL, self._next_pass, attempt)
 
     def _pass_once(self):
         """One dispatch, then the boundary ib_async flushes on.
@@ -233,10 +485,9 @@ class IbkrDxClient:
         nothing delivered leaves their clock alone, so ``timeoutEvent`` fires,
         and emits no ``updateEvent``.
 
-        A pass the pump queued before the caller disconnected does nothing:
-        run later, on the loop the next connect drives, it would tell their
-        wrapper the session had dropped, and their global error event would
-        cancel that connect.
+        A client that has been disconnected makes none: a pass made on a
+        session the caller has ended would tell their wrapper the session had
+        dropped, and their global error event would cancel the next connect.
         """
         if self.connState == IbkrDxClient.DISCONNECTED:
             return
@@ -248,22 +499,6 @@ class IbkrDxClient:
             processed = getattr(self.wrapper, "tcpDataProcessed", None)
             if processed:
                 processed()
-
-    def _start_pump(self):
-        """Drive dispatch, and land every callback on ib_async's own loop.
-
-        ib_async is asyncio end to end: its futures are resolved by wrapper
-        callbacks and must be touched from the loop thread.
-        """
-        self._stop.clear()
-
-        def run():
-            while not self._stop.is_set():
-                self._loop.call_soon_threadsafe(self._pass_once)
-                self._stop.wait(PASS_INTERVAL)
-
-        self._pump = threading.Thread(target=run, daemon=True)
-        self._pump.start()
 
     # ── what IB reads directly ──
 
@@ -280,7 +515,8 @@ class IbkrDxClient:
         return self.isConnected()
 
     def serverVersion(self):
-        return self.MaxClientVersion
+        """178 once connected, and 0 until then, as their client answers it."""
+        return self.MaxClientVersion if self.isConnected() else 0
 
     def getAccounts(self):
         return list(self._accounts)
@@ -300,6 +536,13 @@ class IbkrDxClient:
         # does, so an id seeded by `updateReqId` is the next one issued rather
         # than the one after it.
         new_id = self._reqIdSeq
+        if new_id > WIDEST_REQUEST_ID:
+            # The rest of the range is the engine's own, and it refuses a
+            # request numbered there: raised here rather than number one.
+            raise OverflowError(
+                f"request id {new_id} is past the widest this protocol carries, "
+                f"{WIDEST_REQUEST_ID}: the ids this session can number are spent"
+            )
         self._reqIdSeq += 1
         return new_id
 
@@ -441,6 +684,8 @@ class IbkrDxClient:
         venue has retired them for the account, and otherwise says so and
         places the order without it.
         """
+        if self._refused_options("placeOrder", orderId, order.orderMiscOptions):
+            return
         for name, spelled, refusal, warning in _RETIRED:
             unset = getattr(_TheirOrder, name)
             if getattr(order, name) == unset:
@@ -454,18 +699,45 @@ class IbkrDxClient:
             setattr(order, name, unset)
         self._send_theirs("place_order", orderId, contract, order)
 
+    def _refused_options(self, request, reqId, options):
+        """Whether a gateway refuses ``request`` for its option list; if it
+        does, refused as a gateway refuses it, once the call has returned.
+
+        A gateway checks the list unless the venue exempts the account
+        (``NOAPIMISCVLD`` among its granted features). The one key it takes,
+        ``manual``, is not carried by the engine.
+        """
+        if not options:
+            return False
+        engine = self._connected()
+        if "NOAPIMISCVLD" in engine.enabled_features():
+            return False
+        refusal = _misc_options_refusal(request, options)
+        if refusal is None:
+            return False
+        self._sent += 1
+        self._callbacks.refused.append((reqId, *refusal, ""))
+        return True
+
     def reqMktData(self, reqId, contract, genericTickList, snapshot,
                    regulatorySnapshot, mktDataOptions):
-        _refuse_options("mktDataOptions", mktDataOptions)
+        if self._refused_options("reqMktData", reqId, mktDataOptions):
+            return
         self._send_theirs(
             "req_mkt_data", reqId, contract, genericTickList, snapshot,
             regulatorySnapshot,
         )
 
+    def cancelMktData(self, reqId):
+        """A subscription ended, and what was kept for its quotes with it."""
+        self._callbacks.forget(reqId)
+        self._send_theirs("cancel_mkt_data", reqId)
+
     def reqHistoricalData(self, reqId, contract, endDateTime, durationStr,
                           barSizeSetting, whatToShow, useRTH, formatDate,
                           keepUpToDate, chartOptions):
-        _refuse_options("chartOptions", chartOptions)
+        if self._refused_options("reqHistoricalData", reqId, chartOptions):
+            return
         self._send_theirs(
             "req_historical_data", reqId, contract, endDateTime, durationStr,
             barSizeSetting, whatToShow, 1 if useRTH else 0, formatDate,
@@ -486,27 +758,46 @@ class IbkrDxClient:
 
         Both sides follow the reference client's own signatures, so a request
         with no special handling above is forwarded as it stands rather than
-        written out again here.
+        written out again here. Its arguments are taken as their client's
+        method takes them, by position or by keyword.
         """
         if name.startswith("_"):
             raise AttributeError(name)
 
+        theirs = getattr(_TheirClient, name, None)
         request = _our_name_for(name, self._client)
         if hasattr(self._client, request):
-            return lambda *args: self._send_theirs(request, *args)
-        if not callable(getattr(_TheirClient, name, None)):
+            def forward(*args):
+                return self._send_theirs(request, *args)
+        elif callable(theirs):
+            def forward(*args):
+                # A request their client makes and the engine does not carry:
+                # the handshake a program makes with the gateway it connects
+                # to. A gateway never answers it, and nothing answers it here.
+                self._connected()
+                self._sent += 1
+        else:
             raise AttributeError(
                 f"{type(self).__name__!r} object has no attribute {name!r}"
             )
+        if not callable(theirs):
+            # One of the engine's own, with no method of theirs to say how it
+            # is called: its arguments in the engine's order.
+            return forward
 
-        def unanswered(*args):
-            # A request their client makes and the engine does not carry: the
-            # handshake a program makes with the gateway it connects to. A
-            # gateway never answers it, and nothing answers it here.
-            self._connected()
-            self._sent += 1
+        signature = inspect.signature(theirs)
+        options = MISC_OPTIONS.get(name, (None,))[0]
 
-        return unanswered
+        def carried(*args, **kwargs):
+            call = signature.bind(self, *args, **kwargs)
+            call.apply_defaults()
+            if options and self._refused_options(
+                name, call.arguments["reqId"], call.arguments[options]
+            ):
+                return None
+            return forward(*call.args[1:])
+
+        return carried
 
 
 #: Where the two name the same figure differently. Their bar calls its average
@@ -564,8 +855,6 @@ def _is_named_tuple(t):
 
 def _their_type(name):
     """The type of theirs that goes by this name, if there is one."""
-    import dataclasses
-
     import ib_async.contract as contract_types
     import ib_async.objects as objects
     import ib_async.order as order_types
@@ -617,15 +906,17 @@ def _as_theirs(value):
     of that name in ib_async — a number, a string, an ibkr-dx-only type — is
     handed over as it is.
     """
-    import dataclasses
-
     if isinstance(value, (str, bytes, int, float, bool, type(None))):
         return value
+    if _is_named_tuple(type(value)):
+        # A record, field by field: as a sequence it is one argument to a
+        # type that takes one per field.
+        return type(value)(*[_as_theirs(v) for v in value])
     if isinstance(value, (list, tuple)):
         return type(value)(_as_theirs(v) for v in value)
 
     theirs = _their_type(type(value).__name__)
-    if theirs is None or dataclasses.is_dataclass(value):
+    if theirs is None or isinstance(value, theirs):
         return value
 
     # Built in one go, as their decoder builds one: a record tuple takes its
@@ -657,8 +948,8 @@ class _LoopBound:
 
     def __init__(self, wrapper):
         self._wrapper = wrapper
-        #: The size last stated for each side of each request, by tick type.
-        self._sizes: dict[tuple[int, int], float] = {}
+        #: The size last stated for each side, by request and then tick type.
+        self._sizes: dict[int, dict[int, float]] = {}
         #: Prices this pass stated whose size it has not stated yet.
         self._priced: dict[tuple[int, int], float] = {}
         #: Whether anything was delivered since the last pass ended a batch.
@@ -669,6 +960,9 @@ class _LoopBound:
         self.asking = 0
         #: Refusals stated inside a request call, for the next pass.
         self.refused = collections.deque()
+        #: The thread running the loop, set as a session opens. Nothing is
+        #: delivered from any other.
+        self.thread = threading.get_ident()
 
     def reset(self):
         """A new session: nothing held for the last one reaches it, as their
@@ -679,6 +973,10 @@ class _LoopBound:
         self.arrived = False
         self.received = 0
 
+    def forget(self, req_id):
+        """A subscription over: the sizes kept for its quotes go with it."""
+        self._sizes.pop(req_id, None)
+
     def _deliver(self, method, *args):
         """One message to their wrapper.
 
@@ -686,7 +984,14 @@ class _LoopBound:
         where their own transport starts one when data arrives. A message
         their wrapper raises on is logged and passed over, as their decoder
         treats one: raised into the engine, it closed the session.
+
+        Delivered on the loop's thread only. The engine announces a session
+        from inside its login, on the login's thread, and those announcements
+        are made again on the loop. A login given up on can still announce its
+        session there, after another session has opened.
         """
+        if threading.get_ident() != self.thread:
+            return
         if not self.arrived:
             self.arrived = True
             arrived = getattr(self._wrapper, "tcpDataArrived", None)
@@ -746,20 +1051,21 @@ class _LoopBound:
         """
         price_type = self._PRICE_OF.get(tick_type)
         if price_type is not None:
-            self._sizes[req_id, tick_type] = size
+            self._sizes.setdefault(req_id, {})[tick_type] = size
             price = self._priced.pop((req_id, price_type), None)
             if price is not None:
                 self._deliver(self._wrapper.priceSizeTick, req_id, price_type, price, size)
                 return
         self._deliver(self._wrapper.tickSize, req_id, tick_type, size)
 
-    def end_pass(self):
-        """The prices this pass stated with no size beside them, each with the
-        size standing: the size did not change, so the pass did not state it."""
-        priced, self._priced = self._priced, {}
-        for (req_id, price_type), price in priced.items():
-            size = self._sizes.get((req_id, self._SIZE_OF[price_type]), 0.0)
-            self._deliver(self._wrapper.priceSizeTick, req_id, price_type, price, size)
+    def end_pass(self, req_id=None):
+        """The prices this pass stated with no size beside them, of every
+        request or of one, each with the size standing: the size did not
+        change, so the pass did not state it."""
+        for key in [key for key in self._priced if req_id in (None, key[0])]:
+            price = self._priced.pop(key)
+            size = self._sizes.get(key[0], {}).get(self._SIZE_OF[key[1]], 0.0)
+            self._deliver(self._wrapper.priceSizeTick, *key, price, size)
 
     #: Where their wrapper names a callback something other than the
     #: reference client does, and the two it does not carry at all: display
@@ -771,12 +1077,21 @@ class _LoopBound:
         "display_group_updated": None,
     }
 
+    def tick_snapshot_end(self, req_id):
+        """A snapshot answered: its prices reach the ticker first, as a
+        gateway sends them before the end, and then the sizes kept for them
+        go, since the subscription is over."""
+        self.end_pass(req_id)
+        self.forget(req_id)
+        self._deliver(self._wrapper.tickSnapshotEnd, req_id)
+
     # Under both spellings. This engine looks for the reference client's name
     # first, so a callback answered here under one spelling only would be
     # reached past — straight to their wrapper, and the translation skipped.
     tickPrice = tick_price
     tickSize = tick_size
     histogramData = histogram_data
+    tickSnapshotEnd = tick_snapshot_end
 
     def error(self, req_id, when, code, text, advanced=""):
         """A refusal, in the shape their wrapper declares, when a gateway's
@@ -808,6 +1123,8 @@ class _LoopBound:
         for as long as it kept asking.
         """
         for _ in range(len(self.refused)):
+            if not self.refused:
+                return  # a handler ended the session
             self._deliver(self._wrapper.error, *self.refused.popleft())
 
     def __getattr__(self, name):
@@ -882,8 +1199,6 @@ def _states_nothing(held):
 
 def _as_ours(value):
     """An `ib_async` object, rebuilt as this engine's type of the same name."""
-    import dataclasses
-
     if value is None:
         # Their optional lists arrive as None; every request here takes a
         # list, and an absent one is an empty one.
@@ -955,11 +1270,17 @@ def _as_ours(value):
 
 
 def attach(ib, username="", password="", paper=True, session_file=None,
-           client_id=None, readonly=False):
+           readonly=False):
     """Point an `ib_async.IB` at this engine, and hand it back.
 
-    The credentials are this session's; left out, `IB_USERNAME` and
-    `IB_PASSWORD` are used.
+    The credentials are this session's; left out, those of an ``IBC`` started
+    in the same context, and failing that `IB_USERNAME` and `IB_PASSWORD`.
+    The client id is the one `connect` names.
+
+    A session the instance holds is ended first, as its ``disconnect()`` ends
+    one, and a login still running on it is let go of: the client it replaces
+    would otherwise hold a session nobody could reach, beside a wrapper the
+    new one shares.
 
     The session is kept between runs, under this account's own file in
     ``~/.ibkr_dx``. A venue answers a request that names a session it still holds
@@ -973,14 +1294,12 @@ def attach(ib, username="", password="", paper=True, session_file=None,
     the venue names at every connect and whenever it names another: nothing
     about them is kept between runs.
     """
-    if session_file is None:
-        who = username or os.environ.get("IB_USERNAME", "")
-        kind = "paper" if paper else "live"
-        session_file = str(pathlib.Path.home() / ".ibkr_dx" / f"session-{who}-{kind}")
-    elif session_file is False:
-        session_file = None
+    ib.disconnect()
+    if ib.client.connState != ib.client.DISCONNECTED:
+        ib.client.disconnect()
+    ib.client.apiEnd -= ib.disconnectedEvent
     ib.client = IbkrDxClient(ib.wrapper, username, password, paper, session_file,
-                          client_id, readonly)
+                             readonly)
     ib.wrapper.client = ib.client
     # ib_async's IB ties this to the client it builds for itself.
     ib.client.apiEnd += ib.disconnectedEvent

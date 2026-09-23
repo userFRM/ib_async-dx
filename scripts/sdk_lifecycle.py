@@ -6,8 +6,9 @@ order, change it, and withdraw it — the three a trading program does, in the
 order it does them, through the same calls a program written against ib_async
 uses.
 
-The order is a buy far under the market on a paper account, so it rests and
-nothing trades. It is withdrawn before this returns.
+The order is a buy far under the market on a paper account, meant to rest
+unfilled; a price is not a guarantee, and the order's status says what
+happened. It is withdrawn before this returns.
 
     IB_USERNAME=… IB_PASSWORD=… python3 scripts/sdk_lifecycle.py
 """

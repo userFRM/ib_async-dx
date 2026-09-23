@@ -13,6 +13,7 @@ a number this protocol cannot carry.
 """
 
 import ib_async
+import pytest
 
 from ib_async_dx.bridge import WIDEST_REQUEST_ID, IbkrDxClient
 
@@ -42,3 +43,7 @@ def test_the_top_of_the_range_is_this_clients_own():
     c = _client()
     c.updateReqId(WIDEST_REQUEST_ID)
     assert c.getReqId() == WIDEST_REQUEST_ID, "the widest one a caller may use"
+    # Past it the range is the engine's own, which keeps what is answered
+    # there to itself: handed out, the request was never answered.
+    with pytest.raises(OverflowError):
+        c.getReqId()

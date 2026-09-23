@@ -32,7 +32,59 @@ underneath, and no gateway process.
 
 **An `ib_async.IB` built elsewhere** gets the same client from
 `ib_async_dx.attach(ib, username=..., password=...)`, which hands the instance
-back ready to connect. `ib_async_dx.IB` calls it on every connect.
+back ready to connect. A session the instance holds is ended first, as its
+`disconnect()` ends one, and the client it replaces is no longer tied to it.
+`ib_async_dx.IB` calls it on every connect. An attached `ib_async.IB` is
+ib_async's own, so the [bugs fixed](./beyond.md#ib_asyncs-bugs-fixed) on
+`ib_async_dx.IB` are still there.
+
+## The session's life
+
+- **Callbacks run on the loop, a pass at a time.** A pass hands their wrapper
+  what the engine holds, as one batch: `tcpDataArrived` before its first
+  message, `tcpDataProcessed` after its last, as their transport marks a packet.
+  The loop makes each pass itself, 10 ms after the last, so a program away from
+  its loop — in `time.sleep`, say — queues nothing, and one whose loop ends
+  without a `disconnect()` leaves no pass running. A refusal stated inside a
+  request call waits for the next pass, as a gateway's comes back on the socket
+  once the call has returned. A handler that ends the session ends the pass:
+  nothing more of it reaches their wrapper, as their client drops what it had
+  read once its socket is closed.
+- **The login runs off the loop**, which keeps turning while it waits. What the
+  engine announces from inside it — the connect acknowledgement, the accounts
+  and the next id — reaches nothing there, on the login's thread; the same
+  three are said on the loop once it returns. Their wrapper is called on the
+  loop's thread and no other.
+- **`timeout`** bounds each request of ib_async's startup sync, as it does
+  against a gateway. The login is the engine's to bound, the engine's wait of
+  up to three seconds for the venue to name the working orders among it: a
+  paper login presents no second factor, and a live one waits on it for as
+  long as the engine allows, as a gateway's login is made before a program
+  connects.
+- **A connect ends at once when it is cancelled** — by `wait_for`, a task
+  cancel or an interrupt — **or overtaken** by `disconnect()` or by another
+  connect. The engine is told, and drops the session its login opens instead
+  of keeping it. The login itself runs on inside the engine until the engine
+  returns — on a live account, until the second factor is answered or its wait
+  runs out — on a thread that does not hold the program open. An overtaken
+  connect raises `ConnectionError`. Of two connects on one `ib_async_dx.IB`,
+  the later one's session is the one left open, whenever the later one is
+  made. An attached `ib_async.IB` runs ib_async's own connect, which does not
+  stand down for another: there a connect overtaken during ib_async's startup
+  sync, once the engine has logged in, can still report success on the later
+  session, or end it.
+- **A login that fails raises `ConnectionError`**, `apiError` says why, and the
+  client reads disconnected, as their client fails a connect.
+- **A session the engine ends as it opens** fails the connect, with nothing
+  said on `disconnectedEvent`: their client says nothing of a socket that
+  closed before the API was ready either.
+- **A session the engine ends once open** is handled as their client handles a
+  dropped socket, once: every waiting request fails, `disconnectedEvent`
+  fires, and delivery stops. A pass that raises ends the session the same way,
+  as their transport closes a socket whose data it could not handle.
+- **A `connect` on an `IB` that is connected** ends that session first, as
+  `disconnect()` ends one, and opens the next, as their client closes its
+  socket before it opens another.
 
 ## What is carried
 
@@ -102,8 +154,13 @@ A few details are worth knowing:
   declares, as a gateway's does, and after the call that caused it has
   returned. So a new order refused before it is sent reaches the `Trade`
   `placeOrder` handed back, which their wrapper marks as it marks one a gateway
-  refused: `ValidationError` for 321, which it counts as a warning, and
-  `Cancelled` for an error.
+  refused: `Cancelled` for an error, and, on `ib_async_dx.IB`, for 321, which
+  ib_async counts as a warning ([why](./beyond.md#ib_asyncs-bugs-fixed)).
+- An option list is checked as a gateway checks one: the one key taken is
+  `manual`, valued 0 or 1, none is taken on the two option computations, and
+  another key or value is refused with 10337 or 10338, under the request's
+  number, with nothing sent. `manual` is not carried: see
+  [Limits](./limits.md).
 - An order's status names the client that placed it, as a gateway's does, so
   their wrapper finds the `Trade` an order another client placed is kept under.
 - A record their wrapper builds whole arrives whole: a routing component, a
@@ -115,22 +172,22 @@ A few details are worth knowing:
 - Every account the login holds is listed by `managedAccounts()`, not only the
   first.
 - `isConnected()` answers as their client does. An outage the engine is still
-  mending (1100 until 1102) leaves the session connected. A session the engine
-  ends is handled as their client handles a dropped socket: every waiting
-  request fails, `disconnectedEvent` fires, and the session reads as not
-  connected.
+  mending (1100 until 1102) leaves the session connected.
 - `disconnect()` does not call their `connectionClosed`, as their own client's
   does not. Their wrapper treats that as a session that went away underneath
   them: it fails every request still waiting and raises on their global error
   event. That is right for a socket that dropped and wrong for a caller who
   asked to stop.
-- An `IB` connects again after it disconnected. Delivery still queued from
-  the first session is skipped once the program has disconnected, so it cannot
-  reach their wrapper during the next connect and cancel it. A `connect` on an
-  `ib_async_dx.IB` that is already connected closes that session first, as
-  their client closes its socket.
+- An `IB` connects again after it disconnected. Each session and each connect
+  is counted, and nothing kept for an earlier one — a pass, a login, a held
+  refusal — reaches the next.
 - A request made while not connected raises `ConnectionError("Not connected")`,
-  as their client's does.
+  as their client's does. A request reached by name on `ib.client` takes its
+  arguments as their client's method does, by position or by keyword; `connect`
+  and `run` on it are their client's own, and `reset` ends the session.
+- Request ids stop at the widest a request can carry: the rest of the range
+  is the engine's own. An account whose ids reach it has `getReqId()` raise
+  `OverflowError` rather than number a request the engine refuses.
 - `updateEvent` fires, and their wrapper's `lastTime` moves, only on a pass
   of the engine that delivered something, as they do over a socket only when
   data arrives. A session with nothing arriving stays quiet, so `setTimeout`
@@ -159,21 +216,26 @@ running while the test waits on them. pandas has to be installed too: their
 The conftest replaces their shared `ib` fixture with an `ib_async_dx.IB`,
 connected with the login in the environment, and makes `ib_async.IB` this
 package's, so every test runs on the engine. At 2.1.0 their suite is three
-tests:
+tests, taken from their commit `ab629f34c1`; none has been run against the venue
+at this revision:
 
-| Test | Here |
+| Test | What it asks, and what holds offline |
 | --- | --- |
-| `test_account_summary` | Passes on the engine |
-| `test_request_error_raised` | Fails here as it does against a gateway. Its last line asserts a `RequestError` carrying 321, and 321 is in their own `warningCodes` frozenset, where a warning never ends the request it belongs to, so the error it waits for is never raised |
-| `test_contract_format_data_pd` | Runs on the engine; not yet run against the venue. It builds its own `ib_async.IB()` and connects it to `127.0.0.1:4001` rather than taking the fixture. The conftest makes `ib_async.IB` this package's before their tests are collected, in that run only, so that `IB` connects to the engine whatever host and port it names |
+| `test_account_summary` | The account summary, through their `ib` fixture |
+| `test_request_error_raised` | A `RequestError` carrying 321 from a refused what-if. ib_async 2.1 counts 321 as a warning, which never ends a request, so against any server that answers 321 its own `IB` waits for good; `ib_async_dx.IB` ends the request with the refusal, and `test_a_what_if_refused_with_321_ends_with_the_refusal` holds that offline |
+| `test_contract_format_data_pd` | It builds its own `ib_async.IB()` and connects it to `127.0.0.1:4001` rather than taking the fixture. The conftest makes `ib_async.IB` this package's before their tests are collected, in that run only, so that `IB` connects to the engine whatever host and port it names |
 
 ## What it does not carry
 
-Two things their `IB` reads off its client answer for a transport that has no
-socket. `connectionStats()` counts the messages each way, as their client does:
-a request is one sent, and what reaches their wrapper one received. Its byte
-counts are zero: the engine does not count the bytes of its connections. And
-their client's `conn`, the socket connection, is not there.
+Some of what their `IB` reads off its client answers for a transport that has
+no socket. `connectionStats()` counts the messages each way, as their client
+does: a request is one sent, and what reaches their wrapper one received, over
+the session since it opened. Its byte counts are zero: the engine does not
+count the bytes of its connections. `throttleStart` and `throttleEnd` never
+fire, and `MaxRequests` and `RequestsInterval` are theirs and set nothing:
+their client paces what it writes to a gateway's socket, and nothing between
+the program and the venue paces requests here. And their client's `conn`, the
+socket connection, is not there.
 
 Everything on their `IB` is routed. The rest of what differs is in
 [Limits](./limits.md).
@@ -185,12 +247,8 @@ Each is what ib_async over a gateway does too.
 
 - `readonly=True` makes a read-only session, which refuses to send anything that
   places, changes or withdraws an order, as a gateway set to read-only does.
-- `timeout` bounds what ib_async asks once the session is open — positions,
-  orders, account updates, executions — and not the login, which a gateway also
-  makes before a program connects. A live login waits on its second factor, as
-  a gateway's does; a paper login presents none.
-- `serverVersion()` is 178, the version a current gateway settles on with
-  ib_async 2.1.
+- `serverVersion()` is 178 once connected, the version a current gateway
+  settles on with ib_async 2.1, and 0 until then, as their client answers it.
 - `reqExecutions()` answers with the day's executions: those this session has
   seen and those the venue restated when it opened, fills on orders already
   completed among them. ib_async 2.1's request cannot ask for more.

@@ -13,17 +13,74 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # The engine commit this package is tested against. The engine has no
+  # release to depend on yet, so the commit is named: a newer engine is taken
+  # up by moving this, and the suite says whether it holds.
+  ENGINE_REF: 58ea352aba5a0130ff8670eecda48851d3fc6841
+
 jobs:
+  # The suite against this package as a user installs it — from the wheel and
+  # from the source distribution, into an environment of its own — on Python
+  # 3.11, 3.13 and free-threaded 3.14t.
   pytest:
+    name: pytest (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13", "3.14t"]
+    steps:
+      - uses: actions/checkout@v4
+      # The engine is built from source with its test hooks: the suites drive a
+      # session without a venue, and a release build does not carry them.
+      - uses: actions/checkout@v4
+        with:
+          repository: userFRM/ibkr-dx
+          ref: ${{ env.ENGINE_REF }}
+          path: ibkr-dx
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ibkr-dx
+          key: ${{ matrix.python }}
+      - name: Build the engine and this package
+        run: |
+          python -m pip install maturin build
+          maturin build -m ibkr-dx/Cargo.toml -i "${{ steps.python.outputs.python-path }}" \
+            --features python,extension-module,test-helpers -o dist
+          python -m build --outdir pkg
+      - name: Test the wheel and the source distribution, each installed on its own
+        run: |
+          for artifact in pkg/ib_async_dx-*.whl pkg/ib_async_dx-*.tar.gz; do
+            echo "::group::$artifact"
+            python -m venv "$RUNNER_TEMP/venv"
+            "$RUNNER_TEMP/venv/bin/pip" install dist/ibkr_dx-*.whl "$artifact" pytest pytest-asyncio
+            # The package under test is the installed one, not the checkout's.
+            "$RUNNER_TEMP/venv/bin/python" -c \
+              "import ib_async_dx; assert 'site-packages' in ib_async_dx.__file__, ib_async_dx.__file__"
+            "$RUNNER_TEMP/venv/bin/python" -m pytest tests/python -q -p no:cacheprovider
+            rm -rf "$RUNNER_TEMP/venv"
+            echo "::endgroup::"
+          done
+
+  # The wheel beside the engine as a release builds it: without the test
+  # hooks, which the suite needs and a user's install never has.
+  release-engine:
+    name: the wheel beside a release-built engine
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      # The engine is built from source with its test hooks: the suites drive a
-      # session without a venue, and a released wheel does not carry them.
       - uses: actions/checkout@v4
         with:
           repository: userFRM/ibkr-dx
+          ref: ${{ env.ENGINE_REF }}
           path: ibkr-dx
       - uses: actions/setup-python@v5
         with:
@@ -32,12 +89,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ibkr-dx
-      - name: Build the engine
+      - name: Build and install
         run: |
-          pip install maturin
-          maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
-          pip install dist/*.whl
-      - name: Install this package
-        run: pip install -e . pytest pytest-asyncio
-      - name: Test
-        run: pytest tests/python -q
+          python -m pip install maturin build
+          maturin build -m ibkr-dx/Cargo.toml --release -o dist
+          python -m build --wheel --outdir pkg
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install dist/ibkr_dx-*.whl pkg/ib_async_dx-*.whl
+      - name: It imports, and carries no test hooks
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" - <<'EOF'
+          import ibkr_dx
+          import ib_async_dx
+
+          assert not hasattr(ibkr_dx.EClient, "_test_connect"), "a release build has no test hooks"
+          ib = ib_async_dx.IB()
+          assert not ib.isConnected()
+          assert ib_async_dx.__all__ == __import__("ib_async").__all__
+          print("ib_async_dx", ib_async_dx.__ib_async_dx_version__, "imports beside a release engine")
+          EOF

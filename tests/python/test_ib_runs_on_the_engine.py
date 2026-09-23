@@ -122,7 +122,7 @@ def test_a_second_connect_closes_the_first_session(connect):
     ib = connect()
     first = ib.client
     connect(ib=ib)
-    assert first.connState == first.DISCONNECTED and first._stop.is_set()
+    assert first.connState == first.DISCONNECTED and first._pass is None
     assert not first._client.is_connected(), "the first session is logged out"
     assert ib.isConnected()
 
@@ -169,19 +169,56 @@ def test_a_price_carries_its_size_and_a_size_alone_reaches_tickSize(connect):
         "a price stated alone carries the size standing"
 
 
-def test_a_refused_new_order_reaches_its_trade(connect):
-    """As a gateway's refusal does: after `placeOrder` has made the `Trade`,
-    which ib_async then marks and reports as it marks one a gateway refused.
+def test_a_refused_new_order_reaches_its_trade(connect, caplog):
+    """As a gateway's refusal does: after `placeOrder` has made the `Trade`.
     Delivered inside the call, before the `Trade` existed, the refusal left it
-    PendingSubmit."""
+    PendingSubmit. And a new order refused with 321 is over: ib_async 2.1
+    counts 321 as a warning and left the order `ValidationError`, open for
+    good; ib_async's own rule for 110 on a new order cancels it, and says so
+    on its wrapper's logger."""
+    import logging
+
     ib = connect(readonly=True)
     heard = _heard(ib)
     trade = ib.placeOrder(SPY, ib_async.LimitOrder("BUY", 1, 1.0))
     assert trade.orderStatus.status == "PendingSubmit", "nothing has come back yet"
-    ib.client._pass_once()
-    assert trade.orderStatus.status == "ValidationError", "321 is a warning to ib_async"
-    assert (trade.log[-1].status, trade.log[-1].errorCode) == ("ValidationError", 321)
+    with caplog.at_level(logging.WARNING, logger="ib_async.wrapper"):
+        ib.client._pass_once()
+    said = [(r.name, r.getMessage().split(":")[0]) for r in caplog.records]
+    assert said == [
+        ("ib_async.wrapper", f"Error 321, reqId {trade.order.orderId}"),
+        ("ib_async.wrapper", "Canceled order"),
+    ], said
+    assert (trade.log[-1].status, trade.log[-1].errorCode) == ("Cancelled", 321)
+    assert trade.isDone() and trade not in ib.openTrades()
     assert heard == [(trade.order.orderId, 321)]
+
+
+def test_a_what_if_refused_with_321_ends_with_the_refusal(connect):
+    """ib_async 2.1's `whatIfOrder` waited for good on a 321, a warning to
+    it, which never ends a request; its own suite expects a `RequestError`
+    carrying 321."""
+    ib = connect(readonly=True)
+    ib.RaiseRequestErrors = True
+    with pytest.raises(ib_async.RequestError) as refused:
+        ib.run(asyncio.wait_for(ib.whatIfOrderAsync(SPY, ib_async.LimitOrder("BUY", 1, 1.0)), 2))
+    assert refused.value.code == 321
+    ib.RaiseRequestErrors = False
+    assert ib.run(asyncio.wait_for(ib.whatIfOrderAsync(SPY, ib_async.LimitOrder("BUY", 1, 1.0)), 2)) == []
+
+
+def test_321_on_an_order_already_working_stays_a_warning(connect, monkeypatch):
+    """A modification refused leaves the order live at the venue, which is
+    why ib_async counts 321 as a warning: the trade is marked, and kept."""
+    monkeypatch.setattr(ibkr_dx, "EClient", Placing)
+    ib = connect()
+    heard = _heard(ib)
+    trade = ib.placeOrder(SPY, ib_async.LimitOrder("BUY", 1, 1.0))
+    trade.orderStatus.status = "Submitted"
+    ib.wrapper.error(trade.order.orderId, 321, "the change was not accepted", "")
+    assert trade.orderStatus.status == "ValidationError"
+    assert not trade.isDone()
+    assert heard[-1] == (trade.order.orderId, 321)
 
 
 class Placing(OfflineEngine):
@@ -490,6 +527,98 @@ def test_the_accounts_grants_are_read_from_the_engine(connect):
     assert math.isnan(extras.sharesOutstanding) and extras.statedFigures == {}
 
 
+def test_priceBasedVol_is_a_bool_when_unstated():
+    """As its docstring says: False when the venue did not state it."""
+    from ib_async_dx.ib import _optionModel
+
+    assert _optionModel({}).priceBasedVol is False
+    assert ib_async_dx.OptionModel().priceBasedVol is False
+    assert _optionModel({"priceBasedVol": True}).priceBasedVol is True
+
+
+def test_a_subscription_over_leaves_no_size_behind(connect):
+    """The size kept for a quote's price stays only as long as the
+    subscription: a program opening and closing many kept every one."""
+    ib = connect()
+    engine = ib.client._client
+    engine._test_set_instrument_count(2)
+    held = ib.client._callbacks._sizes
+
+    def kept(reqId):
+        return [k for k in held if (k[0] if isinstance(k, tuple) else k) == reqId]
+
+    reqIds = []
+    for slot, contract in enumerate((SPY, ib_async.Stock("QQQ", "SMART", "USD", conId=320227571))):
+        reqId = ib.client.getReqId()
+        ib.wrapper.startTicker(reqId, contract, "mktData")
+        engine._test_map_instrument(reqId, slot)
+        engine._test_push_quote(slot, bid=100.25, bid_size=300)
+        reqIds.append(reqId)
+    ib.client._pass_once()
+    assert all(kept(reqId) for reqId in reqIds)
+    ib.cancelMktData(SPY)
+    assert not kept(reqIds[0]), "cancelled"
+    ib.client._callbacks.tickSnapshotEnd(reqIds[1])
+    assert not kept(reqIds[1]), "a snapshot answered"
+
+
+class Exempt(Placing):
+    features = ["NOAPIMISCVLD"]
+
+
+def test_an_option_list_is_checked_as_a_gateway_checks_one(connect, monkeypatch):
+    """A gateway takes one key in a request's option list, `manual`, valued 0
+    or 1, and refuses a request stating another with 10337, or another value
+    with 10338, on errorEvent, once the call has returned. A non-empty list
+    raised NotImplementedError here on two requests, and went out dropped on
+    the other seven. The two option computations take no key at all, and
+    went out with theirs dropped."""
+    monkeypatch.setattr(ibkr_dx, "EClient", Placing)
+    ib = connect()
+    heard = []
+    ib.errorEvent += lambda reqId, code, text, contract: heard.append((code, text))
+    engine = ib.client._client
+    TagValue = ib_async.TagValue
+    ib.reqMktData(SPY, mktDataOptions=[TagValue("snapshotMode", "1")])
+    ib.reqRealTimeBars(SPY, 5, "TRADES", False, [TagValue("manual", "2")])
+    order = ib_async.LimitOrder("BUY", 1, 1.0)
+    order.orderMiscOptions = [TagValue("rth", "1")]
+    trade = ib.placeOrder(SPY, order)
+    ib.client._pass_once()
+    assert [code for code, _ in heard] == [10337, 10338, 10337]
+    assert heard[0][1] == (
+        "Misc options key=snapshotMode is invalid in ReqMktData(1) request. "
+        "Valid keys are: manual"
+    )
+    assert heard[1][1] == (
+        "Misc options value=2 is invalid for key=manual in ReqRealTimeBars(50) request. "
+        "Valid values are: 0, 1"
+    )
+    assert engine.asked == [], "nothing went out"
+    assert trade.orderStatus.status == "Cancelled"
+
+    heard.clear()
+    engine._test_take_commands()
+    ib.client.calculateImpliedVolatility(90, SPY, 1.5, 100.0, [TagValue("manual", "1")])
+    ib.client.calculateOptionPrice(91, SPY, 0.2, 100.0, [TagValue("manual", "0")])
+    ib.client._pass_once()
+    assert heard == [
+        (10337, "Misc options key=manual is invalid in ReqCalcImpliedVolatility(54) request. "
+                "Valid keys are: "),
+        (10337, "Misc options key=manual is invalid in ReqCalcOptionPrice(55) request. "
+                "Valid keys are: "),
+    ]
+    assert engine._test_take_commands() == [], "nothing went out"
+
+    ib.reqMktData(SPY, mktDataOptions=[TagValue("manual", "1")])
+    assert engine.asked[-1][0] == "req_mkt_data", "manual is taken"
+
+    monkeypatch.setattr(ibkr_dx, "EClient", Exempt)
+    exempt = connect()
+    exempt.placeOrder(SPY, order)
+    assert exempt.client._client.asked[-1][0] == "place_order", "unless the venue exempts it"
+
+
 def test_a_ping_reaches_the_engine(connect):
     ib = connect()
     engine = ib.client._client
@@ -535,6 +664,24 @@ def test_connectionStats_counts_the_messages_each_way(connect):
     ib.disconnect()
     with pytest.raises(ConnectionError, match="Not connected"):
         ib.client.connectionStats()
+
+
+class Malformed(Stating):
+    def competing_session(self):
+        return ("10.0.0.4", "20261399-99:99:99", True)
+
+
+def test_a_completed_connect_is_not_failed_by_what_follows_it(connect, monkeypatch):
+    """ib_async's connect returns once it has emitted connectedEvent. The
+    competing-session warning that followed failed it: a stamp that did not
+    parse raised, and so did a handler that had disconnected."""
+    monkeypatch.setattr(ibkr_dx, "EClient", Malformed)
+    assert connect().isConnected(), "a stamp that does not parse"
+    monkeypatch.setattr(ibkr_dx, "EClient", Stating)
+    ib = ib_async_dx.IB()
+    ib.connectedEvent += ib.disconnect
+    assert connect(ib=ib) is ib
+    assert not ib.isConnected()
 
 
 def test_the_competing_session_warning_is_this_packages_own(connect, monkeypatch, caplog):
@@ -589,13 +736,85 @@ def test_an_unmodified_watchdog_keeps_the_session_up(connect):
     assert not ib.isConnected()
 
 
-def test_ibc_refuses_a_login_it_cannot_use():
-    """A gateway's login, which there is no gateway to take: raised, rather
-    than a session opened on another login or on paper."""
-    for stated in ({"userid": "me"}, {"password": "pw"}, {"tradingMode": "live"}):
-        with pytest.raises(ValueError, match="attach"):
-            ib_async_dx.IBC(1012, gateway=True, **stated)
-    assert ib_async_dx.IBC(1012, gateway=True, tradingMode="paper")
+def test_an_ibc_carries_its_login_to_the_connect_and_terminates_its_session(connect):
+    """ib_async documents `IBC(976, gateway=True, tradingMode='live',
+    userid=..., password=...)` as how a gateway is given its login. It
+    raised here. Its login is the one a connect naming none logs in with, and
+    terminating it ends the session that login opened, as stopping a gateway
+    ends the sessions of the programs connected to it."""
+    for mode, paper in (("live", False), ("paper", True), ("", True)):
+        ibc = ib_async_dx.IBC(1012, gateway=True, tradingMode=mode, userid="u", password="p")
+        ibc.start()
+        ib = connect()
+        logon = ib.client._client.logon
+        assert (logon["username"], logon["password"], logon["paper"]) == ("u", "p", paper), mode
+        assert logon["session_file"].endswith("session-u-" + ("paper" if paper else "live"))
+        named = connect(username="me", password="pw")
+        assert named.client._client.logon["username"] == "me", "a login named on connect"
+        ended = []
+        ib.disconnectedEvent += lambda: ended.append(1)
+        ibc.terminate()
+        assert not ib.isConnected() and ended == [1], mode
+        assert named.isConnected(), "only the session its login opened"
+        assert connect().client._client.logon["username"] == "", "and it holds it no longer"
+
+
+def test_a_terminated_ibc_ends_every_session_of_its_login_and_lends_it_to_none(connect):
+    """Terminated from another context — a task's copy of the program's own —
+    its login stayed held where it was started, and the next connect there
+    logged in with it, where no gateway was left to connect to. And it ended
+    only the last session its login had opened."""
+    import contextvars
+
+    ibc = ib_async_dx.IBC(1012, gateway=True, tradingMode="paper", userid="u", password="p")
+    ibc.start()
+    first, second = connect(), connect()
+    contextvars.copy_context().run(ibc.terminate)
+    assert not first.isConnected() and not second.isConnected()
+    assert connect().client._client.logon["username"] == ""
+
+
+def test_an_unmodified_watchdog_logs_in_with_its_ibcs_login(connect):
+    """Each Watchdog runs in a task of its own, so each connects with its
+    own IBC's login, and connects again with it when the session ends."""
+    ibs = [ib_async_dx.IB(), ib_async_dx.IB()]
+    ibcs = [
+        ib_async_dx.IBC(1012, gateway=True, tradingMode="live", userid="u1", password="p1"),
+        ib_async_dx.IBC(1012, gateway=True, tradingMode="paper", userid="u2", password="p2"),
+    ]
+    watchdogs = [
+        ib_async_dx.Watchdog(ibc, ib, appStartupTime=0, retryDelay=0, readonly=True,
+                             connectTimeout=0.5)
+        for ibc, ib in zip(ibcs, ibs)
+    ]
+    logons = {id(ib): [] for ib in ibs}
+    for watchdog, ib in zip(watchdogs, ibs):
+        watchdog.startedEvent += lambda w, ib=ib: logons[id(ib)].append(ib.client._client.logon)
+
+    def until(done):
+        for _ in range(100):
+            if done():
+                return
+            with contextlib.suppress(asyncio.CancelledError, ConnectionError):
+                ibs[0].sleep(0.1)
+        raise AssertionError("never happened")
+
+    ib_async.util.getLoop()
+    for watchdog in watchdogs:
+        watchdog.start()
+    try:
+        until(lambda: all(logons.values()))
+        ibs[0].client._client._test_end_session()
+        until(lambda: len(logons[id(ibs[0])]) == 2)
+    finally:
+        for watchdog in watchdogs:
+            watchdog.stop()
+    first, again = logons[id(ibs[0])]
+    [second] = logons[id(ibs[1])]
+    assert (first["username"], first["password"], first["paper"]) == ("u1", "p1", False)
+    assert (again["username"], again["paper"]) == ("u1", False), "the same login again"
+    assert (second["username"], second["password"], second["paper"]) == ("u2", "p2", True)
+    assert not any(ib.isConnected() for ib in ibs)
 
 
 class Answering(OfflineEngine):

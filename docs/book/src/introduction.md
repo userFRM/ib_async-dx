@@ -66,7 +66,7 @@ the one layer that knew there was a socket.
 </div>
 <div class="dx-card">
 <p class="dx-card-title">IBC and the watchdog</p>
-<p>No login window to script and no gateway to restart when it wedges. The engine logs in itself, and rebuilds a dropped connection on the session it already holds. ib_async's own <code>Watchdog</code> still runs, as a reconnect loop.</p>
+<p>No login window to script and no gateway to restart when it wedges. The engine logs in itself, and rebuilds a dropped connection on the session it already holds. ib_async's own <code>Watchdog</code> still runs, as a reconnect loop, with the login its <code>IBC</code> names.</p>
 </div>
 </div>
 
@@ -87,11 +87,11 @@ the one layer that knew there was a socket.
 </div>
 <div class="dx-card">
 <p class="dx-card-title">More than a gateway forwards</p>
-<p>What the venue states that no documented call asks for — the order types the account may use, its algorithms, the features it has enabled, the whole option model — is a method on <code>IB</code>. <a href="./beyond.html">Beyond ib_async</a> lists them, with the two ib_async bugs fixed here.</p>
+<p>What the venue states that no documented call asks for — the order types the account may use, its algorithms, the features it has enabled, the whole option model — is a method on <code>IB</code>. <a href="./beyond.html">Beyond ib_async</a> lists them, with the four ib_async bugs fixed here.</p>
 </div>
 <div class="dx-card">
 <p class="dx-card-title">Honest about its limits</p>
-<p>A field the engine cannot carry is refused by name instead of going out as something other than what was asked. The few things taken and not applied, and everything else that differs from ib_async over a gateway, are <a href="./limits.html">written down</a> with the reason for each.</p>
+<p>A field the engine cannot carry is refused, as a gateway refuses a message it cannot read, instead of going out as something other than what was asked. The few things taken and not applied, and everything else that differs from ib_async over a gateway, are <a href="./limits.html">written down</a> with the reason for each.</p>
 </div>
 </div>
 
@@ -101,7 +101,7 @@ the one layer that knew there was a socket.
 <a class="dx-card" href="./getting-started.html"><strong>Getting started</strong><span>Install, credentials, and a first program.</span></a>
 <a class="dx-card" href="./drop-in.html"><strong>What drop-in means</strong><span>The promise, the connect line, and how it is proven.</span></a>
 <a class="dx-card" href="./bridge.html"><strong>Running ib_async itself</strong><span>ib_async's own code, with the engine where its socket was, and what that carries.</span></a>
-<a class="dx-card" href="./beyond.html"><strong>Beyond ib_async</strong><span>Two bugs fixed, and the calls ib_async has no name for.</span></a>
+<a class="dx-card" href="./beyond.html"><strong>Beyond ib_async</strong><span>Four bugs fixed, and the calls ib_async has no name for.</span></a>
 <a class="dx-card" href="./notebooks.html"><strong>The notebooks</strong><span>All eight of ib_async's notebook subjects, run with no gateway.</span></a>
 <a class="dx-card" href="./limits.html"><strong>Before you depend on it</strong><span>What differs from ib_async over a gateway, and what is not carried and why.</span></a>
 <a class="dx-card" href="./evidence.html"><strong>What it rests on</strong><span>The tests, the scripts and the sessions behind each claim.</span></a>
@@ -109,10 +109,12 @@ the one layer that knew there was a socket.
 
 ## Status
 
-Under active development. The Python package is here with its suite: 259
-tests, 257 of which run offline on every push to `main` and every pull
-request, and 2 that need a live login. ib_async's own suite runs against the engine too, where
-its tests use the connection it shares; see [Evidence](./evidence.md).
+Under active development. The Python package is here with its suite: 300
+tests, 298 of which run offline on every push to `main` and every pull
+request, on Python 3.11, 3.13 and free-threaded 3.14t, and 2 that need a live
+login. ib_async's own
+suite is written to run against the engine too, and has not been run against
+the venue at this revision; see [Evidence](./evidence.md).
 
 A Rust client — ib_async's model in Rust spelling, on the engine's public API —
 is coming. It is not in this repository yet.

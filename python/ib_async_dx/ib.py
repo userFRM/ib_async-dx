@@ -20,11 +20,13 @@ from ib_async import util
 from ib_async.contract import Contract, TagValue
 from ib_async.ib import *  # noqa: F403
 from ib_async.ib import StartupFetch, StartupFetchALL
-from ib_async.objects import AccountValue, Position
+from ib_async.objects import AccountValue, Position, TradeLogEntry
+from ib_async.order import OrderStatus
 from ib_async.ticker import Ticker
+from ib_async.wrapper import RequestError
 from ibkr_dx import SpreadScan
 
-from .bridge import PASS_INTERVAL, IbkrDxClient, _refuse_options, attach
+from .bridge import PASS_INTERVAL, IbkrDxClient, attach
 
 #: What ``from ib_async_dx.ib import *`` binds: ib_async's module's names.
 __all__ = [name for name in dir(ib_async.ib) if not name.startswith("_")]
@@ -79,7 +81,7 @@ class OptionModel:
     modelYield: float | None = None
     bridgeYield: float | None = None
     timeValue: float | None = None
-    priceBasedVol: bool | None = None
+    priceBasedVol: bool = False
 
 
 class OrderPreset(NamedTuple):
@@ -166,7 +168,18 @@ def _stated(value, unset=math.nan):
 def _optionModel(stated: dict | None) -> OptionModel | None:
     if stated is None:
         return None
-    return OptionModel(**{name: _stated(v, None) for name, v in stated.items()})
+    return OptionModel(**{
+        name: bool(v) if name == "priceBasedVol" else _stated(v, None)
+        for name, v in stated.items()
+    })
+
+
+def _current_task() -> asyncio.Task | None:
+    """The task running now, or None outside one."""
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
 
 
 class IB(ib_async.ib.IB):
@@ -177,14 +190,14 @@ class IB(ib_async.ib.IB):
     runs ib_async's connect. Beyond ib_async:
 
     * ``connect`` and ``connectAsync`` take the account's login;
-    * two ib_async 2.1 bugs are fixed: ``reqUserInfo`` returned ``[]``, and
-      the startup sync asked for positions whatever ``fetchFields`` said;
+    * four ib_async 2.1 bugs are fixed: ``reqUserInfo`` returned ``[]``; the
+      startup sync asked for positions whatever ``fetchFields`` said; a
+      what-if or a new order refused with 321 was never ended, since 321 is
+      a warning to ib_async; and ``disconnect()`` did nothing while a connect
+      was under way, which then opened the session anyway;
     * the engine's calls beyond the documented API are methods here, from
       :meth:`reqMktDataEx` on.
     """
-
-    #: False only while connectAsync runs without StartupFetch.POSITIONS.
-    _fetchPositions = True
 
     def connect(
         self,
@@ -208,17 +221,30 @@ class IB(ib_async.ib.IB):
         are not used, and ``clientId`` keys this session's orders.
         ``readonly`` also makes the engine refuse order requests.
 
+        ``timeout`` bounds each request of the startup sync, as ib_async's
+        does. The login is the engine's to bound, the engine's wait of up to
+        three seconds for the venue to name the working orders among it: a
+        paper login presents no second factor, and a live one waits on the
+        second factor for as long as the engine allows, as a gateway's login
+        happens before a program connects. An interrupt ends the connect, and
+        the engine drops the session its login opens.
+
         Args:
-            username: The account's login name. Left empty, ``IB_USERNAME``.
-            password: Its password. Left empty, ``IB_PASSWORD``.
-            paper: A paper session unless ``False``.
+            username: The account's login name. Left empty, and ``password``
+                too, the login an :class:`IBC` was started with in this
+                context, and failing one ``IB_USERNAME``.
+            password: Its password. Left empty, as ``username``, and failing
+                both ``IB_PASSWORD``.
+            paper: A paper session unless ``False``. Where the login an
+                ``IBC`` holds is used, its ``tradingMode`` decides instead:
+                live where it is ``'live'``, and paper otherwise.
             sessionFile: Where the session is kept between runs. ``None`` is
                 ``~/.ibkr_dx/session-{username}-{paper|live}``; ``False``
                 keeps nothing.
 
         The other arguments are ib_async's.
         """
-        return self._run(
+        task = asyncio.ensure_future(
             self.connectAsync(
                 host,
                 port,
@@ -232,8 +258,18 @@ class IB(ib_async.ib.IB):
                 password=password,
                 paper=paper,
                 sessionFile=sessionFile,
-            )
+            ),
+            loop=util.getLoop(),
         )
+        try:
+            return self._run(task)
+        except KeyboardInterrupt:
+            # The interrupt leaves the loop, and the connect with it: the next
+            # call that ran the loop finished the connect, and opened the
+            # session the program was stopped from opening.
+            task.cancel()
+            self.disconnect()
+            raise
 
     async def connectAsync(
         self,
@@ -251,46 +287,137 @@ class IB(ib_async.ib.IB):
         paper: bool = True,
         sessionFile: str | Literal[False] | None = None,
     ):
-        # ib_async's own client closes the session it holds before opening
-        # another.
-        self.disconnect()
-        attach(self, username, password, paper, sessionFile, clientId, readonly)
-        wrapper = self.wrapper
-        # ib_async 2.1's Wrapper.userInfo ends the request without the White
-        # Branding ID it was answered with, so reqUserInfo() returned [].
-        wrapper.userInfo = lambda reqId, whiteBrandingId: wrapper._endReq(
-            reqId, whiteBrandingId
-        )
-        # The answer to reqCurrentTimeInMillis, which ib_async's Wrapper lacks.
-        wrapper.currentTimeInMillis = lambda timeInMillis: wrapper._endReq(
-            "currentTimeInMillis", timeInMillis
-        )
-        self._fetchPositions = bool(fetchFields & StartupFetch.POSITIONS)
+        # One connect at a time. A later one ends the connects still under
+        # way and waits for them to end, so what an earlier one does on its
+        # way out — ib_async disconnects on a failed connect — reaches its own
+        # session: run beside the later connect, it ended the later one's.
+        # Each is held by the task running it, until it has ended.
+        task = _current_task()
+        connecting = self.__dict__.setdefault("_connecting", {})
+        earlier = dict(connecting)
+        ended = connecting[task] = asyncio.get_running_loop().create_future()
+        # Whether this connect's startup request for positions is still to be
+        # answered from the cache, by the task running it.
+        connects = self.__dict__.setdefault("_connects", {})
         try:
+            for t in earlier:
+                t.cancel()
+            if earlier:
+                await asyncio.wait(earlier.values())
+            # attach() ends the session this IB holds, or the login still
+            # running for one, as ib_async's own client closes its socket
+            # before it opens another.
+            attach(self, username, password, paper, sessionFile, readonly)
+            wrapper = self.wrapper
+            # ib_async 2.1's Wrapper.userInfo ends the request without the
+            # White Branding ID it was answered with, so reqUserInfo()
+            # returned [].
+            wrapper.userInfo = lambda reqId, whiteBrandingId: wrapper._endReq(
+                reqId, whiteBrandingId
+            )
+            # The answer to reqCurrentTimeInMillis, which ib_async's Wrapper
+            # lacks.
+            wrapper.currentTimeInMillis = lambda timeInMillis: wrapper._endReq(
+                "currentTimeInMillis", timeInMillis
+            )
+            wrapper.error = self._error
+            connects[task] = not fetchFields & StartupFetch.POSITIONS
             await super().connectAsync(
                 host, port, clientId, timeout, readonly, account, raiseSyncErrors,
                 fetchFields,
             )
+        except asyncio.CancelledError:
+            if next(reversed(connecting)) is task:
+                raise
+            # Ended by a later connect, not by its caller.
+            task.uncancel()
+            raise ConnectionError(
+                "Connection abandoned: another connect was called"
+            ) from None
         finally:
-            self._fetchPositions = True
-        if session := self.competingSession():
+            connects.pop(task, None)
+            del connecting[task]
+            ended.set_result(None)
+        # Said of a session still open, in the engine's own terms: a warning
+        # never fails a connect that has completed, whatever its handlers did.
+        stated = self.isConnected() and self.client._client.competing_session()
+        if stated:
+            origin, since, readOnly = stated
             _logger.warning(
-                f"Another session was logged in on this account when this one "
-                f"connected: {session}"
+                "Another session was logged in on this account when this one "
+                f"connected: from {origin}, logged in at {since} UTC"
+                + (", holding the account, so this session may only read" if readOnly else "")
             )
         return self
 
+    def disconnect(self) -> str | None:
+        """ib_async's disconnect, and a connect still logging in is ended too.
+
+        ib_async's does nothing while its client is connecting, so the connect
+        went on and opened the session the program had asked to close. That
+        connect now raises ``ConnectionError``, and the engine drops what its
+        login opens.
+        """
+        client = self.client
+        if isinstance(client, IbkrDxClient) and client.connState == IbkrDxClient.CONNECTING:
+            client.disconnect()
+            return None
+        return super().disconnect()
+
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
-        if self._fetchPositions:
+        # ib_async 2.1's startup sync asks for positions even when
+        # fetchFields leaves StartupFetch.POSITIONS out. That one request,
+        # made by the connect's own task, is answered from the cache without
+        # asking; any other asks as usual.
+        connects = self.__dict__.get("_connects", {})
+        task = _current_task()
+        if not connects.get(task):
             return super().reqPositionsAsync()
-        # ib_async 2.1's startup sync asks for positions even when fetchFields
-        # leaves StartupFetch.POSITIONS out. connectAsync lowers the flag for
-        # that one request, answered here from the cache without asking; it is
-        # raised again at once, so any later request asks as usual.
-        self._fetchPositions = True
+        connects[task] = False
         future = asyncio.get_running_loop().create_future()
         future.set_result(self.positions())
         return future
+
+    def _error(self, reqId: int, errorCode: int, errorString: str,
+               advancedOrderRejectJson: str) -> None:
+        """ib_async's ``error``, with 321 on a request or a new order ended.
+
+        ib_async 2.1 counts 321 as a warning, which never ends what it is
+        about: a what-if refused with it never resolved, and a new order
+        stayed ``ValidationError`` and open for good. It applies the same
+        rule to 110 already, and this applies it to 321: a request waiting
+        under the number fails, and a trade still ``PendingSubmit`` is
+        cancelled. On an order already working, 321 stays a warning, since a
+        modification refused leaves the order live.
+        """
+        wrapper = self.wrapper
+        trade = wrapper.trades.get((wrapper.clientId, reqId)) if reqId != -1 else None
+        isRequest = reqId in wrapper._futures
+        newOrder = trade is not None and trade.orderStatus.status == OrderStatus.PendingSubmit
+        if errorCode != 321 or not (isRequest or newOrder):
+            type(wrapper).error(wrapper, reqId, errorCode, errorString, advancedOrderRejectJson)
+            return
+        contract = wrapper._reqId2Contract.get(reqId)
+        msg = f"Error {errorCode}, reqId {reqId}: {errorString}"
+        if contract:
+            msg += f", contract: {contract}"
+        wrapper._logger.error(msg)
+        if isRequest:
+            if self.RaiseRequestErrors:
+                error = RequestError(reqId, errorCode, errorString)
+                wrapper._endReq(reqId, error, success=False)
+            else:
+                wrapper._endReq(reqId)
+        else:
+            if advancedOrderRejectJson:
+                trade.advancedError = advancedOrderRejectJson
+            status = trade.orderStatus.status = OrderStatus.Cancelled
+            trade.log.append(TradeLogEntry(wrapper.lastTime, status, msg, errorCode))
+            wrapper._logger.warning(f"Canceled order: {trade}")
+            self.orderStatusEvent.emit(trade)
+            trade.statusEvent.emit(trade)
+            trade.cancelledEvent.emit(trade)
+        self.errorEvent.emit(reqId, errorCode, errorString, contract)
 
     # ── Beyond ib_async: the engine's calls past the documented API ──
 
@@ -338,9 +465,10 @@ class IB(ib_async.ib.IB):
                 f"marketDataType={marketDataType!r}: 1 live, 2 frozen, 3 delayed "
                 "or 4 delayed frozen"
             )
-        _refuse_options("mktDataOptions", mktDataOptions)
         reqId = self.client.getReqId()
         ticker = self.wrapper.startTicker(reqId, contract, "mktData")
+        if self.client._refused_options("reqMktData", reqId, mktDataOptions):
+            return ticker
         self._send(
             "req_mkt_data_ex", reqId, contract, genericTickList, snapshot,
             regulatorySnapshot, mode,

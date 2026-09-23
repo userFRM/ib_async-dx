@@ -67,13 +67,14 @@ A few things they show along the way:
 
 > [!NOTE]
 > `ordering` places a real order on the paper account: a buy at half the last
-> price, so it rests and does not fill, and a later cell withdraws it.
-> Run the notebook through, or withdraw it yourself.
+> price, meant to rest unfilled until a later cell withdraws it. A price is not
+> a guarantee; the trade's status says what happened. Run the notebook
+> through, or withdraw it yourself.
 
 ## Running them
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx"
+pip install "git+https://github.com/userFRM/ibkr-dx@58ea352aba5a0130ff8670eecda48851d3fc6841"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx" \
     jupyter python-dotenv pandas
 git clone https://github.com/userFRM/ib_async-dx

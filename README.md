@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/userFRM/ib_async-dx/actions/workflows/tests.yml"><img src="https://github.com/userFRM/ib_async-dx/actions/workflows/tests.yml/badge.svg" alt="Build"></a>
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python version">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/userFRM/ib_async-dx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License"></a>
   <a href="https://userfrm.github.io/ib_async-dx/"><img src="https://img.shields.io/badge/docs-book-green.svg" alt="Docs"></a>
   <a href="https://github.com/userFRM/ibkr-dx"><img src="https://img.shields.io/badge/engine-ibkr--dx-red.svg" alt="Engine: ibkr-dx"></a>
 </p>
@@ -110,8 +110,9 @@ No IB software is required, and not the `ibapi` package either.
 The engine first, then this package:
 
 ```bash
-# The engine. It compiles from source, so it needs the Rust toolchain.
-pip install "git+https://github.com/userFRM/ibkr-dx"
+# The engine, at the commit this package is tested against. It compiles
+# from source, so it needs the Rust toolchain.
+pip install "git+https://github.com/userFRM/ibkr-dx@58ea352aba5a0130ff8670eecda48851d3fc6841"
 
 # This package, which brings ib_async 2.1 with it.
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
@@ -121,7 +122,9 @@ pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
 > Neither ib_async-dx nor the engine is on PyPI or crates.io yet, so both
 > install from their repositories.
 > The order matters: ib_async-dx names the engine (`ibkr-dx`) as a dependency,
-> and pip finds it only once the first line has installed it.
+> and pip finds it only once the first line has installed it. The engine has no
+> release yet, so the line names the engine commit the suite runs against on
+> every push.
 
 ## Quick start
 
@@ -161,12 +164,12 @@ reading code:
 
 | What is run | What it shows | Where |
 | --- | --- | --- |
-| The package, against ib_async | `ib_async_dx.__all__` is ib_async's, and every name in it is ib_async's own object except `IB` and `IBC`; `__version__` is ib_async's. All 13 of its submodules resolve here, as `import ib_async_dx.contract` and as `from ib_async_dx.util import df`. `connect` is ib_async's signature with four keyword-only parameters after it | [`tests/python/test_the_package_is_ib_async.py`](tests/python/test_the_package_is_ib_async.py) |
-| Their transport, read from their source | Their `IB` makes 67 distinct calls on its transport at 2.1.0, and every one lands here. The list is read out of their installed source on every run, so a call they add fails here before it fails a program | [`tests/python/test_ib_async_transport.py`](tests/python/test_ib_async_transport.py) |
-| Their client's own messages | Each of the 80 requests their client writes as a message, written by their own code through `send`, reads back into the message it was and reaches the engine exactly as the same request made by name | [`tests/python/test_a_raw_message_is_the_request_it_names.py`](tests/python/test_a_raw_message_is_the_request_it_names.py) |
-| ib_async's own test suite | Their tests, from their own checkout and unvendored, each against an `ib_async_dx.IB`: the shared `ib` fixture's, or the `ib_async.IB()` a test builds itself | [`tests/ib_async_upstream/conftest.py`](tests/ib_async_upstream/conftest.py) |
-| An unmodified program, live | Their `IB`, attached, connects, names its account, reads bars and quotes, and takes an order through its whole life | [`tests/python/test_ib_async_transport.py`](tests/python/test_ib_async_transport.py), with a login |
-| A paper account | Every read asked of the venue, and an order placed, changed and withdrawn, through `ib_async_dx.IB`; not yet run against the venue | [`scripts/`](scripts/) |
+| The package, against ib_async | `ib_async_dx.__all__` is ib_async's, and every name in it is ib_async's own object except `IB` and `IBC`; `__version__` is ib_async's. All 13 of its submodules resolve here, as `import ib_async_dx.contract` and as `from ib_async_dx.util import df`. `connect` is ib_async's signature with four keyword-only parameters after it | [`tests/python/test_the_package_is_ib_async.py`](https://github.com/userFRM/ib_async-dx/blob/main/tests/python/test_the_package_is_ib_async.py) |
+| Their transport, read from their source | Their `IB` makes 67 distinct calls on its transport at 2.1.0, and every one lands here. The list is read out of their installed source on every run, so a call they add fails here before it fails a program | [`tests/python/test_ib_async_transport.py`](https://github.com/userFRM/ib_async-dx/blob/main/tests/python/test_ib_async_transport.py) |
+| Their client's own messages | Each of the 80 requests their client writes as a message, written by their own code through `send`, reads back into the message it was and reaches the engine exactly as the same request made by name | [`tests/python/test_a_raw_message_is_the_request_it_names.py`](https://github.com/userFRM/ib_async-dx/blob/main/tests/python/test_a_raw_message_is_the_request_it_names.py) |
+| ib_async's own test suite | Their tests, from their own checkout and unvendored, each against an `ib_async_dx.IB`: the shared `ib` fixture's, or the `ib_async.IB()` a test builds itself; not run against the venue at this revision | [`tests/ib_async_upstream/conftest.py`](https://github.com/userFRM/ib_async-dx/blob/main/tests/ib_async_upstream/conftest.py) |
+| An unmodified program, live | Their `IB`, attached, connects, names its account, reads bars and quotes, and takes an order through its whole life; written for the venue, and not run against it at this revision | [`tests/python/test_ib_async_transport.py`](https://github.com/userFRM/ib_async-dx/blob/main/tests/python/test_ib_async_transport.py), with a login |
+| A paper account | Every read asked of the venue, and an order placed, changed and withdrawn, through `ib_async_dx.IB`; not yet run against the venue | [`scripts/`](https://github.com/userFRM/ib_async-dx/tree/main/scripts) |
 
 Their suite is not vendored. Point a run at a checkout of theirs:
 
@@ -186,15 +189,16 @@ while the test waits on them. pandas has to be installed too: their
 `test_contract.py` imports it, and without it the run stops at collection.
 
 > [!NOTE]
-> At 2.1.0 their suite is three tests. `test_account_summary` passes on the
-> engine. `test_request_error_raised` fails here as it does against a gateway:
-> it asserts a `RequestError` carrying code 321, and 321 is in their own
-> `warningCodes`, where a warning never ends the request it belongs to.
+> At 2.1.0 their suite is three tests, and none of them has been run against
+> the venue at this revision. `test_request_error_raised` asserts a
+> `RequestError` carrying code 321 from a refused what-if. ib_async 2.1 counts
+> 321 as a warning and never ends the request, against a gateway as anywhere;
+> `ib_async_dx.IB` ends it, as [one of the bugs fixed](#what-is-better-underneath),
+> and an offline test holds a refused what-if to that `RequestError`.
 > `test_contract_format_data_pd` builds its own `ib_async.IB()` and connects it
 > to `127.0.0.1:4001` rather than using their `ib` fixture; the conftest makes
 > `ib_async.IB` this package's before their tests are collected, in that run
-> only, so it connects to the engine. It has not yet been run against the
-> venue.
+> only, so it connects to the engine.
 
 The whole account of what "drop-in" covers, and what each claim rests on, is on
 [Drop-in](https://userfrm.github.io/ib_async-dx/drop-in.html) and
@@ -213,19 +217,25 @@ as ib_async's own dataclass, by type name, so a field it has and the engine does
 not keeps its default. A bar's date arrives in the spelling ib_async's own
 parser reads.
 
-**What a gateway answers, the engine answers.** A refusal reaches
-`errorEvent` after the call that caused it has returned, so a refused new
-order is marked on its `Trade` as ib_async marks one a gateway refused. An
-order is carried as their client writes it, and one stating an attribute the
-venue no longer takes is answered as a gateway answers it. Orders and requests
-are numbered from one counter, as their client numbers them, starting past
-every order id the account has used, where a gateway's next valid id starts.
-`readonly=True` makes a read-only session, which refuses orders as a gateway
-set to read-only does. `timeout` bounds what ib_async asks once the session is
-open, and a live login waits on its second factor before that, as a gateway's
-does. `serverVersion()` is 178, `reqExecutions()` answers with the day's
-executions, `numIds` changes nothing on `reqIds`, and callbacks that reach
-nothing in ib_async over a gateway reach nothing here either.
+**What a gateway answers, the engine answers.** A refusal reaches `errorEvent`
+after the call that caused it has returned, so a refused new order is marked on
+its `Trade` as ib_async marks one a gateway refused. An order is carried as
+their client writes it, and one stating an attribute the venue no longer takes
+is answered as a gateway answers it. An option list is checked as a gateway
+checks one: `manual`, valued 0 or 1, is the one key it takes, none on the two
+option computations, and another key or value is refused with 10337 or 10338.
+Orders and requests are numbered from one counter, as their client numbers
+them, starting past every order id the account has used, where a gateway's next
+valid id starts. `readonly=True` makes a read-only session, which refuses
+orders as a gateway set to read-only does. A login that fails raises
+`ConnectionError` with `apiError` saying why, as a gateway that refuses a
+connection does. `timeout` bounds each request ib_async makes as the session
+opens; the login itself is the engine's to bound, its wait of up to three
+seconds for the venue to name the working orders among it, and a live one waits
+on its second factor, as a gateway's login is made before a program connects.
+`serverVersion()` is 178 once connected and 0 before, `reqExecutions()` answers
+with the day's executions, `numIds` changes nothing on `reqIds`, and callbacks
+that reach nothing in ib_async over a gateway reach nothing here either.
 [Running ib_async itself](https://userfrm.github.io/ib_async-dx/bridge.html)
 has each of them.
 
@@ -236,19 +246,29 @@ has each of them.
 * **Connections mend themselves.** Each connection a session runs on — trading,
   market data, historical, contract definitions — is rebuilt on its own if it
   drops, and what it was serving is asked for again under the caller's request.
-* **Two of ib_async's bugs, fixed.** In ib_async 2.1, `reqUserInfo()` returns
+* **Delivery on your loop, and nowhere else.** Every callback reaches ib_async
+  on the thread running its loop, a pass at a time, each pass one batch as a
+  packet is over a socket. Passes are made by the loop itself, so a program
+  away from its loop queues nothing, and one whose loop ends leaves no pass
+  running.
+* **Four of ib_async's bugs, fixed.** In ib_async 2.1, `reqUserInfo()` returns
   `[]`: its wrapper ends the request without the White Branding ID it was
-  answered with. Here it returns the ID. And ib_async 2.1 asks for positions as
-  it connects whatever `fetchFields` says; here `StartupFetch.POSITIONS` left
-  out means that request is not made, and a later `reqPositions()` asks as
-  usual. Each fix is a small override on `IB`, with a test that shows ib_async's
-  own answer beside it.
+  answered with. Here it returns the ID. ib_async 2.1 asks for positions as it
+  connects whatever `fetchFields` says; here `StartupFetch.POSITIONS` left out
+  means that request is not made, and a later `reqPositions()` asks as usual.
+  ib_async 2.1 counts error 321 as a warning, so a what-if refused with it never
+  resolves and a new order refused with it stays open for good; here the
+  what-if ends with the refusal and the order is cancelled, as ib_async already
+  does for 110. And its `disconnect()` does nothing while a connect is under
+  way, which then opens the session anyway; here the connect is ended. Each fix
+  is a small override on `IB`, with a test.
 
 ### What is left out
 
 | | Today |
 | --- | --- |
-| Option lists other than `mktDataOptions` and `chartOptions` | Taken and not applied: the request has nowhere to put them. A non-empty `mktDataOptions` or `chartOptions` raises `NotImplementedError`. |
+| `manual` in an option list | Checked as a gateway checks it, and not carried: the engine has no field for it. Any other key or value is refused as a gateway refuses it. |
+| `fundamentalDataOptions`, and `ignoreSize` on `reqHistoricalTicks` | Taken and not applied: the request has nowhere to put them, and goes out without them. |
 | `bboExchange`, `modelCode`, `groupName`, the account on `reqAccountUpdates`, `ledgerAndNLV` | Taken and not applied: the venue answers these requests the same way whatever they name. [Limits](https://userfrm.github.io/ib_async-dx/limits.html) says why for each. |
 | The byte counts in `connectionStats()` | Zero: the engine does not count the bytes of its connections. The message counts are carried. |
 | `TickerExtras.statedRows`, [beyond ib_async](#beyond-ib_async) | Coming; it needs an addition to the engine first. |
@@ -302,18 +322,18 @@ opens a paper session.
 
 | Notebook | What it covers |
 | --- | --- |
-| [`basics`](notebooks/basics.ipynb) | Account values, positions, and one quote |
-| [`bar_data`](notebooks/bar_data.ipynb) | How far back the venue holds a series, the bars themselves, a frame, and a series kept up to date |
-| [`contract_details`](notebooks/contract_details.ipynb) | What the venue knows about a contract, and how it answers a description that matches more than one |
-| [`market_depth`](notebooks/market_depth.ipynb) | The book, and which venues will answer for it |
-| [`option_chain`](notebooks/option_chain.ipynb) | An index's option chains, the options near the money on the next three expiries, and their quotes and model greeks |
-| [`ordering`](notebooks/ordering.ipynb) | Placing an order, watching it, moving it, withdrawing it, and a preview that sends nothing |
-| [`scanners`](notebooks/scanners.ipynb) | What can be scanned for, and one scan run |
-| [`tick_data`](notebooks/tick_data.ipynb) | Top of book as it changes, and every print as it happens |
+| [`basics`](https://github.com/userFRM/ib_async-dx/blob/main/notebooks/basics.ipynb) | Account values, positions, and one quote |
+| [`bar_data`](https://github.com/userFRM/ib_async-dx/blob/main/notebooks/bar_data.ipynb) | How far back the venue holds a series, the bars themselves, a frame, and a series kept up to date |
+| [`contract_details`](https://github.com/userFRM/ib_async-dx/blob/main/notebooks/contract_details.ipynb) | What the venue knows about a contract, and how it answers a description that matches more than one |
+| [`market_depth`](https://github.com/userFRM/ib_async-dx/blob/main/notebooks/market_depth.ipynb) | The book, and which venues will answer for it |
+| [`option_chain`](https://github.com/userFRM/ib_async-dx/blob/main/notebooks/option_chain.ipynb) | An index's option chains, the options near the money on the next three expiries, and their quotes and model greeks |
+| [`ordering`](https://github.com/userFRM/ib_async-dx/blob/main/notebooks/ordering.ipynb) | Placing an order, watching it, moving it, withdrawing it, and a preview that sends nothing |
+| [`scanners`](https://github.com/userFRM/ib_async-dx/blob/main/notebooks/scanners.ipynb) | What can be scanned for, and one scan run |
+| [`tick_data`](https://github.com/userFRM/ib_async-dx/blob/main/notebooks/tick_data.ipynb) | Top of book as it changes, and every print as it happens |
 
 ```bash
 git clone https://github.com/userFRM/ib_async-dx && cd ib_async-dx
-pip install "git+https://github.com/userFRM/ibkr-dx"
+pip install "git+https://github.com/userFRM/ibkr-dx@58ea352aba5a0130ff8670eecda48851d3fc6841"
 pip install -e . jupyter python-dotenv pandas
 jupyter lab notebooks
 ```
@@ -384,9 +404,10 @@ moves the file, and `sessionFile=False` keeps nothing.
 <details>
 <summary><b>Is paper different from live?</b></summary>
 
-Not in what arrives. The same wire, the same API, the same entitlements — the
-money is what differs. A live login additionally enters the second-factor
-approval, which paper does not.
+Here, the same code and the same protocol run both. A live login also enters
+the second-factor approval, which paper does not. What market data a paper
+account is entitled to is set by the venue for that account, and has not been
+compared with its live account's here.
 </details>
 
 <details>
@@ -425,18 +446,23 @@ Claims here rest on tests, and the tests are counted rather than described:
 
 | Suite | Count | Needs a session |
 | --- | ---: | :---: |
-| Python | 257 | No |
+| Python | 298 | No |
 | Python, live | 2 | Yes |
 | ib_async's own suite, at 2.1.0 | 3 | Yes |
 | Paper-account scripts | 3 | Yes |
 
 The offline suite drives a session with no venue behind it, which needs the
 engine built with its test hooks. A wheel built for use leaves them out on
-purpose, so the tests build their own — the same steps the workflow runs on
-every push:
+purpose, so the tests build their own. The workflow runs the suite on every
+push to `main` and every pull request, on Python 3.11, 3.13 and free-threaded
+3.14t, against this package installed from its wheel and from its source
+distribution, and checks that the wheel imports beside an engine built as a
+release builds it.
+Locally:
 
 ```bash
 git clone https://github.com/userFRM/ibkr-dx
+git -C ibkr-dx checkout 58ea352aba5a0130ff8670eecda48851d3fc6841
 pip install maturin
 maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
 pip install dist/*.whl
@@ -444,13 +470,11 @@ pip install -e . pytest pytest-asyncio
 pytest tests/python -q
 ```
 
-All three of ib_async's tests run on the engine: `test_account_summary`
-passes, `test_request_error_raised` fails as it does against a gateway, and
-`test_contract_format_data_pd`, which builds its own `IB`, has not yet been
-run against the venue ([why](#drop-in-and-how-it-is-proven)).
+ib_async's three tests are written to run on the engine, and none has been run
+against the venue at this revision ([how, and what each asks](#drop-in-and-how-it-is-proven)).
 
 The two live tests run when `IB_USERNAME` and `IB_PASSWORD` are set, and are
-skipped otherwise; the workflow sets neither. The scripts under [`scripts/`](scripts/) run against a paper
+skipped otherwise; the workflow sets neither. The scripts under [`scripts/`](https://github.com/userFRM/ib_async-dx/tree/main/scripts) run against a paper
 account: `sdk_sweep.py` asks for every read and places nothing, `sdk_lifecycle.py`
 places, changes and withdraws a limit far from the market, and
 `order_round_trip.py` does the same on a contract that trades nearly around the
@@ -477,7 +501,7 @@ A fix to the engine reaches this package by reinstalling the engine.
 * [Getting started](https://userfrm.github.io/ib_async-dx/getting-started.html) — install, credentials, and a program that connects
 * [Drop-in](https://userfrm.github.io/ib_async-dx/drop-in.html) — what "drop-in" means here, and how it is proven
 * [Running ib_async itself](https://userfrm.github.io/ib_async-dx/bridge.html) — how the engine takes the socket's place, and what it carries
-* [Beyond ib_async](https://userfrm.github.io/ib_async-dx/beyond.html) — the two bugs fixed, and the calls ib_async has no name for
+* [Beyond ib_async](https://userfrm.github.io/ib_async-dx/beyond.html) — the four bugs fixed, and the calls ib_async has no name for
 * [Notebooks](https://userfrm.github.io/ib_async-dx/notebooks.html) — all eight of ib_async's notebook subjects, without a gateway
 * [Limits](https://userfrm.github.io/ib_async-dx/limits.html) — what differs from ib_async over a gateway, and what is not carried
 * [Evidence](https://userfrm.github.io/ib_async-dx/evidence.html) — what each claim rests on
@@ -492,7 +516,7 @@ Issues and pull requests are welcome.
 > the programs it has been held against.
 
 Before opening a pull request, run the offline suite as [Testing](#testing)
-shows; the workflow runs the same steps.
+shows; the workflow runs the same suite.
 
 ## Security
 
@@ -522,14 +546,14 @@ registered trademarks of Interactive Brokers Group, Inc.
 > first, and satisfy yourself that an order reads the way you meant it before
 > pointing it at money.
 
-- **No warranty.** Provided "as is", without warranty of any kind. See [LICENSE](LICENSE) for full terms.
+- **No warranty.** Provided "as is", without warranty of any kind. See [LICENSE](https://github.com/userFRM/ib_async-dx/blob/main/LICENSE) for full terms.
 - **Use at your own risk.** Users are solely responsible for ensuring their use complies with Interactive Brokers' Terms of Service, Customer Agreement, and any applicable laws or regulations. Use may carry risks including account restriction or termination by IB.
 - **Not financial software.** An experimental project, not a replacement for officially supported IB software in production trading. The authors accept no liability for financial losses, missed trades, account issues, or any other damages arising from its use.
 - **Protocol stability.** The engine speaks a protocol IB does not publish, and IB may change it at any time without notice. There is no guarantee of continued functionality.
 
 ## License and credits
 
-[AGPL-3.0](LICENSE), the same as ibkr-dx.
+[AGPL-3.0](https://github.com/userFRM/ib_async-dx/blob/main/LICENSE), the same as ibkr-dx.
 
 ib_async's code is not copied, vendored or modified here: ib_async-dx runs the
 copy pip installs, as a dependency, under its own BSD-2-Clause licence. ib_async

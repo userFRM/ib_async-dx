@@ -16,12 +16,13 @@ repositories.
 ## Install
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx"
+pip install "git+https://github.com/userFRM/ibkr-dx@58ea352aba5a0130ff8670eecda48851d3fc6841"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
 ```
 
-The engine goes first. ib_async-dx names it as a dependency, and with nothing
-on PyPI, pip has to find it already installed.
+The engine goes first, at the commit this package is tested against: it has
+no release yet. ib_async-dx names it as a dependency, and with nothing on
+PyPI, pip has to find it already installed.
 
 ## Credentials
 
@@ -54,10 +55,16 @@ venue's second-factor approval, which waits on a device: `connect` returns once
 it has been answered. A paper session presents no second factor. Use a paper
 account while you are writing something; a live account is a live account.
 
-`connect`'s `timeout` does not bound the login, which a gateway also makes
-before a program connects. The login runs off ib_async's event loop, so the
-loop keeps turning while it waits, and `timeout` bounds the requests ib_async
-makes once the session is open, as it does against a gateway.
+**`timeout`** bounds each request ib_async makes as the session opens, as it
+does against a gateway. It does not bound the login, which a gateway also
+makes before a program connects, nor the engine's wait of up to three seconds,
+inside the login, for the venue to name the working orders: a paper login
+presents no second factor, and a live one waits on it for as long as the
+engine allows. The login runs off ib_async's event loop, so the loop keeps
+turning while it waits, and a connect cancelled, interrupted, or overtaken by
+`disconnect()`, ends at once; the engine drops the session that login opens.
+The login itself runs on until the engine returns, on a thread that does not
+hold the program open. A login that fails raises `ConnectionError`.
 
 > [!IMPORTANT]
 > One program per login. Each program is its own session on the login, and a
@@ -98,19 +105,26 @@ as dead when it is only unattended.
 ## What `connect` takes
 
 ib_async's parameters, with its defaults, and four keyword-only ones after
-them:
+them, `username`, `password`, `paper` and `sessionFile`. Every argument given
+at its default:
 
 ```python
+from ib_async_dx import IB, StartupFetchALL
+
+ib = IB()
 ib.connect(
     host="127.0.0.1", port=7497, clientId=1,    # host and port: accepted, not used
     timeout=4, readonly=False, account="",
     raiseSyncErrors=False, fetchFields=StartupFetchALL,
-    *,
-    username="", password="",                   # left empty: IB_USERNAME, IB_PASSWORD
+    username="", password="",                   # left empty: see below
     paper=True,                                 # False asks for a live session
     sessionFile=None,                           # where the session is kept between runs
 )
 ```
+
+A `username` and `password` left empty are an `IBC`'s login where one was
+started in the same context (see [Limits](./limits.md)), and otherwise
+`IB_USERNAME` and `IB_PASSWORD`.
 
 `connectAsync` takes the same. `readonly=True` makes a read-only session,
 which refuses to send anything that places, changes or withdraws an order, as a
@@ -140,15 +154,17 @@ ib.connect()                      # names no host: there is no gateway
 
 `attach` puts the engine under that one instance and hands it back; nothing of
 ib_async's classes or modules is patched. It takes the same login as `connect`,
-spelled `username`, `password`, `paper`, `session_file`, `client_id` and
-`readonly`. It is what `ib_async_dx.IB` does on every connect.
+spelled `username`, `password`, `paper`, `session_file` and `readonly`; the
+client id is the one `connect` names. A session the instance holds is ended
+first, as its `disconnect()` ends one. It is what `ib_async_dx.IB` does on every
+connect.
 
 ## Next steps
 
 * [What drop-in means](./drop-in.md) — the promise, and how it is proven
 * [Running ib_async itself](./bridge.md) — what the engine changes, what it
   carries, and how ib_async's own tests run here
-* [Beyond ib_async](./beyond.md) — the two bugs fixed, and the calls ib_async
+* [Beyond ib_async](./beyond.md) — the four bugs fixed, and the calls ib_async
   has no name for
 * [Notebooks](./notebooks.md) — all eight of ib_async's notebook subjects,
   with no gateway

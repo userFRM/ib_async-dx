@@ -5,9 +5,10 @@ the hours anyone works in. This asks of a contract that trades nearly around
 the clock, so the order path can be checked at three in the morning as well as
 at noon.
 
-A limit far below the market, so it rests and never trades. What is checked is
-the round trip: that the venue takes each step, and that this client's record
-of the order moves with it. Nothing is bought.
+A limit far below the market, meant to rest unfilled until it is withdrawn;
+a price is not a guarantee, and the order's status says what happened. What is
+checked is the round trip: that the venue takes each step, and that this
+client's record of the order moves with it.
 
 Paper only, and it says so on the connection rather than trusting a default.
 

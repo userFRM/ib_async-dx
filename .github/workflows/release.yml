@@ -1,0 +1,110 @@
+name: release
+
+# A release is ib_async-dx whole: the Python package and the Rust client, with
+# nothing on Evidence still waiting to be built. The gate below refuses a tag
+# until that holds, and then everything the tag has to pass runs again against
+# it, because a tag can point at a commit that was green before its neighbour
+# landed. A release runs the workflow as it exists at the tag.
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The engine commit the package is tested against, as in tests.yml.
+  ENGINE_REF: 58ea352aba5a0130ff8670eecda48851d3fc6841
+
+jobs:
+  gate:
+    name: the release rule
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python and Rust both complete, and the tag names this version
+        run: |
+          set -e
+          if ! grep -Eqs '^name = "ib_async-dx"' Cargo.toml; then
+            echo "::error::The Rust client is not in this repository: a release is Python and Rust together."
+            exit 1
+          fi
+          if grep -n -- "— Not yet" docs/book/src/evidence.md; then
+            echo "::error::Evidence lists surfaces not built yet."
+            exit 1
+          fi
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "${{ github.event_name }}" != workflow_dispatch ] && [ "$tag" != "$version" ]; then
+            echo "::error::The tag names $tag and pyproject.toml $version."
+            exit 1
+          fi
+
+  python:
+    name: the Python package, built and tested as installed
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: userFRM/ibkr-dx
+          ref: ${{ env.ENGINE_REF }}
+          path: ibkr-dx
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: |
+          python -m pip install maturin build
+          maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o engine
+          python -m build --outdir dist
+      - name: The wheel and the source distribution each pass the suite
+        run: |
+          for artifact in dist/ib_async_dx-*.whl dist/ib_async_dx-*.tar.gz; do
+            python -m venv "$RUNNER_TEMP/check"
+            "$RUNNER_TEMP/check/bin/pip" install engine/ibkr_dx-*.whl "$artifact" pytest pytest-asyncio
+            "$RUNNER_TEMP/check/bin/python" -m pytest tests/python -q -p no:cacheprovider
+            rm -rf "$RUNNER_TEMP/check"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python
+          path: dist/*
+
+  rust:
+    name: the Rust client, tested and ready to publish
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test
+        run: cargo test
+      - name: The crate would publish
+        run: cargo publish --dry-run
+
+  # Attached to the release rather than published to an index: publishing is a
+  # decision with a token behind it, and this workflow holds none.
+  attach:
+    name: attach the artifacts to the release
+    needs: [python, rust]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python
+          path: dist
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber

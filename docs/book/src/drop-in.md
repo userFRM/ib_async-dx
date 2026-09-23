@@ -25,10 +25,16 @@ the same enum, the same `__version__` — except two:
 * **`IB`**, a subclass of `ib_async.IB`. Its `connect` and `connectAsync` put
   the engine in place of ib_async's `Client` and then run ib_async's own
   connect. Everything else on it is ib_async's, apart from the
-  [two bug fixes and the added calls](./beyond.md).
-* **`IBC`**, a subclass of `ib_async.IBC` with no gateway to start or stop, so
-  ib_async's own `Watchdog`, handed one, connects its `IB` and connects it again
-  when the session ends ([Limits](./limits.md) has the detail).
+  [four bug fixes and the added calls](./beyond.md).
+* **`IBC`**, a subclass of `ib_async.IBC` with no gateway to launch: starting
+  it holds the login it names for the connects made in the same context, and
+  terminating it ends every session that login opened. ib_async's own `Watchdog`,
+  handed one, connects its `IB` with that login and connects it again when the
+  session ends ([Limits](./limits.md) has the detail).
+
+`Client` is ib_async's own socket client, re-exported unchanged like every
+other name: a program that builds one itself still addresses a gateway. `IB`
+is what runs on the engine.
 
 `__version__` and `__version_info__` are ib_async's, so a program that checks
 the API level it runs on reads what it always did. This package's own version
@@ -54,13 +60,16 @@ writes it out.
 * `clientId` is carried into the login, where it keys this session's orders.
   One program per login: a second program on the same login takes the session
   from the first.
-* `username` and `password`, left empty, are read from `IB_USERNAME` and
-  `IB_PASSWORD`.
+* `username` and `password`, left empty, are an `IBC`'s login where one was
+  started in the same context, and otherwise `IB_USERNAME` and `IB_PASSWORD`.
 * `readonly=True` makes a read-only session, which refuses to send anything
   that places, changes or withdraws an order, as a gateway set to read-only
   does.
-* `timeout` bounds the requests ib_async makes once the session is open, not
-  the login, which a gateway also makes before a program connects.
+* `timeout` bounds each request ib_async makes as the session opens, as it
+  does against a gateway. It does not bound the login, which a gateway also
+  makes before a program connects, nor the engine's wait of up to three
+  seconds, inside the login, for the venue to name the working orders: a live
+  login waits on its second factor for as long as the engine allows.
 
 The rest is ib_async's own connect: as it does against a gateway, it asks for
 the account's values, its positions, its open and completed orders and its
@@ -92,26 +101,29 @@ exactly as the same request made by name.
 ib_async's test suite against the engine instead of against a gateway: their
 shared `ib` fixture is an `ib_async_dx.IB`, connected with the login in the
 environment, and so is the `ib_async.IB()` a test builds for itself. The suite
-is theirs, fetched from their repository rather than copied into this one. At
-2.1.0 one of its three tests passes here, one fails here as it does against a
-gateway, and one has not yet been run against the venue; the detail, and how to
-run it, is in [Running ib_async itself](./bridge.md#their-own-test-suite).
+is theirs, fetched from their repository rather than copied into this one. It
+has not been run against the venue at this revision; what each of its three
+tests asks, and how to run them, is in
+[Running ib_async itself](./bridge.md#their-own-test-suite).
 
 **Against the venue.** Two tests take a live login, each with ib_async's own
 `IB` attached. One runs an unmodified ib_async program — connect, qualify,
 bars, quotes through `pendingTickersEvent`. The other takes an order through
 its whole life in ib_async's objects: priced as a what-if, placed, changed and
-withdrawn. Both are skipped where `IB_USERNAME` and `IB_PASSWORD` are not set.
-The scripts under `scripts/` do the same through `ib_async_dx.IB` against a
-paper account, and the [notebooks](./notebooks.md) do it a cell at a time.
-Neither has been run against the venue through `ib_async_dx.IB` yet, so
-[Evidence](./evidence.md) rates that path ✅ Offline.
+withdrawn. Both are skipped where `IB_USERNAME` and `IB_PASSWORD` are not set,
+and neither has been run against the venue at this revision. The scripts under
+`scripts/` do the same through `ib_async_dx.IB` against a paper account, and
+the [notebooks](./notebooks.md) do it a cell at a time. Neither has been run
+against the venue through `ib_async_dx.IB` yet, so [Evidence](./evidence.md)
+rates both paths ✅ Offline.
 
-**What crosses, offline.** The other 257 tests need no session: that a
+**What crosses, offline.** The other 298 tests need no session: that a
 combination keeps its legs on every request path, that a fill's cost reaches
 ib_async as its own `CommissionReport`, that a refused order reaches its
-`Trade`, that `connect` takes its login from the environment and is paper
-unless told otherwise, that each bug fix answers what ib_async 2.1 does not.
+`Trade`, that `connect` takes its login from the environment or an `IBC` and
+is paper unless told otherwise, that a session opens and closes once, on the
+program's loop, however a connect is cancelled, overtaken or failed, and that
+each bug fix answers what ib_async 2.1 does not.
 [Evidence](./evidence.md) lists what they cover.
 
 ## In Rust

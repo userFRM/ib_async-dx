@@ -44,7 +44,7 @@ def test_an_outage_leaves_the_session_open_and_an_end_closes_it():
 
     client._client._test_end_session()
     client._client.poll()
-    assert not client.isConnected() and client._stop.is_set()
+    assert not client.isConnected() and client._pass is None
     assert heard == ["disconnected"]
     with pytest.raises(ConnectionError, match="Not connected"):
         client.getReqId()
@@ -108,7 +108,8 @@ def test_an_unmodified_program_runs_on_this_engine():
 def test_an_order_lives_its_whole_life_through_their_api():
     """Placed, changed and withdrawn, in their objects.
 
-    A limit far under the market, so it rests and nothing trades.
+    A limit far under the market, meant to rest unfilled until it is
+    withdrawn.
     """
     ib = ib_async_dx.attach(ib_async.IB())
     ib.connect("no gateway", 0, clientId=1)

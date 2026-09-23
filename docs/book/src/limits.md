@@ -7,9 +7,9 @@ venue's answer rather than this package's.
 
 ib_async runs as itself, so its calls, its arguments and its answers are its
 own. What differs is what its `IB` reads off a transport with no socket
-underneath, and what the engine does that a gateway does not. Most of what
-cannot be carried is refused by name. What is taken and not applied instead is
-named below, where it happens. Where the engine answers as a gateway does, and
+underneath, and what the engine does that a gateway does not. What a gateway
+refuses is refused as a gateway refuses it, on `errorEvent`. What is taken and
+not applied is named below, where it happens. Where the engine answers as a gateway does, and
 a program might not expect it to, [Running ib_async itself](./bridge.md) says
 so.
 
@@ -42,15 +42,21 @@ so.
   does: a request is one sent, and what reaches ib_async's wrapper one
   received. Its byte counts are zero: the engine does not count the bytes of
   its connections.
-* **A non-empty `mktDataOptions` or `chartOptions` is refused** with
-  `NotImplementedError` naming it, rather than the request going out without
-  it and answering something other than what was asked.
-* **Every other option list is taken and not applied**: `mktDepthOptions`,
-  `realTimeBarsOptions`, `newsArticleOptions`, `historicalNewsOptions`,
-  `fundamentalDataOptions`, `miscOptions`, `scannerSubscriptionOptions`,
-  `implVolOptions` and `optPrcOptions`, and `ignoreSize` on
-  `reqHistoricalTicks`. The request has nowhere to put them, and goes out
-  without them.
+* **An option list is checked as a gateway checks one, and `manual` is not
+  carried.** On nine of the eleven requests a gateway reads a list on —
+  `reqMktData`, `placeOrder` (the order's `orderMiscOptions`), `reqMktDepth`,
+  `reqHistoricalData`, `reqScannerSubscription`, `reqRealTimeBars`,
+  `reqNewsArticle`, `reqHistoricalNews` and `reqHistoricalTicks` — the one key
+  taken is `manual`, valued 0 or 1. The other two,
+  `calculateImpliedVolatility` and `calculateOptionPrice`, take no key at
+  all. Another key is refused with 10337 and another value with 10338, on
+  `errorEvent` under the request's number, and the request is not sent. Where
+  the venue exempts the account from the check (`NOAPIMISCVLD` among its
+  `enabledFeatures()`), nothing is refused. `manual` itself is taken and not
+  applied: the engine has no field for it.
+* **Some options are taken and not applied**: `fundamentalDataOptions`, and
+  `ignoreSize` on `reqHistoricalTicks`. The request has nowhere to put them,
+  and goes out without them.
 * **Some arguments are taken and not applied**, because the venue answers the
   request the same way whatever they name:
   * `groupName` on `reqAccountSummary`, the account on `reqAccountUpdates`, and
@@ -61,18 +67,28 @@ so.
     the net liquidation among the account's figures without being asked.
   * `bboExchange` on `reqSmartComponents`: the venue states one table of
     routing components for the session, and the whole table comes back.
-* **`IBC` starts nothing.** `ib_async_dx.IBC` is ib_async's with no gateway to
-  start or stop: the engine logs in on `connect`, and rebuilds a dropped
-  connection on the session it already holds. ib_async's own `Watchdog`, handed
-  one, is a reconnect loop: it connects its `IB`, and when the session ends it
-  connects again. Its login is the one `connect` takes with no login arguments,
-  `IB_USERNAME` and `IB_PASSWORD` on a paper session. `IBC` given a `userid`, a
-  `password` or `tradingMode="live"` raises `ValueError`, rather than open a
-  session on another login or on paper. A `Watchdog` keeps another login, or a
-  live session, across its reconnects on an `ib_async.IB` handed it by
-  `ib_async_dx.attach(ib_async.IB(), username=..., password=..., paper=False)`.
+* **`IBC` launches nothing, and holds the login it names.** `ib_async_dx.IBC`
+  is ib_async's with no gateway to launch: the engine logs in on `connect`,
+  and rebuilds a dropped connection on the session it already holds. Starting
+  it holds its `userid` and `password`, on a live session where `tradingMode`
+  is `'live'` and on paper otherwise, as the gateway it would launch holds a
+  login; a connect in the same context that names no login of its own logs in
+  with it, and an empty `userid` or `password` is read from `IB_USERNAME` or
+  `IB_PASSWORD`. A login named on `connect`, or given to `attach`, comes first.
+  Terminating it ends every session that login opened, as stopping a gateway
+  ends the sessions connected to it, and from whichever context it is
+  terminated, no connect logs in with it afterwards. ib_async's own `Watchdog`, handed one, is
+  a reconnect loop: it starts the IBC and connects its `IB` in a task of its
+  own, so each `Watchdog` logs in with its own IBC's login, and when the
+  session ends it connects again. Its probes and timeouts are ib_async's own.
   A session that ends because another program or a gateway logged in on the
-  same login is one the `Watchdog` connects again, which takes it back.
+  same login is one the `Watchdog` connects again, which takes it back. The
+  paths, the Java settings and the FIX login are a gateway's, and nothing
+  reads them. Nor is IBC's own `config.ini`: a login or a `TradingMode` kept
+  there is not read, so `userid` and `password` are given to the `IBC` or
+  left to the environment, and a `tradingMode` left empty is paper. Where the
+  `IBC`'s login is used, its `tradingMode`, not `connect`'s `paper`, decides
+  whether the session is live.
 
 ## A restart is a new login
 
@@ -92,8 +108,9 @@ after its process ends, so that covers a quick restart only.
 
 # The venue's answer, not this package's
 
-A gateway answers every one of these the same way. They are written down
-because a program meeting one for the first time reads it as a fault here.
+These are the venue's answers, as the engine's sessions have met them, and
+none is something this package decides. They are written down because a
+program meeting one for the first time reads it as a fault here.
 
 * **Market depth depends on the entitlement.** A venue the account is not
   entitled to refuses by name. A book asked for on no particular venue is

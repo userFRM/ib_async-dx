@@ -27,7 +27,7 @@ the login.
 ## Running them
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx"
+pip install "git+https://github.com/userFRM/ibkr-dx@58ea352aba5a0130ff8670eecda48851d3fc6841"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx" \
     jupyter python-dotenv pandas
 git clone https://github.com/userFRM/ib_async-dx

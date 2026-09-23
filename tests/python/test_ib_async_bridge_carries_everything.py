@@ -127,7 +127,6 @@ def test_every_account_the_login_holds_crosses_over():
             return 1
 
     c._client = Several()
-    c._start_pump = lambda: None
 
     import asyncio
     asyncio.run(c.connectAsync("", 0, 1))
@@ -216,3 +215,31 @@ def test_a_callback_that_cannot_be_rebuilt_is_logged_and_passed_over(caplog):
     assert seen == []
     assert caplog.records[-1].name == "ib_async_dx.bridge"
     assert "family_codes" in caplog.records[-1].getMessage()
+
+
+def test_a_record_tuple_is_rebuilt_field_by_field():
+    """Their ticks are named tuples. Rebuilt as a sequence, one of several
+    fields was handed the whole record and the callback was lost."""
+    import datetime
+
+    from ib_async_dx.bridge import _as_theirs
+
+    tick = ib_async.TickData(datetime.datetime(2026, 9, 24), 1, 100.25, 300.0)
+    assert _as_theirs(tick) == tick
+
+
+def test_a_record_named_as_theirs_and_not_theirs_is_rebuilt_as_theirs():
+    """Handed over because it was a dataclass, a record of another type
+    reached their wrapper under their record's name."""
+    import dataclasses
+
+    from ib_async_dx.bridge import _as_theirs
+
+    @dataclasses.dataclass
+    class FamilyCode:
+        accountID: str = "DU000000"
+        familyCodeStr: str = "F1"
+
+    assert _as_theirs(FamilyCode()) == ib_async.FamilyCode("DU000000", "F1")
+    theirs = ib_async.FamilyCode("DU000000", "F1")
+    assert _as_theirs(theirs) is theirs, "their own record is handed over as it is"
