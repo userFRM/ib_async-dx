@@ -2,35 +2,46 @@
 
 What a caller has to know before writing against ib_async-dx, sorted by what
 kind of thing it is: where ib_async on the engine behaves differently from
-ib_async over a gateway, what is not carried and why, and what is the venue's
-answer rather than this package's.
+ib_async over a gateway, what is taken and not applied, and what is the
+venue's answer rather than this package's.
 
 ib_async runs as itself, so its calls, its arguments and its answers are its
 own. What differs is what its `IB` reads off a transport with no socket
 underneath, and what the engine does that a gateway does not. Most of what
 cannot be carried is refused by name. What is taken and not applied instead is
-named below, where it happens.
+named below, where it happens. Where the engine answers as a gateway does, and
+a program might not expect it to, [Running ib_async itself](./bridge.md) says
+so.
 
 # Where it differs from a gateway
 
 * **`connect` addresses nothing.** `host` and `port` are accepted and not used,
   and the port does not choose paper or live: the session is paper unless
   `connect` is given `paper=False`. `clientId` is carried into the login.
-* **`timeout` bounds what ib_async asks once the session is open** — positions,
-  orders, account updates, executions — as it does against a gateway. The login
-  itself is not cut short by it: a live login waits on a person.
-* **`readonly=True` reaches the session.** ib_async's own `readonly` only skips
-  the order requests it makes as it connects. Here the session also refuses to
-  send anything that places, changes or withdraws an order.
-* **A new order the engine refuses before sending it stays `PendingSubmit`.**
-  The refusal — from a read-only session, for one — reaches ib_async's wrapper
-  as error 321 while `placeOrder` runs, before ib_async has made the `Trade`.
-  With no trade yet to mark, the wrapper leaves the `Trade` it hands back
-  `PendingSubmit`, whatever the code. The refusal, with its reason, is on
-  `errorEvent`.
-* **`serverVersion()`** is a fixed 178, and **`connectionStats()`** states when
-  the session started and how long it has run, with its byte and message
-  counts at zero.
+* **One program per login.** Each program is its own session on the login, and
+  a second program on the same login, or a gateway, takes the session from the
+  first; the venue says which host took it. Programs that share one gateway
+  login under their own client ids each need a login of their own here.
+* **Every session hears every order on the account**, whatever its
+  `clientId`: `trades()`, `openTrades()`, `reqOpenOrders()` and
+  `openOrderEvent` include the account's orders placed elsewhere — in TWS, on
+  the phone, or by a program under another client id. Over a gateway, a
+  program is told of its own orders only, unless it connects as client 0 or as
+  the gateway's master client, or asks with `reqAllOpenOrders()`.
+* **A request a gateway reroutes is refused.** Asked for a quote or a book on
+  a contract the venue serves under another, a contract for difference
+  standing for a share among them, a gateway tells the program where to ask
+  instead, and ib_async, which has no handler for that, hears nothing. Here
+  the request is refused in the venue's words, on `errorEvent`.
+* **A pass's ticks reach a ticker in the engine's order.** The engine states
+  a quote's prices before its sizes, and a price is handed over with the size
+  that goes with it, so the bid, ask and last a pass states land in
+  `ticker.ticks` after the other ticks of that pass. The ticker's fields end
+  the pass as they would over a gateway.
+* **`connectionStats()`** counts the messages each way, as ib_async's client
+  does: a request is one sent, and what reaches ib_async's wrapper one
+  received. Its byte counts are zero: the engine does not count the bytes of
+  its connections.
 * **A non-empty `mktDataOptions` or `chartOptions` is refused** with
   `NotImplementedError` naming it, rather than the request going out without
   it and answering something other than what was asked.
@@ -50,16 +61,18 @@ named below, where it happens.
     the net liquidation among the account's figures without being asked.
   * `bboExchange` on `reqSmartComponents`: the venue states one table of
     routing components for the session, and the whole table comes back.
-  * `numIds` on `reqIds`: ids are handed out one at a time.
-  * `bAutoBind` on `reqAutoOpenOrders`, which ib_async sends as it connects
-    with `clientId` 0: the session hears about every order on the account
-    either way.
-* **`FlexReport`** is not routed through the engine. It fetches a report over
-  the web with a token of its own, never touches a session, and runs as it
-  always has.
-* **IBC and `Watchdog`** start and restart a gateway. There is none to start:
-  the engine logs in itself, and rebuilds a dropped connection on the session
-  it already holds.
+* **`IBC` starts nothing.** `ib_async_dx.IBC` is ib_async's with no gateway to
+  start or stop: the engine logs in on `connect`, and rebuilds a dropped
+  connection on the session it already holds. ib_async's own `Watchdog`, handed
+  one, is a reconnect loop: it connects its `IB`, and when the session ends it
+  connects again. Its login is the one `connect` takes with no login arguments,
+  `IB_USERNAME` and `IB_PASSWORD` on a paper session. `IBC` given a `userid`, a
+  `password` or `tradingMode="live"` raises `ValueError`, rather than open a
+  session on another login or on paper. A `Watchdog` keeps another login, or a
+  live session, across its reconnects on an `ib_async.IB` handed it by
+  `ib_async_dx.attach(ib_async.IB(), username=..., password=..., paper=False)`.
+  A session that ends because another program or a gateway logged in on the
+  same login is one the `Watchdog` connects again, which takes it back.
 
 ## A restart is a new login
 
@@ -71,50 +84,17 @@ account that login waits on the second factor. The session is kept in
 with a challenge rather than a full login. The venue lets a session go soon
 after its process ends, so that covers a quick restart only.
 
-# What is not carried, and why
-
-The documented API names a few callbacks that nothing here delivers. None of
-them costs an ib_async program anything, because ib_async has no handler for
-most of them either.
-
-| Callbacks | Why |
-| --- | --- |
-| `displayGroupList`, `displayGroupUpdated` | A display group is what a Trader Workstation window is showing, and there is no window here. ib_async's `IB` has no call for them and its wrapper no handler; the two are dropped |
-| `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted` | A handshake a program makes with the gateway it connects to. There is no gateway to make it with, and the engine never fires them. ib_async's wrapper has none of the four |
-| `rerouteMktDataReq`, `rerouteMktDepthReq` | Nothing on this connection states a reroute, so nothing fires them. ib_async's wrapper has neither |
-| `winError` | An error from the reference client's own socket layer, and there is none here. ib_async's wrapper has no handler for it |
-| `tickEFP`, `deltaNeutralValidation` | ib_async's wrapper handles both. The venue states neither an exchange-for-physical quote nor a delta-neutral pairing on this connection, so they never fire, and a `Ticker`'s EFP fields keep their defaults |
-
-ib_async's raw wire — its `Connection`, and its client's `send` and `sendMsg` —
-has nothing to write to: there is no socket.
-
-## What ib_async itself does not have
+# What ib_async itself does not have
 
 * **`reqCurrentTimeInMillis`** is in the documented API and not in ib_async.
   `ib_async_dx.IB` adds it, with its `…Async` twin; see
   [Beyond ib_async](./beyond.md).
-* **`replaceFAEnd`** has no handler in ib_async's wrapper, so the completion of
-  `replaceFA` is not reported through ib_async — here, as against a gateway.
-* **`tickPrice`** is not a gap. ib_async's wrapper takes a price and its size
-  together, as `priceSizeTick`, and the engine's client pairs the two before
-  handing them over.
 
 # The venue's answer, not this package's
 
 A gateway answers every one of these the same way. They are written down
 because a program meeting one for the first time reads it as a fault here.
 
-* **One session per login.** Opening a second takes the first away, and the
-  venue says which host took it. A gateway on the same login is a second
-  session.
-* **A live login waits on a person.** It enters the venue's second-factor
-  approval, which waits on a device. A paper login presents no second factor.
-* **Executions are the day's, not the account's history.** `reqExecutions()`
-  answers with the executions this session has seen and those the venue
-  restated when it opened — the day's, fills on orders already completed among
-  them. Anything before today is not available: an empty answer means the venue
-  restated none and this session has seen none. `reqCompletedOrders()` asks the
-  venue.
 * **Market depth depends on the entitlement.** A venue the account is not
   entitled to refuses by name. A book asked for on no particular venue is
   acknowledged and then produces nothing, which is what an account with no

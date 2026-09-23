@@ -1,9 +1,9 @@
 # Notebooks
 
 [`notebooks/`](https://github.com/userFRM/ib_async-dx/tree/main/notebooks)
-holds seven notebooks on ib_async's own subjects, written against ib_async
-itself — its `IB`, its contracts, its events, its `util.df` — and run on the
-engine through `ib_async_dx.IB`. None of them starts a gateway, and every one
+holds eight notebooks, one on each of ib_async's own subjects, written against
+ib_async itself — its `IB`, its contracts, its events, its `util.df` — and run
+on the engine through `ib_async_dx.IB`. None of them starts a gateway, and every one
 opens a paper session.
 
 Each begins the same way. It is the one cell that differs from a notebook
@@ -30,7 +30,7 @@ ib.connect(
 ib_async's blocking calls can run inside the notebook's loop, as it does over a
 gateway.
 
-## The seven
+## The eight
 
 | Notebook | What it shows | ib_async calls |
 | --- | --- | --- |
@@ -41,6 +41,7 @@ gateway.
 | `market_depth` | Which venues will answer for a book, a ten-level book, and the book moving | `reqMktDepthExchanges`, `reqMktDepth`, `ticker.domBids`, `ticker.domAsks`, `ticker.updateEvent` |
 | `scanners` | What the venue can scan for, one scan run, and its rows as a frame | `reqScannerParameters`, `ScannerSubscription`, `reqScannerData`, `util.df` |
 | `ordering` | An order placed, watched, moved and withdrawn, and one previewed rather than sent | `placeOrder`, `LimitOrder`, `trade.log`, `cancelOrder`, `openTrades`, `whatIfOrder` |
+| `option_chain` | The S&P 500 index's option chains, the options within 20 points of it on the next three monthly expiries, and their quotes and model greeks | `reqMarketDataType`, `reqTickers`, `reqSecDefOptParams`, `qualifyContracts`, `ticker.modelGreeks` |
 
 A few things they show along the way:
 
@@ -61,6 +62,8 @@ A few things they show along the way:
   history of the order. A modification is the same order under the same id, at
   a new price; `whatIfOrder` asks what an order would cost the account and
   sends nothing.
+- **An option chain is every expiry against every strike.** The notebook takes
+  the options it wants from that matrix and qualifies them in one call.
 
 > [!NOTE]
 > `ordering` places a real order on the paper account: a buy at half the last

@@ -102,9 +102,13 @@ def test_a_seeded_order_id_is_the_next_one_their_client_issues():
     """
     import ib_async_dx.bridge
 
+    import types
+
     client = ib_async_dx.bridge.IbkrDxClient.__new__(ib_async_dx.bridge.IbkrDxClient)
     client._reqIdSeq = 1
     client.connState = client.CONNECTED
+    # An account that has used no order id.
+    client._client = types.SimpleNamespace(next_shared_id=lambda: 1)
 
     client.updateReqId(1_700_000_000)
     assert client.getReqId() == 1_700_000_000, "the seeded id is issued, not the one after it"

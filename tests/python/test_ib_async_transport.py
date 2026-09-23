@@ -6,6 +6,7 @@ changed — the attach — and no gateway process anywhere. The live parts need
 credentials.
 """
 
+import inspect
 import os
 
 import ib_async
@@ -51,10 +52,29 @@ def test_an_outage_leaves_the_session_open_and_an_end_closes_it():
         client.reqCurrentTime()
 
 
-def test_a_request_their_client_carries_and_this_one_does_not_says_so():
+def test_a_request_their_client_makes_and_the_engine_does_not_carry_goes_unanswered():
+    """As over a gateway, which never answers the handshake requests their
+    client can send (`verifyRequest` and the three after it): they go out and
+    nothing comes back. They raised here. A name their client does not have
+    is a missing attribute, as on theirs."""
     ib = ib_async_dx.attach(ib_async.IB())
-    with pytest.raises(NotImplementedError, match="not carried"):
-        ib.client.reqSomethingNobodyCarries(1)
+    client = ib.client
+    with pytest.raises(ConnectionError, match="Not connected"):
+        client.verifyRequest("app", "1")
+    client._client._test_connect("DU000000", False)
+    client.connState = client.CONNECTED
+    heard = []
+    ib.errorEvent += lambda *args: heard.append(args)
+    for request, args in [
+        ("verifyRequest", ("app", "1")), ("verifyMessage", ("data",)),
+        ("verifyAndAuthRequest", ("app", "1", "key")),
+        ("verifyAndAuthMessage", ("data", "response")),
+    ]:
+        assert getattr(client, request)(*args) is None
+    client._pass_once()
+    assert heard == [], "nothing answers them"
+    with pytest.raises(AttributeError):
+        client.reqSomethingNobodyCarries(1)
 
 
 @needs_venue
@@ -240,6 +260,47 @@ def test_a_field_that_cannot_be_carried_is_refused():
         ib_async_dx.bridge._as_ours(their)
 
 
+def test_a_field_at_their_default_is_carried():
+    """Their client sends every field an order holds, one at its own default
+    among them. Left to the engine's default instead, the order went out on
+    terms the program never stated: `openClose` is "O" there and empty here.
+    What their client sends as an empty field — None, an empty string or list,
+    their unset number — is what is left to the engine."""
+    import ibkr_dx
+
+    ours = ib_async_dx.bridge._as_ours(ib_async.LimitOrder("BUY", 1, 1.0))
+    assert ours.openClose == "O"
+    assert ours.usePriceMgmtAlgo == 0, "theirs is False, and the engine's own None"
+    assert ours.lmtPrice == 1.0
+    assert ours.auxPrice == ibkr_dx.Order().auxPrice, "their unset is the engine's own"
+    assert ours.algoParams == [], "an empty list states nothing"
+
+
+def test_a_condition_joined_by_or_is_carried():
+    """Their conditions say "a" or "o" for how each joins the next; the
+    engine's say whether it is an and. With nothing carrying one to the
+    other, an order with an or in it could not be placed at all."""
+    order = ib_async.LimitOrder("BUY", 1, 1.0)
+    order.conditions = [
+        ib_async.PriceCondition(conjunction="o", price=100.0, conId=756733, exch="SMART"),
+        ib_async.TimeCondition(conjunction="a", time="20261218 15:00:00 US/Eastern"),
+    ]
+    ours = ib_async_dx.bridge._as_ours(order)
+    assert [c.isConjunctionConnection for c in ours.conditions] == [False, True]
+
+    order.conditions[0].conjunction = "x"
+    with pytest.raises(ValueError, match="conjunction"):
+        ib_async_dx.bridge._as_ours(order)
+
+
+def test_a_retired_attribute_at_their_default_states_nothing():
+    """`eTradeOnly`, `firmQuoteOnly` and `nbboPriceCap` go out on every order
+    their client places, at False, False and unset, and the engine has no
+    place for them. There they state nothing, and the order is carried."""
+    ours = ib_async_dx.bridge._as_ours(ib_async.LimitOrder("BUY", 1, 1.0))
+    assert not hasattr(ours, "eTradeOnly")
+
+
 def test_readonly_reaches_the_session_through_the_adapter():
     """A read-only connection through this adapter is read-only.
 
@@ -262,3 +323,20 @@ def test_readonly_reaches_the_session_through_the_adapter():
     client = IbkrDxClient(wrapper=None, readonly=True)
     assert client._readonly is True
 
+
+
+def test_their_suite_builds_this_packages_IB_where_it_builds_its_own(monkeypatch):
+    """Their `test_contract_format_data_pd` builds its own `ib_async.IB()` and
+    connects it to a gateway's port rather than taking the shared fixture.
+    The runner's conftest makes that `IB` this package's before their tests
+    are collected, so it connects to the engine; in that run only."""
+    import importlib.util
+    import pathlib
+
+    monkeypatch.setattr(ib_async, "IB", ib_async.IB)  # put back after this test
+    conftest = pathlib.Path(__file__).parents[1] / "ib_async_upstream" / "conftest.py"
+    spec = importlib.util.spec_from_file_location("ib_async_upstream_conftest", conftest)
+    spec.loader.exec_module(importlib.util.module_from_spec(spec))
+
+    assert ib_async.IB is ib_async_dx.IB
+    assert "username" in inspect.signature(ib_async.IB().connect).parameters

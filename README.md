@@ -46,13 +46,15 @@ stays as it is.
 ```
 
 > [!TIP]
-> `ib_async_dx` is ib_async: the same 103 names, the same objects and the same
-> submodules, from the copy of ib_async installed with it. The one class that
-> differs is `IB`, a subclass of ib_async's whose `connect` takes a login instead
-> of a gateway's address. Credentials left out of `connect` are read from
-> `IB_USERNAME` and `IB_PASSWORD`, so where those are set the connect line can
-> stay as it was for a paper account: the host and port are not used, and the
-> port does not choose paper or live. Add `paper=False` for a live account.
+> `ib_async_dx` is ib_async: the same 103 names, the same objects, the same
+> submodules and the same `__version__`, from the copy of ib_async installed
+> with it. Two classes differ: `IB`, a subclass of ib_async's whose `connect`
+> takes a login instead of a gateway's address, and `IBC`, which has no gateway
+> to start. Credentials left out of `connect` are read from `IB_USERNAME` and
+> `IB_PASSWORD`, so where those are set a program on a paper account changes
+> only its import line, as a gateway keeps its login in its own settings: the
+> host and port are not used. A session is paper unless `connect` is given
+> `paper=False`; the port does not choose.
 
 ## Why this exists
 
@@ -93,14 +95,15 @@ against and removes the process behind it.
 * An Interactive Brokers account, paper or live
 * Python 3.11 or newer
 * A Rust toolchain, 1.89 or newer, while the engine is installed from source
-* ib_async 2.1, which pip installs with this package
+* ib_async 2.1, ib_async's current release, which pip installs with this package
 
 No IB software is required, and not the `ibapi` package either.
 
 > [!IMPORTANT]
-> A live login enters the venue's second-factor approval, which waits on a
-> device. Paper logins do not. One session per login: opening a second takes
-> the first away, and the venue says which host took it.
+> One program per login. Each program is its own session on the login, and a
+> second program on the same login, or a gateway, takes the session from the
+> first; the venue says which host took it. Programs that share one gateway
+> login under their own client ids each need a login of their own here.
 
 ## Installation
 
@@ -158,9 +161,10 @@ reading code:
 
 | What is run | What it shows | Where |
 | --- | --- | --- |
-| The package, against ib_async | `ib_async_dx.__all__` is ib_async's, and every name in it is ib_async's own object except `IB` and `__version__`. All 13 of its submodules resolve here, as `import ib_async_dx.contract` and as `from ib_async_dx.util import df`. `connect` is ib_async's signature with four keyword-only parameters after it | [`tests/python/test_the_package_is_ib_async.py`](tests/python/test_the_package_is_ib_async.py) |
+| The package, against ib_async | `ib_async_dx.__all__` is ib_async's, and every name in it is ib_async's own object except `IB` and `IBC`; `__version__` is ib_async's. All 13 of its submodules resolve here, as `import ib_async_dx.contract` and as `from ib_async_dx.util import df`. `connect` is ib_async's signature with four keyword-only parameters after it | [`tests/python/test_the_package_is_ib_async.py`](tests/python/test_the_package_is_ib_async.py) |
 | Their transport, read from their source | Their `IB` makes 67 distinct calls on its transport at 2.1.0, and every one lands here. The list is read out of their installed source on every run, so a call they add fails here before it fails a program | [`tests/python/test_ib_async_transport.py`](tests/python/test_ib_async_transport.py) |
-| ib_async's own test suite | Their tests, from their own checkout and unvendored. Those that use their shared `ib` fixture run against an `ib_async_dx.IB` | [`tests/ib_async_upstream/conftest.py`](tests/ib_async_upstream/conftest.py) |
+| Their client's own messages | Each of the 80 requests their client writes as a message, written by their own code through `send`, reads back into the message it was and reaches the engine exactly as the same request made by name | [`tests/python/test_a_raw_message_is_the_request_it_names.py`](tests/python/test_a_raw_message_is_the_request_it_names.py) |
+| ib_async's own test suite | Their tests, from their own checkout and unvendored, each against an `ib_async_dx.IB`: the shared `ib` fixture's, or the `ib_async.IB()` a test builds itself | [`tests/ib_async_upstream/conftest.py`](tests/ib_async_upstream/conftest.py) |
 | An unmodified program, live | Their `IB`, attached, connects, names its account, reads bars and quotes, and takes an order through its whole life | [`tests/python/test_ib_async_transport.py`](tests/python/test_ib_async_transport.py), with a login |
 | A paper account | Every read asked of the venue, and an order placed, changed and withdrawn, through `ib_async_dx.IB`; not yet run against the venue | [`scripts/`](scripts/) |
 
@@ -183,13 +187,14 @@ while the test waits on them. pandas has to be installed too: their
 
 > [!NOTE]
 > At 2.1.0 their suite is three tests. `test_account_summary` passes on the
-> engine. `test_request_error_raised` cannot pass against any server: it
-> asserts a `RequestError` carrying code 321, and 321 is in their own
+> engine. `test_request_error_raised` fails here as it does against a gateway:
+> it asserts a `RequestError` carrying code 321, and 321 is in their own
 > `warningCodes`, where a warning never ends the request it belongs to.
-> `test_contract_format_data_pd` builds its own `IB` and connects it to
-> `127.0.0.1:4001` rather than using their `ib` fixture, so this conftest cannot
-> give it an `ib_async_dx.IB`: without a gateway on that port it fails to
-> connect, and never reaches the engine.
+> `test_contract_format_data_pd` builds its own `ib_async.IB()` and connects it
+> to `127.0.0.1:4001` rather than using their `ib` fixture; the conftest makes
+> `ib_async.IB` this package's before their tests are collected, in that run
+> only, so it connects to the engine. It has not yet been run against the
+> venue.
 
 The whole account of what "drop-in" covers, and what each claim rests on, is on
 [Drop-in](https://userfrm.github.io/ib_async-dx/drop-in.html) and
@@ -208,6 +213,22 @@ as ib_async's own dataclass, by type name, so a field it has and the engine does
 not keeps its default. A bar's date arrives in the spelling ib_async's own
 parser reads.
 
+**What a gateway answers, the engine answers.** A refusal reaches
+`errorEvent` after the call that caused it has returned, so a refused new
+order is marked on its `Trade` as ib_async marks one a gateway refused. An
+order is carried as their client writes it, and one stating an attribute the
+venue no longer takes is answered as a gateway answers it. Orders and requests
+are numbered from one counter, as their client numbers them, starting past
+every order id the account has used, where a gateway's next valid id starts.
+`readonly=True` makes a read-only session, which refuses orders as a gateway
+set to read-only does. `timeout` bounds what ib_async asks once the session is
+open, and a live login waits on its second factor before that, as a gateway's
+does. `serverVersion()` is 178, `reqExecutions()` answers with the day's
+executions, `numIds` changes nothing on `reqIds`, and callbacks that reach
+nothing in ib_async over a gateway reach nothing here either.
+[Running ib_async itself](https://userfrm.github.io/ib_async-dx/bridge.html)
+has each of them.
+
 ### What is better underneath
 
 * **No process in the middle.** No gateway, no JVM, no localhost socket, no
@@ -215,16 +236,6 @@ parser reads.
 * **Connections mend themselves.** Each connection a session runs on — trading,
   market data, historical, contract definitions — is rebuilt on its own if it
   drops, and what it was serving is asked for again under the caller's request.
-* **Order ids come from the account.** An order left unnumbered is numbered
-  from what the account has used, and order ids are counted apart from request
-  ids, so an account whose order ids have grown wide still has request ids to
-  give.
-* **`readonly` holds.** `connect(readonly=True)` makes the session itself
-  refuse to send anything that places, changes or withdraws an order. ib_async's
-  own `readonly` only skips the order requests it makes as it connects.
-* **Refused rather than dropped.** A contract or order field set to a value the
-  engine cannot carry raises a `ValueError` naming it, rather than the order
-  going out on terms nobody stated.
 * **Two of ib_async's bugs, fixed.** In ib_async 2.1, `reqUserInfo()` returns
   `[]`: its wrapper ends the request without the White Branding ID it was
   answered with. Here it returns the ID. And ib_async 2.1 asks for positions as
@@ -237,10 +248,10 @@ parser reads.
 
 | | Today |
 | --- | --- |
-| A new order the engine refuses before sending it | Reported to ib_async while `placeOrder` runs, before ib_async has made the `Trade`, so the `Trade` stays `PendingSubmit`. The refusal is on `errorEvent`. |
 | Option lists other than `mktDataOptions` and `chartOptions` | Taken and not applied: the request has nowhere to put them. A non-empty `mktDataOptions` or `chartOptions` raises `NotImplementedError`. |
-| `bboExchange`, `modelCode`, `groupName`, the account on `reqAccountUpdates`, `ledgerAndNLV`, `numIds`, `bAutoBind` | Taken and not applied: the venue answers these requests the same way whatever they name. [Limits](https://userfrm.github.io/ib_async-dx/limits.html) says why for each. |
-| Five of the calls [beyond ib_async](#beyond-ib_async) | Coming; each needs an addition to the engine first. |
+| `bboExchange`, `modelCode`, `groupName`, the account on `reqAccountUpdates`, `ledgerAndNLV` | Taken and not applied: the venue answers these requests the same way whatever they name. [Limits](https://userfrm.github.io/ib_async-dx/limits.html) says why for each. |
+| The byte counts in `connectionStats()` | Zero: the engine does not count the bytes of its connections. The message counts are carried. |
+| `TickerExtras.statedRows`, [beyond ib_async](#beyond-ib_async) | Coming; it needs an addition to the engine first. |
 | The Rust client | [Coming](#rust). |
 | Published packages | None yet; ib_async-dx and the engine both install from git. |
 
@@ -256,7 +267,7 @@ ib_async's objects, reprs, `util.df` columns and equality stay ib_async's.
 | Method | What it answers |
 | --- | --- |
 | `reqMktDataEx(..., marketDataType=None)` | `reqMktData`, with a market data type (1 live, 2 frozen, 3 delayed, 4 delayed frozen) for this request only. A contract holds one subscription: asked again while subscribed, it follows the one that is up |
-| `reqCurrentTimeInMillis()`, and its `…Async` twin | The venue's clock in milliseconds. It is in the documented API and not in ib_async; accurate to about a second |
+| `reqCurrentTimeInMillis()`, and its `…Async` twin | The time in milliseconds, read off the session's clock, which follows the venue's to within about a second, as a gateway answers from its own clock. It is in the documented API and not in ib_async |
 | `tickerExtras(ticker)` | What the venue states for a ticker's contract beyond ib_async's `Ticker`: shares outstanding, the open a year ago, whether a short-sale circuit breaker is on, and numbered series as the venue states them |
 | `optionModel(ticker)`, `closingOptionModel(ticker)` | The venue's option model: `OptionComputation`'s eight figures and the ten it has no field for |
 | `companyData(contract)` | What the venue states about a contract's company or terms, by series |
@@ -266,19 +277,14 @@ ib_async's objects, reprs, `util.df` columns and equality stay ib_async's.
 | `orderPresets()` | The sets of order defaults the account holds, by key; their values are not carried |
 | `competingSession()` | Another session that held the account when this one connected. `connect` logs a warning when there is one |
 | `reqPing()`, `lastRtt()` | The round trip to the venue, in milliseconds |
+| `reqCorporateActions(contract, startDate, endDate)`, and its `…Async` twin | A contract's corporate actions over a range of days: dividends, splits, spin-offs, rights offers and rollovers, as `CorporateAction` |
+| `reqSpreadScan(contract, scan, timeout=10)`, and its `…Async` twin | An underlying, scanned by the venue for strategies worth putting on, in the venue's own terms, as `ScannedStrategy`. The scan is the engine's `SpreadScan`. While the underlying's market data is still subscribed, a scan can be answered with the last scan's strategies |
+| `positionsElsewhere()` | Holdings the venue reports that this broker does not hold itself: positions held away at another broker, and rows shown but not held. Kept out of `positions()`, so the account is not overstated |
+| `accountValuesElsewhere(held)` | The account figures for those holdings, as `AccountValue` rows, kept out of `accountValues()` |
 
-Coming, each once the engine exposes what it needs: `reqCorporateActions` (a
-contract's corporate actions over a range of days), `reqSpreadScan` (an
-underlying scanned for strategies), `positionsElsewhere` and
-`accountValuesElsewhere` (holdings the venue reports that this broker does not
-hold, kept apart from `positions()` so the account is not overstated), and
-`TickerExtras.statedRows`. More is on
+Coming, once the engine exposes what it needs: `TickerExtras.statedRows`.
+More is on
 [Beyond ib_async](https://userfrm.github.io/ib_async-dx/beyond.html).
-
-> [!TIP]
-> These calls are one-way. A program that uses one cannot move back to a
-> gateway, because a gateway has no message to carry it. Everything ib_async
-> itself names moves both ways.
 
 ## Rust
 
@@ -290,9 +296,9 @@ engine through [ibkr-dx](https://github.com/userFRM/ibkr-dx) directly.
 
 ## Notebooks
 
-Seven of ib_async's eight notebook subjects (all but `option_chain`), run
-without a gateway. Each connects an `ib_async_dx.IB`, so the code in them is
-ib_async's own, and each opens a paper session.
+All eight of ib_async's notebook subjects, run without a gateway. Each
+connects an `ib_async_dx.IB`, so the code in them is ib_async's own, and each
+opens a paper session.
 
 | Notebook | What it covers |
 | --- | --- |
@@ -300,6 +306,7 @@ ib_async's own, and each opens a paper session.
 | [`bar_data`](notebooks/bar_data.ipynb) | How far back the venue holds a series, the bars themselves, a frame, and a series kept up to date |
 | [`contract_details`](notebooks/contract_details.ipynb) | What the venue knows about a contract, and how it answers a description that matches more than one |
 | [`market_depth`](notebooks/market_depth.ipynb) | The book, and which venues will answer for it |
+| [`option_chain`](notebooks/option_chain.ipynb) | An index's option chains, the options near the money on the next three expiries, and their quotes and model greeks |
 | [`ordering`](notebooks/ordering.ipynb) | Placing an order, watching it, moving it, withdrawing it, and a preview that sends nothing |
 | [`scanners`](notebooks/scanners.ipynb) | What can be scanned for, and one scan run |
 | [`tick_data`](notebooks/tick_data.ipynb) | Top of book as it changes, and every print as it happens |
@@ -337,11 +344,12 @@ class.
 <details>
 <summary><b>Will my existing program run unchanged?</b></summary>
 
-Apart from two lines. The import becomes `ib_async_dx`, and the connect call
-gains credentials — or keeps its host and port where `IB_USERNAME` and
-`IB_PASSWORD` are set, because neither is used. The client id is carried into
-the login. The port does not choose paper or live: the session is paper unless
-`connect` is given `paper=False`.
+Apart from its import, which becomes `ib_async_dx`. The connect call gains
+credentials, or, for a paper account, stays as it was where `IB_USERNAME` and
+`IB_PASSWORD` are set: a gateway keeps its login in its own settings, and here
+it is in the environment. The host and port are not used, and the client id is
+carried into the login. A session is paper unless `connect` is given
+`paper=False`; the port does not choose.
 </details>
 
 <details>
@@ -354,9 +362,10 @@ quotes stop arriving, and every stream reads as dead when it is only unattended.
 <details>
 <summary><b>Can I run this and a gateway at the same time?</b></summary>
 
-Not on the same login. One session per login — opening a second takes the first
-away, and the venue names the host that took it. Use a second login if you need
-both at once.
+Not on the same login. One program per login: each program is its own
+session, and a second program on the login, or a gateway, takes the session
+from the first; the venue names the host that took it. Use a second login if
+you need both at once.
 </details>
 
 <details>
@@ -416,7 +425,7 @@ Claims here rest on tests, and the tests are counted rather than described:
 
 | Suite | Count | Needs a session |
 | --- | ---: | :---: |
-| Python | 49 | No |
+| Python | 257 | No |
 | Python, live | 2 | Yes |
 | ib_async's own suite, at 2.1.0 | 3 | Yes |
 | Paper-account scripts | 3 | Yes |
@@ -435,10 +444,10 @@ pip install -e . pytest pytest-asyncio
 pytest tests/python -q
 ```
 
-Of ib_async's three tests, two run on the engine: `test_account_summary` passes,
-and `test_request_error_raised` fails as it does against any server. The third
-opens its own connection to a gateway on port 4001 and never reaches the engine
-([why](#drop-in-and-how-it-is-proven)).
+All three of ib_async's tests run on the engine: `test_account_summary`
+passes, `test_request_error_raised` fails as it does against a gateway, and
+`test_contract_format_data_pd`, which builds its own `IB`, has not yet been
+run against the venue ([why](#drop-in-and-how-it-is-proven)).
 
 The two live tests run when `IB_USERNAME` and `IB_PASSWORD` are set, and are
 skipped otherwise; the workflow sets neither. The scripts under [`scripts/`](scripts/) run against a paper
@@ -469,7 +478,7 @@ A fix to the engine reaches this package by reinstalling the engine.
 * [Drop-in](https://userfrm.github.io/ib_async-dx/drop-in.html) — what "drop-in" means here, and how it is proven
 * [Running ib_async itself](https://userfrm.github.io/ib_async-dx/bridge.html) — how the engine takes the socket's place, and what it carries
 * [Beyond ib_async](https://userfrm.github.io/ib_async-dx/beyond.html) — the two bugs fixed, and the calls ib_async has no name for
-* [Notebooks](https://userfrm.github.io/ib_async-dx/notebooks.html) — seven of ib_async's notebook subjects, without a gateway
+* [Notebooks](https://userfrm.github.io/ib_async-dx/notebooks.html) — all eight of ib_async's notebook subjects, without a gateway
 * [Limits](https://userfrm.github.io/ib_async-dx/limits.html) — what differs from ib_async over a gateway, and what is not carried
 * [Evidence](https://userfrm.github.io/ib_async-dx/evidence.html) — what each claim rests on
 

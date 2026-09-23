@@ -1,8 +1,9 @@
-"""`import ib_async_dx` is `import ib_async`, with one class that differs.
+"""`import ib_async_dx` is `import ib_async`, with two classes that differ.
 
 A program changes its import line and nothing else it reads: the same names,
-the same objects, the same submodules. Only `IB` and `__version__` are this
-package's: `IB` is a subclass of theirs whose `connect` takes a login.
+the same objects, the same submodules, the same version. Only `IB` and `IBC`
+are this package's: `IB` is a subclass of theirs whose `connect` takes a login,
+and `IBC` a subclass of theirs with no gateway to start.
 """
 
 import importlib
@@ -24,13 +25,15 @@ def test_the_names_are_theirs_and_so_are_the_objects():
     assert ib_async_dx.__all__ == ib_async.__all__
     assert len(ib_async_dx.__all__) == 103
     differ = [n for n in ib_async.__all__ if getattr(ib_async_dx, n) is not getattr(ib_async, n)]
-    assert differ == ["IB", "__version__"], "only IB, and the version this package is"
+    assert differ == ["IB", "IBC"], "only IB and IBC"
 
 
-def test_the_versions_name_this_package_and_the_ib_async_it_runs():
-    assert ib_async_dx.__version__ == importlib.metadata.version("ib_async-dx")
-    assert ib_async_dx.__ib_async_version__ == ib_async.__version__
+def test_the_version_is_ib_asyncs_and_this_packages_is_apart():
+    """A program that checks the API level it runs on reads ib_async's."""
+    assert ib_async_dx.__version__ is ib_async.__version__
     assert ib_async_dx.__version_info__ is ib_async.__version_info__
+    assert ib_async_dx.__ib_async_dx_version__ == importlib.metadata.version("ib_async-dx")
+    assert "__ib_async_dx_version__" not in ib_async_dx.__all__
 
 
 def test_every_submodule_of_theirs_resolves_here():
@@ -38,7 +41,7 @@ def test_every_submodule_of_theirs_resolves_here():
     for name in SUBMODULES:
         ours = importlib.import_module(f"ib_async_dx.{name}")
         assert getattr(ib_async_dx, name) is ours, f"ib_async_dx.{name} as an attribute"
-        if name != "ib":
+        if name not in ("ib", "ibcontroller"):
             assert ours is importlib.import_module(f"ib_async.{name}"), name
 
 
@@ -64,6 +67,25 @@ def test_the_ib_module_is_theirs_with_ib_replaced():
     theirs, ours = {}, {}
     exec("from ib_async.ib import *", theirs)
     exec("from ib_async_dx.ib import *", ours)
+    assert ours.keys() == theirs.keys()
+
+
+def test_the_ibcontroller_module_is_theirs_with_IB_and_IBC_replaced():
+    from ib_async_dx.ibcontroller import IB, IBC, Watchdog
+
+    assert IB is ib_async_dx.IB, "their module names their gateway's IB"
+    assert IBC is ib_async_dx.IBC and IBC is not ib_async.IBC
+    assert issubclass(IBC, ib_async.IBC)
+    assert Watchdog is ib_async.Watchdog, "their Watchdog, unmodified"
+    public = [
+        n for n in dir(ib_async.ibcontroller)
+        if not n.startswith("_") and n not in ("IB", "IBC")
+    ]
+    assert all(getattr(ib_async_dx.ibcontroller, n) is getattr(ib_async.ibcontroller, n)
+               for n in public)
+    theirs, ours = {}, {}
+    exec("from ib_async.ibcontroller import *", theirs)
+    exec("from ib_async_dx.ibcontroller import *", ours)
     assert ours.keys() == theirs.keys()
 
 

@@ -52,15 +52,41 @@ their own record.
 **Their requests are carried whole.** A contract or an order going the other
 way is rebuilt as the engine's, field by field, whatever the field: a
 combination keeps its legs, an algo its parameters, an order its soft-dollar
-tier. A field still at their default is left to the engine's own. A field set to
-something the engine cannot carry raises a `ValueError` that names it, rather
-than the order going out on terms nobody stated.
+tier and its conditions, joined by and or by or. A field is carried as their
+client sends it, one at their own default among them; what their client sends
+as an empty field (None, an empty string or list, their unset number) is left to
+the engine's own default. A value its field cannot take — text where a number
+goes — is refused with 320 on `errorEvent`, under the request's number, as a
+gateway refuses a message it cannot read, rather than the request going out on
+terms nobody stated.
 
-**Orders are numbered from the account.** Their client numbers orders and
-requests out of one counter. Here the two are counted apart: an order they leave
-unnumbered is numbered from what the account has used, since the venue refuses
-an id a fill has already spent, and an account whose order ids have grown past
-what a request id can carry still leaves every request numberable.
+**An order is what their client writes.** Their `placeOrder` writes the order
+as its message, and the message is read back as a gateway reads it, so what
+reaches the engine is what a gateway would be sent: a field their client does
+not write is not carried, and `volatility`, which their client clears on any
+order but a volatility order, is cleared. Their client also writes
+`eTradeOnly`, `firmQuoteOnly` and `nbboPriceCap`, which the venue no longer
+takes, and an order stating one is answered as a gateway answers it: where the
+venue has retired them for the account, refused with 10268, 10269 or 10270
+under the order's number; otherwise placed without it, with the notice 2168,
+2169 or 2170.
+
+**Orders and requests are numbered from one counter**, as their client numbers
+them, so an order never takes the number of a request still waiting. The
+counter starts past every id the account has used that a request can carry,
+which the venue names at every connect, and is kept past every one it names
+after: a new order never takes an id a fill has already spent, and an order
+placed elsewhere under an id wider than a request can carry leaves every
+request numberable.
+
+**Their client's own messages are the requests they name.** `send` is their
+client's own, writing the fields as one message, and `sendMsg` reads a
+message back, as a gateway reads one, into the request their client writes it
+for, and answers it as a gateway does. A message naming no request their
+client writes is logged on `ib_async_dx.bridge`, and nothing answers it. One
+that does not read as the request it names is refused with 320 on
+`errorEvent`, under that request's number where it was read before the field
+that failed, and under -1 before it. Either way the session carries on.
 
 A few details are worth knowing:
 
@@ -69,11 +95,23 @@ A few details are worth knowing:
   a date and a time and a zone separated by single spaces is an aware moment —
   and the frame example in their own tests calls `tz_convert` on the date
   column, which refuses a naive datetime.
-- A price and its size reach them together, as their `priceSizeTick`. A size
-  stated before any price is sent with their own "no price", because a zero
-  there is a market quoted at nothing.
+- A price and the size that goes with it reach them together, as their
+  `priceSizeTick`, and a size that changed on its own as their `tickSize`, as
+  a gateway sends them.
 - A refusal reaches their `error` in the four-argument shape their wrapper
-  declares. Handed five, it would raise on the first notice of the session.
+  declares, as a gateway's does, and after the call that caused it has
+  returned. So a new order refused before it is sent reaches the `Trade`
+  `placeOrder` handed back, which their wrapper marks as it marks one a gateway
+  refused: `ValidationError` for 321, which it counts as a warning, and
+  `Cancelled` for an error.
+- An order's status names the client that placed it, as a gateway's does, so
+  their wrapper finds the `Trade` an order another client placed is kept under.
+- A record their wrapper builds whole arrives whole: a routing component, a
+  family code. A bar's average price arrives as its `average`, and a
+  condition says how it joins the next. A callback that cannot be rebuilt, or
+  that their wrapper raises on, is logged on `ib_async_dx.bridge` and passed
+  over, as their decoder treats a message it cannot handle, and the session
+  carries on.
 - Every account the login holds is listed by `managedAccounts()`, not only the
   first.
 - `isConnected()` answers as their client does. An outage the engine is still
@@ -119,27 +157,57 @@ running while the test waits on them. pandas has to be installed too: their
 `test_contract.py` imports it, and without it the run stops at collection.
 
 The conftest replaces their shared `ib` fixture with an `ib_async_dx.IB`,
-connected with the login in the environment, so every test that takes that
-fixture runs on the engine. At 2.1.0 their suite is three tests:
+connected with the login in the environment, and makes `ib_async.IB` this
+package's, so every test runs on the engine. At 2.1.0 their suite is three
+tests:
 
 | Test | Here |
 | --- | --- |
 | `test_account_summary` | Passes on the engine |
-| `test_request_error_raised` | Cannot pass against any server. Its last line asserts a `RequestError` carrying 321, and 321 is in their own `warningCodes` frozenset, where a warning never ends the request it belongs to, so the error it waits for is never raised |
-| `test_contract_format_data_pd` | Never reaches the engine. It builds its own `IB` and connects it to `127.0.0.1:4001` rather than taking the fixture, so the conftest cannot replace it; with no gateway on that port it fails to connect |
+| `test_request_error_raised` | Fails here as it does against a gateway. Its last line asserts a `RequestError` carrying 321, and 321 is in their own `warningCodes` frozenset, where a warning never ends the request it belongs to, so the error it waits for is never raised |
+| `test_contract_format_data_pd` | Runs on the engine; not yet run against the venue. It builds its own `ib_async.IB()` and connects it to `127.0.0.1:4001` rather than taking the fixture. The conftest makes `ib_async.IB` this package's before their tests are collected, in that run only, so that `IB` connects to the engine whatever host and port it names |
 
 ## What it does not carry
 
-`FlexReport` reads a report over the web. It is a class of its own, not a method
-on their `IB`, and it never touches a session, so it runs as it always has.
-Everything on their `IB` is routed.
-
 Two things their `IB` reads off its client answer for a transport that has no
-socket. `serverVersion()` is a fixed 178. `connectionStats()` states when the
-session started and how long it has run, and its byte and message counts are
-zero: there is no socket to count.
+socket. `connectionStats()` counts the messages each way, as their client does:
+a request is one sent, and what reaches their wrapper one received. Its byte
+counts are zero: the engine does not count the bytes of its connections. And
+their client's `conn`, the socket connection, is not there.
 
-A request their client carries and the engine does not raises
-`NotImplementedError` naming it, rather than failing as a missing attribute.
-None of the 67 their `IB` makes is one of those. The rest — display groups,
-callbacks the venue never sends — is in [Limits](./limits.md).
+Everything on their `IB` is routed. The rest of what differs is in
+[Limits](./limits.md).
+
+## Where it answers as a gateway does
+
+A program meeting one of these for the first time may read it as a difference.
+Each is what ib_async over a gateway does too.
+
+- `readonly=True` makes a read-only session, which refuses to send anything that
+  places, changes or withdraws an order, as a gateway set to read-only does.
+- `timeout` bounds what ib_async asks once the session is open — positions,
+  orders, account updates, executions — and not the login, which a gateway also
+  makes before a program connects. A live login waits on its second factor, as
+  a gateway's does; a paper login presents none.
+- `serverVersion()` is 178, the version a current gateway settles on with
+  ib_async 2.1.
+- `reqExecutions()` answers with the day's executions: those this session has
+  seen and those the venue restated when it opened, fills on orders already
+  completed among them. ib_async 2.1's request cannot ask for more.
+  `reqCompletedOrders()` asks the venue.
+- `numIds` on `reqIds` changes nothing: ids are handed out one at a time.
+- A request their client makes that the engine does not carry — `verifyRequest`
+  and the three after it, the handshake a program makes with the gateway it
+  connects to — is taken, and nothing answers it, as a gateway answers
+  nothing. A name their client does not have is a missing attribute, as on
+  theirs.
+- Callbacks that reach nothing in ib_async over a gateway reach nothing here.
+  Their wrapper has no handler for `displayGroupList`, `displayGroupUpdated`,
+  `rerouteMktDataReq`, `rerouteMktDepthReq` or `replaceFAEnd`, discards
+  `deltaNeutralValidation`, and is never sent `verifyMessageAPI`,
+  `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted` or
+  `tickEFP`, so a `Ticker`'s EFP fields keep their defaults. `winError` is no
+  message at all. A request a gateway would reroute is itself answered
+  differently: see [Limits](./limits.md).
+- `FlexReport` fetches a report over the web with a token of its own and never
+  touches a session, here or over a gateway.

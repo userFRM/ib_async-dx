@@ -2,9 +2,7 @@
 
 This engine states when the venue said it, as the current reference client
 does. ib_async predates that argument and declares four, so a wrapper handed
-five raises on the first error or notice of the session — and a callback that
-raises there closes the session, which turned any refusal at all into a
-disconnection.
+five raises on every error and notice of the session, and each is lost.
 
 Run: pytest tests/python/test_a_refusal_reaches_their_wrapper.py -v
 """

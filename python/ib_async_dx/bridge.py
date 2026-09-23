@@ -26,14 +26,22 @@ session's orders. The credentials are given to `attach`, or left to
 """
 
 import asyncio
+import collections
+import logging
 import os
 import pathlib
 import threading
 import time
 
 from eventkit import Event
+from ib_async.client import Client as _TheirClient
+from ib_async.order import Order as _TheirOrder
 
 import ibkr_dx as _ibkr_dx
+
+from . import _messages
+
+_logger = logging.getLogger(__name__)
 
 
 def _refuse_options(named: str, given) -> None:
@@ -59,6 +67,11 @@ def _refuse_options(named: str, given) -> None:
 #: not held to it: the venue numbers orders as wide as it likes, and an account
 #: whose orders have outgrown a request id is ordinary rather than broken.
 WIDEST_REQUEST_ID = 0xC000_0000 - 1
+
+
+#: How often the pump makes a pass: the finest step at which anything the
+#: engine holds reaches ib_async.
+PASS_INTERVAL = 0.01
 
 
 class IbkrDxClient:
@@ -98,7 +111,9 @@ class IbkrDxClient:
         self._loop = None
         self._pump = None
         self._stop = threading.Event()
+        #: When the session started, and the requests sent on it.
         self._since = time.time()
+        self._sent = 0
 
         # The engine, with ib_async's own wrapper as the callback target: this
         # client already resolves a callback under the reference client's
@@ -132,8 +147,9 @@ class IbkrDxClient:
         """
         readonly = self._readonly if readonly is None else bool(readonly)
         self.host, self.port, self.clientId = host, int(port), int(clientId)
-        self._callbacks._client_id = self.clientId
         self.connState = IbkrDxClient.CONNECTING
+        self._since, self._sent = time.time(), 0
+        self._callbacks.reset()
         self._loop = asyncio.get_running_loop()
         self.wrapper.__dict__.setdefault("clientId", self.clientId)
 
@@ -163,24 +179,17 @@ class IbkrDxClient:
         # the answer is in hand before it is read.
         self._pass_once()
         self._accounts = list(getattr(self.wrapper, "accounts", []))
-        # Their wrapper's `nextValidId` does nothing; their client seeds the
-        # counter itself when it sees one on the wire. `placeOrder` takes its
-        # id from that counter, so an id announced and not seeded is an order
-        # numbered from one on an account that has already traded.
-        # Announced, not seeded. Their client numbers its orders and its
-        # requests out of one counter because the client it stands in for
-        # carries both as the same signed 32-bit number. This protocol does
-        # not: an order id goes as wide as it likes and a request id is four
-        # billion wide, and an account that has once been given a wide order
-        # id leaves that counter unable to carry a request. The two are
-        # counted apart here — requests from where they were, orders from what
-        # the account has used, filled in by `placeOrder` below.
-        next_valid = self._client.next_order_id()
+        # The number their client counts on, which numbers its requests and
+        # the orders it places alike, as a gateway announces it when the API
+        # starts: their client takes it as the next id to hand out, and their
+        # wrapper hears it. The engine's is the first number past every order
+        # id the account has used that a request can also carry, so no id this
+        # counter hands out names an order the venue already holds, and one
+        # counter means an order never takes the number of a request that is
+        # still waiting.
+        next_valid = self._client.next_shared_id()
+        self.updateReqId(next_valid)
         self.wrapper.nextValidId(next_valid)
-        # Their counter serves requests and the orders they number themselves,
-        # so it is seeded with a number that answers for both: past every id
-        # an order has spent that a request could also carry.
-        self.updateReqId(self._client.next_shared_id())
 
         self._start_pump()
         self.apiStart.emit()
@@ -200,7 +209,14 @@ class IbkrDxClient:
     def _session_ended(self):
         """The engine ended the session: what ib_async's client does when its
         socket closes. Waiting requests fail, and ``apiEnd`` fires, which
-        their ``IB`` hears as ``disconnectedEvent``."""
+        their ``IB`` hears as ``disconnectedEvent``.
+
+        The prices this pass stated before the end reach their tickers first,
+        as what a socket carried before it closed is read before the close.
+        Held to the end of the pass, they reached a wrapper the close had
+        already cleared, which logged each as a request it did not know.
+        """
+        self._callbacks.end_pass()
         self.connState = IbkrDxClient.DISCONNECTED
         self._stop.set()
         self.wrapper.setEventsDone()
@@ -224,7 +240,9 @@ class IbkrDxClient:
         """
         if self.connState == IbkrDxClient.DISCONNECTED:
             return
+        self._callbacks.begin_pass()
         self._client.poll()
+        self._callbacks.end_pass()
         if self._callbacks.arrived:
             self._callbacks.arrived = False
             processed = getattr(self.wrapper, "tcpDataProcessed", None)
@@ -242,7 +260,7 @@ class IbkrDxClient:
         def run():
             while not self._stop.is_set():
                 self._loop.call_soon_threadsafe(self._pass_once)
-                self._stop.wait(0.01)
+                self._stop.wait(PASS_INTERVAL)
 
         self._pump = threading.Thread(target=run, daemon=True)
         self._pump.start()
@@ -270,6 +288,14 @@ class IbkrDxClient:
     def getReqId(self):
         if not self.isConnected():
             raise ConnectionError("Not connected")
+        # Past every order id the venue has named, those it names after the
+        # connect among them: the history of an order that filled can come
+        # later than the wait at connect, and the venue refuses an id a fill
+        # has spent. Their wrapper raises the counter only on an open order.
+        # After the venue reconnects, the first call waits, three seconds at
+        # most, for the venue to name the working orders again, as the
+        # connect does.
+        self.updateReqId(self._client.next_shared_id())
         # Hands out the current value and then advances, as their own client
         # does, so an id seeded by `updateReqId` is the next one issued rather
         # than the one after it.
@@ -281,27 +307,35 @@ class IbkrDxClient:
         # Their wrapper raises this counter past every order id it sees, so
         # that the next order their client numbers is not one the account is
         # already working. Their client numbers orders and requests out of it
-        # alike, because the client it stands in for carries both as one signed
-        # 32-bit number.
+        # alike, and so does this one.
         #
-        # Here they are two. An order id goes as wide as the venue lets it, a
-        # request id is four billion wide with the top of that reserved, and
-        # `placeOrder` below numbers an order from the account's own counter
-        # rather than from this one — so a raise past what a request can carry
-        # buys nothing and costs everything: on an account whose orders are
-        # numbered above it, every request afterwards was refused as a number
+        # An order id placed elsewhere can go wider than a request id, which
+        # is four billion wide with the top of that reserved. A raise past what
+        # a request can carry buys nothing and costs everything: on an account
+        # with such an order, every request afterwards was refused as a number
         # this protocol cannot carry, and an unmodified program could not so
-        # much as name a contract. Such a raise is let go of rather than taken
-        # to the top of the range, which saturates and steps over the edge on
-        # the next request.
+        # much as name a contract. The counter starts past every id the
+        # account has used that a request can carry, so an id it hands out is
+        # clear of that order as well. Such a raise is let go of rather than
+        # taken to the top of the range, which saturates and steps over the
+        # edge on the next request.
         if minReqId > WIDEST_REQUEST_ID:
             return
         self._reqIdSeq = max(self._reqIdSeq, minReqId)
 
     def connectionStats(self):
+        """When the session started, how long it has run, and the messages
+        each way, as their client counts them: a request is one sent, and what
+        reaches their wrapper one received. The byte counts are nought: the
+        engine does not count the bytes of its connections."""
         from ib_async.objects import ConnectionStats
 
-        return ConnectionStats(self._since, time.time() - self._since, 0, 0, 0, 0)
+        if not self.isReady():
+            raise ConnectionError("Not connected")
+        return ConnectionStats(
+            self._since, time.time() - self._since, 0, 0,
+            self._callbacks.received, self._sent,
+        )
 
     def setConnectOptions(self, options):
         self.connectOptions = options.encode()
@@ -313,13 +347,118 @@ class IbkrDxClient:
             raise ConnectionError("Not connected")
         return self._client
 
+    def _send(self, request, *args):
+        """One request to the engine, as their client writes one message.
+
+        The engine answers a request it refuses inside the call itself. Their
+        client's answers come back on the socket once the call has returned,
+        so a refusal is held for the next pass (see `_LoopBound.error`).
+        """
+        engine = self._connected()
+        self._sent += 1
+        self._callbacks.asking += 1
+        try:
+            return getattr(engine, request)(*args)
+        finally:
+            self._callbacks.asking -= 1
+
+    def _send_theirs(self, request, *args):
+        """A request as their client makes it, each argument rebuilt as the
+        engine's.
+
+        An object holding a value its field cannot take — text where a number
+        goes — is one a gateway cannot read off their client's message, and it
+        is refused as a gateway refuses a message it cannot read: 320, under
+        the request's own number, once the call has returned. Every request of
+        their client that carries an object is numbered by its first argument.
+        """
+        try:
+            ours = [_as_ours(a) for a in args]
+        except ValueError as why:
+            self._connected()
+            self._sent += 1
+            self._callbacks.refused.append((args[0], *_unreadable(why)))
+            return None
+        return self._send(request, *ours)
+
+    # ── their raw messages ──
+
+    #: Their client's own: it writes the fields as one message, as theirs
+    #: does, and hands the message to `sendMsg`.
+    send = _TheirClient.send
+
+    def sendMsg(self, msg):
+        """A message as their client writes one, sent as the request that
+        writes it.
+
+        There is no socket to write it to, so it is read back, as a gateway
+        reads one, into the request their client names for it, and answered
+        as a gateway answers it:
+
+        * a message naming no request their client writes is logged, and
+          nothing answers it;
+        * one that does not read as the request it names is refused with 320,
+          once the call has returned, under that request's number where it was
+          read before the field that failed, and under -1 before it.
+
+        While not connected nothing is sent, as their client's socket sends
+        nothing, and an empty message is nothing to send.
+        """
+        if not self.isConnected() or not msg:
+            return
+        try:
+            read = _messages.read(msg)
+        except _messages.Unreadable as why:
+            self._sent += 1
+            self._callbacks.refused.append((why.reqId, *_unreadable(why)))
+            return
+        if read is None:
+            self._sent += 1
+            named = msg.split("\0", 1)[0]
+            _logger.error(f"Invalid incoming request type - {named}")
+            return
+        request, args = read
+        if request == "placeOrder":
+            self._place_order(*args)
+        else:
+            getattr(self, request)(*args)
+
     # ── requests: the same shape, all the way down ──
+
+    def placeOrder(self, orderId, contract, order):
+        """An order, written by their client and read back as a gateway reads
+        it, so what reaches the engine is what their client sends: a field
+        their client does not write is not carried, and one it clears is
+        cleared, `volatility` on any order but a volatility order among them.
+        """
+        _TheirClient.placeOrder(self, orderId, contract, order)
+
+    def _place_order(self, orderId, contract, order):
+        """An order as a gateway takes it off their client's message.
+
+        Three attributes their client writes on every order are ones the venue
+        no longer takes. A gateway refuses an order stating one where the
+        venue has retired them for the account, and otherwise says so and
+        places the order without it.
+        """
+        for name, spelled, refusal, warning in _RETIRED:
+            unset = getattr(_TheirOrder, name)
+            if getattr(order, name) == unset:
+                continue
+            text = f"The '{spelled}' order attribute is not supported."
+            if "DEPRETFQNC" in self._client.enabled_features():
+                self._sent += 1
+                self._callbacks.refused.append((orderId, refusal, text, ""))
+                return
+            self._callbacks.refused.append((orderId, warning, f"Warning: {text}", ""))
+            setattr(order, name, unset)
+        self._send_theirs("place_order", orderId, contract, order)
 
     def reqMktData(self, reqId, contract, genericTickList, snapshot,
                    regulatorySnapshot, mktDataOptions):
         _refuse_options("mktDataOptions", mktDataOptions)
-        self._connected().req_mkt_data(
-            reqId, _as_ours(contract), genericTickList, snapshot,
+        self._send_theirs(
+            "req_mkt_data", reqId, contract, genericTickList, snapshot,
             regulatorySnapshot,
         )
 
@@ -327,8 +466,8 @@ class IbkrDxClient:
                           barSizeSetting, whatToShow, useRTH, formatDate,
                           keepUpToDate, chartOptions):
         _refuse_options("chartOptions", chartOptions)
-        self._connected().req_historical_data(
-            reqId, _as_ours(contract), endDateTime, durationStr,
+        self._send_theirs(
+            "req_historical_data", reqId, contract, endDateTime, durationStr,
             barSizeSetting, whatToShow, 1 if useRTH else 0, formatDate,
             keepUpToDate, [],
         )
@@ -337,40 +476,44 @@ class IbkrDxClient:
     # through `_as_ours`, which turns None into an empty list — right for an
     # options list and wrong for a string, which is what these carry.
     def reqAccountUpdates(self, subscribe, acctCode):
-        self._connected().req_account_updates(subscribe, acctCode)
+        self._send("req_account_updates", subscribe, acctCode)
 
     def reqAccountSummary(self, reqId, groupName, tags):
-        self._connected().req_account_summary(reqId, groupName, tags)
+        self._send("req_account_summary", reqId, groupName, tags)
 
     def __getattr__(self, name):
         """Every other request, under the name this engine carries it by.
 
         Both sides follow the reference client's own signatures, so a request
         with no special handling above is forwarded as it stands rather than
-        written out again here. One that this engine does not carry says so,
-        naming itself, instead of failing as a missing attribute.
+        written out again here.
         """
         if name.startswith("_"):
             raise AttributeError(name)
 
-        carried = getattr(self._client, _our_name_for(name, self._client), None)
-        if carried is None:
-            def missing(*args, **kwargs):
-                raise NotImplementedError(
-                    f"{name}() is not carried by this client"
-                )
-            return missing
+        request = _our_name_for(name, self._client)
+        if hasattr(self._client, request):
+            return lambda *args: self._send_theirs(request, *args)
+        if not callable(getattr(_TheirClient, name, None)):
+            raise AttributeError(
+                f"{type(self).__name__!r} object has no attribute {name!r}"
+            )
 
-        def forwarding(*args):
+        def unanswered(*args):
+            # A request their client makes and the engine does not carry: the
+            # handshake a program makes with the gateway it connects to. A
+            # gateway never answers it, and nothing answers it here.
             self._connected()
-            return carried(*(_as_ours(a) for a in args))
+            self._sent += 1
 
-        return forwarding
+        return unanswered
 
 
-#: Where the two name the same figure differently. Their order state was
+#: Where the two name the same figure differently. Their bar calls its average
+#: price what the reference client calls `wap`, and their order state was
 #: written before the venue renamed a commission to include its fees.
 _OUR_NAME = {
+    "average": "wap",
     "commission": "commissionAndFees",
     "minCommission": "minCommissionAndFees",
     "maxCommission": "maxCommissionAndFees",
@@ -441,6 +584,10 @@ def _field_of(value, name):
     A moment is handed over as their own, because their records declare it as
     a datetime and a number read as one is an instant in 1970.
     """
+    if name == "conjunction":
+        # The engine says whether the join is an "and"; theirs says "a" or "o".
+        isAnd = getattr(value, "isConjunctionConnection", None)
+        return None if isAnd is None else "a" if isAnd else "o"
     got = getattr(value, name, None)
     if got is None:
         got = getattr(value, _OUR_NAME.get(name, name), None)
@@ -481,26 +628,18 @@ def _as_theirs(value):
     if theirs is None or dataclasses.is_dataclass(value):
         return value
 
-    # A record tuple is built in one go: its fields are positional and it has
-    # no setters, so the field-by-field walk below cannot be used on one.
+    # Built in one go, as their decoder builds one: a record tuple takes its
+    # fields in order, and some of their dataclasses take every field when
+    # they are made and cannot be changed after. Made empty and filled one
+    # field at a time, those could not be made at all.
     if _is_named_tuple(theirs):
-        return theirs(*[
-            _as_theirs(_field_of(value, name))
-            for name in theirs._fields
-        ])
-
-    made = theirs()
-    for field in dataclasses.fields(theirs):
-        ours = getattr(value, field.name, None)
-        if ours is None:
-            ours = getattr(value, _OUR_NAME.get(field.name, field.name), None)
-        if ours is None:
-            continue
-        try:
-            setattr(made, field.name, _as_theirs(ours))
-        except (TypeError, ValueError, AttributeError):
-            pass
-    return made
+        return theirs(*[_as_theirs(_field_of(value, name)) for name in theirs._fields])
+    # A field the engine does not state keeps their default.
+    return theirs(**{
+        field.name: _as_theirs(got)
+        for field in dataclasses.fields(theirs)
+        if (got := _field_of(value, field.name)) is not None
+    })
 
 
 class _LoopBound:
@@ -516,21 +655,48 @@ class _LoopBound:
     _SIZE_OF = {1: 0, 2: 3, 4: 5, 66: 69, 67: 70, 68: 71}
     _PRICE_OF = {size: price for price, size in _SIZE_OF.items()}
 
-    def __init__(self, wrapper, client_id=0):
+    def __init__(self, wrapper):
         self._wrapper = wrapper
-        self._client_id = client_id
-        self._quotes: dict[int, dict[int, float]] = {}
+        #: The size last stated for each side of each request, by tick type.
+        self._sizes: dict[tuple[int, int], float] = {}
+        #: Prices this pass stated whose size it has not stated yet.
+        self._priced: dict[tuple[int, int], float] = {}
         #: Whether anything was delivered since the last pass ended a batch.
         self.arrived = False
+        #: The messages delivered to their wrapper.
+        self.received = 0
+        #: How many requests are being made right now.
+        self.asking = 0
+        #: Refusals stated inside a request call, for the next pass.
+        self.refused = collections.deque()
 
-    def _arrive(self):
-        """Start their batch on the first callback since the last one ended,
-        where their own transport starts one when data arrives."""
+    def reset(self):
+        """A new session: nothing held for the last one reaches it, as their
+        client clears its queues when it connects."""
+        self._sizes.clear()
+        self._priced.clear()
+        self.refused.clear()
+        self.arrived = False
+        self.received = 0
+
+    def _deliver(self, method, *args):
+        """One message to their wrapper.
+
+        Their batch starts on the first message since the last one ended,
+        where their own transport starts one when data arrives. A message
+        their wrapper raises on is logged and passed over, as their decoder
+        treats one: raised into the engine, it closed the session.
+        """
         if not self.arrived:
             self.arrived = True
             arrived = getattr(self._wrapper, "tcpDataArrived", None)
             if arrived:
                 arrived()
+        self.received += 1
+        try:
+            method(*args)
+        except Exception:
+            _logger.exception(f"Error handling {getattr(method, '__name__', method)}{args!r}")
 
     def histogram_data(self, req_id, items):
         """The spread of trades across prices, in their own type.
@@ -540,13 +706,13 @@ class _LoopBound:
         """
         from ib_async.objects import HistogramData
 
-        self._arrive()
         # Built as theirs either way. This engine states a bucket the way the
         # reference client does — `price` and `size` — and their wrapper reads
         # `price` and `count`, so an entry passed straight through carries a
         # name they do not read. Handing back whatever arrived was right only
         # while this engine handed back a pair.
-        self._wrapper.histogramData(
+        self._deliver(
+            self._wrapper.histogramData,
             req_id,
             [
                 HistogramData(
@@ -557,55 +723,43 @@ class _LoopBound:
             ],
         )
 
-    def order_status(self, order_id, status, filled, remaining, avg_fill_price,
-                     perm_id, parent_id, last_fill_price, client_id, why_held,
-                     mkt_cap_price):
-        """Stamped with the client this session opened under.
-
-        Their wrapper holds a trade under the client that placed it, and looks
-        it up the same way; stamped with a client the session never used, the
-        status reaches nothing.
-        """
-        self._arrive()
-        self._wrapper.orderStatus(
-            order_id, status, filled, remaining, avg_fill_price, perm_id,
-            parent_id, last_fill_price, self._client_id, why_held,
-            mkt_cap_price,
-        )
-
     def tick_price(self, req_id, tick_type, price, attrib=None):
-        """A price, delivered with the size that belongs to it.
+        """A price, delivered with the size that goes with it.
 
-        This engine states a price and a size as the reference client does —
-        two ticks. ib_async holds a quote as one thing and blanks a side whose
-        size is zero, so the two are paired here rather than each arrival
-        wiping the other half.
+        This engine states a price and its size as the reference client does,
+        as two ticks, and a pass states every price before any size. A
+        gateway sends the two as one message, which their decoder hands over
+        as one `priceSizeTick`. So a price that has a size waits for the size
+        this pass states with it, or for the end of the pass, where it goes
+        with the size standing.
         """
-        self._arrive()
-        held = self._quotes.setdefault(req_id, {})
-        held[tick_type] = price
-        size = held.get(self._SIZE_OF.get(tick_type, -1), 0.0)
-        self._wrapper.priceSizeTick(req_id, tick_type, price, size)
+        if tick_type in self._SIZE_OF:
+            self._priced[req_id, tick_type] = price
+        else:
+            self._deliver(self._wrapper.priceSizeTick, req_id, tick_type, price, 0.0)
 
     def tick_size(self, req_id, tick_type, size):
-        """A size, delivered with the price that belongs to it.
+        """A size: with the price this pass stated beside it, or on its own.
 
-        A size can change while the price does not, so the price half comes
-        from what was last stated. Where nothing has stated one, their own
-        "no price" is what is sent: a zero there is a market quoted at
-        nothing, which is a different thing from a market not yet quoted.
+        A size that changed while its price did not is what a gateway sends
+        on its own, and their decoder hands that over as `tickSize`.
         """
-        self._arrive()
-        held = self._quotes.setdefault(req_id, {})
-        held[tick_type] = size
         price_type = self._PRICE_OF.get(tick_type)
-        if price_type is None:
-            self._wrapper.tickSize(req_id, tick_type, size)
-            return
-        unstated = getattr(self._wrapper, "defaultEmptyPrice", -1)
-        self._wrapper.priceSizeTick(
-            req_id, price_type, held.get(price_type, unstated), size
-        )
+        if price_type is not None:
+            self._sizes[req_id, tick_type] = size
+            price = self._priced.pop((req_id, price_type), None)
+            if price is not None:
+                self._deliver(self._wrapper.priceSizeTick, req_id, price_type, price, size)
+                return
+        self._deliver(self._wrapper.tickSize, req_id, tick_type, size)
+
+    def end_pass(self):
+        """The prices this pass stated with no size beside them, each with the
+        size standing: the size did not change, so the pass did not state it."""
+        priced, self._priced = self._priced, {}
+        for (req_id, price_type), price in priced.items():
+            size = self._sizes.get((req_id, self._SIZE_OF[price_type]), 0.0)
+            self._deliver(self._wrapper.priceSizeTick, req_id, price_type, price, size)
 
     #: Where their wrapper names a callback something other than the
     #: reference client does, and the two it does not carry at all: display
@@ -620,22 +774,41 @@ class _LoopBound:
     # Under both spellings. This engine looks for the reference client's name
     # first, so a callback answered here under one spelling only would be
     # reached past — straight to their wrapper, and the translation skipped.
-    orderStatus = order_status
     tickPrice = tick_price
     tickSize = tick_size
     histogramData = histogram_data
 
     def error(self, req_id, when, code, text, advanced=""):
-        """A refusal, in the shape their wrapper declares.
+        """A refusal, in the shape their wrapper declares, when a gateway's
+        would arrive.
 
         This engine states when the venue said it, as the current reference
         client does. `ib_async` predates that argument and declares four, so
-        their wrapper is handed four: passed five it raises on the first error
-        or notice of the session, and a callback that raises here closes the
-        session — which turned any refusal at all into a disconnection.
+        their wrapper is handed four: passed five it raises, and every error
+        and notice of the session would be lost.
+
+        A refusal stated inside a request call waits for the next pass. A
+        gateway's comes back on the socket after the call has returned, and
+        their `placeOrder` makes its `Trade` after the call: delivered inside
+        it, a refused new order had no trade to mark and stayed PendingSubmit.
         """
-        self._arrive()
-        self._wrapper.error(req_id, code, text, advanced)
+        refusal = (req_id, code, text, advanced)
+        if self.asking:
+            self.refused.append(refusal)
+        else:
+            self._deliver(self._wrapper.error, *refusal)
+
+    def begin_pass(self):
+        """What was refused inside a request call before this pass.
+
+        Only that: a refusal of a request made while these are delivered — a
+        handler asking again — waits for the next pass, as a gateway's answer
+        to it would come back on the socket after the call. Delivered in the
+        same pass, a handler that asks again on every refusal held the loop
+        for as long as it kept asking.
+        """
+        for _ in range(len(self.refused)):
+            self._deliver(self._wrapper.error, *self.refused.popleft())
 
     def __getattr__(self, name):
         # Under either spelling: this engine calls a callback by the name it
@@ -659,23 +832,52 @@ class _LoopBound:
             raise AttributeError(name)
 
         def carrying(*args):
-            self._arrive()
-            return method(*(_as_theirs(a) for a in args))
+            try:
+                theirs = [_as_theirs(a) for a in args]
+            except Exception:
+                # As their decoder treats a message it cannot handle: said, and
+                # the session carries on without it.
+                _logger.exception(f"Error handling {name}{args!r}")
+                return
+            self._deliver(method, *theirs)
 
         return carrying
 
 
-#: What they mean by "the caller set nothing".
-#:
-#: Both sides spell it the same way, and this engine states it as zero on most
-#: fields but keeps the sentinel on the ones where zero is a value a caller can
-#: mean. Which fields those are is not a list to keep by hand — the engine's own
-#: default says so, and a list went stale: an order carrying their unset
-#: `basisPoints` was rewritten to zero, which this engine reads as a caller
-#: stating a field the protocol cannot carry, so every order through their API
-#: was refused for setting something nobody set.
+#: Their unset numbers, which their client sends as an empty field.
 _UNSET_DOUBLE = 1.7976931348623157e308
 _UNSET_INTEGER = 2147483647
+
+
+def _unreadable(why):
+    """A request a gateway could not read off their client's message, as it
+    refuses one: code, text and no advanced reject."""
+    return 320, f"Error reading request:{why}", ""
+
+
+#: The order attributes their client writes and the venue no longer takes:
+#: each by name, as a gateway spells it, and the code it refuses an order
+#: stating one under where the venue has retired them for the account, then
+#: the code it warns under otherwise, placing the order without it.
+_RETIRED = (
+    ("eTradeOnly", "EtradeOnly", 10268, 2168),
+    ("firmQuoteOnly", "FirmQuoteOnly", 10269, 2169),
+    ("nbboPriceCap", "NbboPriceCap", 10270, 2170),
+)
+
+#: How their order conditions say one joins the next, as the engine says it:
+#: whether the join is an "and".
+_CONJUNCTION = {"a": True, "o": False}
+
+
+def _states_nothing(held):
+    """A field their client sends empty: None, an empty string or list, or
+    one of their unset numbers."""
+    return (
+        held is None or held == "" or held == [] or held == _UNSET_DOUBLE
+        or (isinstance(held, int) and not isinstance(held, bool)
+            and held == _UNSET_INTEGER)
+    )
 
 
 def _as_ours(value):
@@ -720,42 +922,33 @@ def _as_ours(value):
     made = ours()
     for field in dataclasses.fields(value):
         held = getattr(value, field.name, None)
-        if held is None:
+        # Carried as their client sends it: every field, one at their own
+        # default among them, except what goes out as an empty field. That is
+        # left to this engine's default, which is its own "not stated". Left
+        # out at their default, `openClose` went as nothing where their
+        # client sends "O".
+        if _states_nothing(held):
             continue
-        # A field still at their default was not stated by whoever placed the
-        # order, and the two sides do not agree on what a default is — theirs
-        # says an order does not use the automatic hedge price, this engine's
-        # says it does, and neither was asked for. Carrying theirs over states
-        # a field nobody set, and where the protocol has nowhere to send it the
-        # order is refused for it. What the caller actually set is carried; the
-        # rest is left to this engine's own default.
-        if field.default is not dataclasses.MISSING and held == field.default:
+        name = field.name
+        if name == "conjunction":
+            name, held = "isConjunctionConnection", _CONJUNCTION.get(held, held)
+        # Already what the engine holds — a condition's type is its class's
+        # own on both sides, and fixed on this one — or a field the engine has
+        # no place for, at the value their client sends on every order:
+        # `eTradeOnly` and `firmQuoteOnly`, always False, state nothing.
+        if getattr(made, name, field.default) == held:
             continue
-        # Past the check above, this field was set to something other than
-        # their default — including, from a program that spells it out, their
-        # unset sentinel itself. That still means nothing was set, so it is
-        # translated the same way.
-        #
-        # `made` is untouched at this field until the line below, so what it
-        # holds here is this engine's own default — which is what says whether
-        # the sentinel means anything on this field.
-        unset_here = getattr(made, field.name, None)
-        if held == _UNSET_DOUBLE and unset_here != _UNSET_DOUBLE:
-            held = 0.0
-        elif (isinstance(held, int) and not isinstance(held, bool)
-              and held == _UNSET_INTEGER and unset_here != _UNSET_INTEGER):
-            held = 0
-        carried = _as_ours(held)
         try:
-            setattr(made, field.name, carried)
+            setattr(made, name, _as_ours(held))
         except (AttributeError, TypeError, ValueError) as why:
-            # Only fields the caller set reach here. A field that cannot be
-            # carried is one the order goes out without, so it is raised rather
-            # than swallowed: an algo without its parameters or a commission
-            # directed nowhere is an order on terms nobody stated.
+            # A field that cannot be carried is one the order goes out
+            # without, so it is raised rather than swallowed: an algo without
+            # its parameters or a commission directed nowhere is an order on
+            # terms nobody stated.
             raise ValueError(
-                f"{type(value).__name__}.{field.name} was set to {held!r}, "
-                f"which this client cannot carry: {why}"
+                f"{type(value).__name__}.{field.name} was set to "
+                f"{getattr(value, field.name)!r}, which this client cannot "
+                f"carry: {why}"
             ) from why
 
     return made
@@ -775,8 +968,10 @@ def attach(ib, username="", password="", paper=True, session_file=None,
     started again later logs in afresh. Name another path to move it, or pass
     ``False`` to keep nothing and log in fully every time.
 
-    Order ids are counted from what the account is working, which the venue
-    names at every connect, so nothing about them is kept between runs.
+    Orders and requests are numbered from one counter, as ib_async's own
+    client numbers them, kept past every order id the account has used, which
+    the venue names at every connect and whenever it names another: nothing
+    about them is kept between runs.
     """
     if session_file is None:
         who = username or os.environ.get("IB_USERNAME", "")
@@ -789,18 +984,4 @@ def attach(ib, username="", password="", paper=True, session_file=None,
     ib.wrapper.client = ib.client
     # ib_async's IB ties this to the client it builds for itself.
     ib.client.apiEnd += ib.disconnectedEvent
-
-    # An order they leave unnumbered is numbered from what the account has
-    # used, rather than from the counter their requests come out of. The venue
-    # refuses an order id a fill has spent, and their counter knows nothing
-    # about which those are. Wrapped from the class, so attaching again (every
-    # `ib_async_dx.IB.connect` does) does not wrap the wrapper.
-    placing = type(ib).placeOrder
-
-    def place_order(contract, order):
-        if not getattr(order, "orderId", 0):
-            order.orderId = ib.client.next_order_id()
-        return placing(ib, contract, order)
-
-    ib.placeOrder = place_order
     return ib

@@ -136,18 +136,83 @@ def test_every_account_the_login_holds_crosses_over():
     assert c.getAccounts() == ["DU1", "DU2", "DU3"], c.getAccounts()
 
 
-def test_a_size_with_no_price_behind_it_states_no_price():
-    """A zero there is a market quoted at nothing, which is not the same as a
-    market nobody has quoted yet."""
+def test_a_size_with_no_price_beside_it_is_a_size_tick():
+    """A size that changed while its price did not is what a gateway sends
+    on its own, and their decoder hands that over as `tickSize`. Sent as a
+    `priceSizeTick`, it stated a price nobody had quoted."""
     seen = []
 
     class Wrapper:
-        defaultEmptyPrice = -1
+        def tickSize(self, reqId, tickType, size):
+            seen.append(("tickSize", tickType, size))
 
         def priceSizeTick(self, reqId, tickType, price, size):
-            seen.append((tickType, price, size))
+            seen.append(("priceSizeTick", tickType, price, size))
 
     bound = _LoopBound(Wrapper())
-    # A bid size arrives with no bid price ever having been stated.
     bound.tick_size(1, 0, 400.0)
-    assert seen == [(1, -1, 400.0)], seen
+    bound.end_pass()
+    assert seen == [("tickSize", 0, 400.0)], seen
+
+
+def test_a_bar_carries_its_average_price():
+    """The engine names it as the reference client does, `wap`; their bar
+    reads `average`. Unmapped, every bar arrived with an average of nought."""
+    from ib_async_dx.bridge import _as_theirs
+
+    bar = ibkr_dx.BarData()
+    bar.date, bar.close, bar.wap, bar.barCount = "20260918", 101.0, 100.75, 12
+    theirs = _as_theirs(bar)
+    assert isinstance(theirs, ib_async.BarData)
+    assert (theirs.close, theirs.average, theirs.barCount) == (101.0, 100.75, 12)
+
+
+def test_a_condition_arrives_saying_how_it_joins_the_next():
+    """The engine says whether the join is an and; their condition says "a"
+    or "o". Unmapped, an or arrived as their default, an and."""
+    from ib_async_dx.bridge import _as_theirs
+
+    joined = ibkr_dx.PriceCondition()
+    joined.isConjunctionConnection = False
+    assert _as_theirs(joined).conjunction == "o"
+    joined.isConjunctionConnection = True
+    assert _as_theirs(joined).conjunction == "a"
+
+
+def test_a_record_theirs_builds_whole_arrives_whole():
+    """Their family code and routing component take every field when they are
+    made, and cannot be changed after. Made empty and filled one field at a
+    time, neither could be made at all."""
+    from ib_async_dx.bridge import _as_theirs
+
+    code = ibkr_dx.FamilyCode()
+    code.accountID, code.familyCodeStr = "DU000000", "F1"
+    assert _as_theirs(code) == ib_async.FamilyCode("DU000000", "F1")
+
+    component = ibkr_dx.SmartComponent()
+    component.bitNumber, component.exchange, component.exchangeLetter = 4, "ARCA", "P"
+    assert _as_theirs(component) == ib_async.SmartComponent(4, "ARCA", "P")
+
+
+def test_a_callback_that_cannot_be_rebuilt_is_logged_and_passed_over(caplog):
+    """As their decoder treats a message it cannot handle: logged, and the
+    session carries on. Swallowed, a field arrived at its default and nothing
+    said so; raised, it closed the session."""
+    import logging
+
+    class FamilyCode:
+        """Named as the engine's, and short of a field theirs requires."""
+
+        accountID = "DU000000"
+
+    seen = []
+
+    class Wrapper:
+        def familyCodes(self, codes):
+            seen.append(codes)
+
+    with caplog.at_level(logging.ERROR, logger="ib_async_dx"):
+        _LoopBound(Wrapper()).family_codes([FamilyCode()])
+    assert seen == []
+    assert caplog.records[-1].name == "ib_async_dx.bridge"
+    assert "family_codes" in caplog.records[-1].getMessage()

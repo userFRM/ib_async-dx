@@ -1,6 +1,6 @@
 # ib_async, without a gateway
 
-Seven notebooks on ib_async's own subjects, written against
+Eight notebooks, one on each of ib_async's own subjects, written against
 [`ib_async`](https://github.com/ib-api-reloaded/ib_async) itself — its `IB`, its
 contracts, its events, its `util.df` — and run on the ibkr-dx engine instead of
 on a gateway.

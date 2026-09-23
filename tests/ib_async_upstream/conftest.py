@@ -21,9 +21,16 @@ running while the test waits on them. pandas has to be installed too: their
 """
 import os
 
+import ib_async
 import pytest_asyncio
 
 import ib_async_dx
+
+# Before their tests are collected, and in this run only: a test that builds
+# its own `ib_async.IB()` rather than taking the fixture below, as
+# `test_contract_format_data_pd` does, builds this package's, which connects
+# to the engine whatever host and port it names.
+ib_async.IB = ib_async_dx.IB
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")

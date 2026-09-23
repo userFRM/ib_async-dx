@@ -1,13 +1,16 @@
 """ib_async's ``ib`` module, with :class:`IB` running on the ibkr-dx engine.
 
 Every other name ib_async's module has is ib_async's own object here.
-:class:`TickerExtras`, :class:`OptionModel`, :class:`OrderPreset` and
-:class:`CompetingSession` are this package's, and outside ``__all__``.
+:class:`TickerExtras`, :class:`OptionModel`, :class:`OrderPreset`,
+:class:`CompetingSession`, :class:`CorporateAction`, :class:`ScannedStrategy`
+and :class:`PositionElsewhere` are this package's, and :class:`SpreadScan` the
+engine's; all are outside ``__all__``.
 """
 
 import asyncio
 import dataclasses
 import datetime
+import logging
 import math
 from collections.abc import Awaitable
 from typing import Literal, NamedTuple
@@ -17,13 +20,16 @@ from ib_async import util
 from ib_async.contract import Contract, TagValue
 from ib_async.ib import *  # noqa: F403
 from ib_async.ib import StartupFetch, StartupFetchALL
-from ib_async.objects import Position
+from ib_async.objects import AccountValue, Position
 from ib_async.ticker import Ticker
+from ibkr_dx import SpreadScan
 
-from .bridge import IbkrDxClient, _as_ours, _refuse_options, attach
+from .bridge import PASS_INTERVAL, IbkrDxClient, _refuse_options, attach
 
 #: What ``from ib_async_dx.ib import *`` binds: ib_async's module's names.
 __all__ = [name for name in dir(ib_async.ib) if not name.startswith("_")]
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
@@ -91,6 +97,65 @@ class CompetingSession(NamedTuple):
     loggedInAt: datetime.datetime
     #: This session may read but not trade, because the other holds the account.
     readOnly: bool
+
+
+class CorporateAction(NamedTuple):
+    """One of a contract's corporate actions, as the venue states it.
+
+    ``kind`` is the venue's two-letter name for it: CD a cash dividend, SD a
+    dividend in shares, SS a split, SO a spin-off, RO a rights offer, FR a
+    future rolling into the next month. Days are ``YYYYMMDD``. A field the
+    kind does not carry is empty.
+    """
+
+    kind: str
+    date: str
+    value: str
+    currency: str
+    announceDate: str
+    recordDate: str
+    payDate: str
+    paymentType: str
+    distributionType: str
+
+
+class ScannedStrategy(NamedTuple):
+    """A strategy a spread scan found, in the venue's own terms.
+
+    The venue names none of its figures, so they are kept in the order it
+    states them. A figure it does not hold is nan.
+    """
+
+    #: Each leg as the venue's id for its contract and how much of it to
+    #: hold; a leg sold is a negative size.
+    legs: list[tuple[int, int]]
+    #: Which shape of strategy this is, as the venue numbers them.
+    kind: int
+    #: How pressing the venue takes it to be, as it numbers that.
+    aggression: int
+    #: The thirteen figures the venue states about it.
+    figures: list[float]
+    #: Where it comes out even.
+    breakEvens: list[float]
+    #: The figure stated behind those.
+    lastFigure: float
+
+
+class PositionElsewhere(NamedTuple):
+    """A holding the venue reports that this broker does not hold itself.
+
+    ``held`` is ``'Away'`` for a position held at another broker,
+    ``'DisplayOnly'`` for a row shown but not held, and ``'Aside'`` for one
+    reported apart without saying why.
+    """
+
+    conId: int
+    symbol: str
+    secType: str
+    currency: str
+    position: float
+    avgCost: float
+    held: str
 
 
 def _stated(value, unset=math.nan):
@@ -209,7 +274,7 @@ class IB(ib_async.ib.IB):
         finally:
             self._fetchPositions = True
         if session := self.competingSession():
-            self._logger.warning(
+            _logger.warning(
                 f"Another session was logged in on this account when this one "
                 f"connected: {session}"
             )
@@ -236,6 +301,12 @@ class IB(ib_async.ib.IB):
         if not isinstance(self.client, IbkrDxClient) or not self.client.isConnected():
             raise ConnectionError("Not connected")
         return self.client._client
+
+    def _send(self, request, *args):
+        """One of the engine's requests, sent as ib_async's client sends one."""
+        if not isinstance(self.client, IbkrDxClient):
+            raise ConnectionError("Not connected")
+        return self.client._send_theirs(request, *args)
 
     def _reqIdOf(self, ticker: Ticker) -> int:
         return self.wrapper.ticker2ReqId["mktData"].get(ticker, 0)
@@ -268,12 +339,11 @@ class IB(ib_async.ib.IB):
                 "or 4 delayed frozen"
             )
         _refuse_options("mktDataOptions", mktDataOptions)
-        eclient = self._eclient
         reqId = self.client.getReqId()
         ticker = self.wrapper.startTicker(reqId, contract, "mktData")
-        eclient.req_mkt_data_ex(
-            reqId, _as_ours(contract), genericTickList, snapshot, regulatorySnapshot,
-            mode,
+        self._send(
+            "req_mkt_data_ex", reqId, contract, genericTickList, snapshot,
+            regulatorySnapshot, mode,
         )
         return ticker
 
@@ -287,10 +357,166 @@ class IB(ib_async.ib.IB):
         return self._run(self.reqCurrentTimeInMillisAsync())
 
     def reqCurrentTimeInMillisAsync(self) -> Awaitable[int]:
-        eclient = self._eclient
         future = self.wrapper.startReq("currentTimeInMillis")
-        eclient.req_current_time_in_millis()
+        self._send("req_current_time_in_millis")
         return future
+
+    def reqCorporateActions(
+        self, contract: Contract, startDate: str, endDate: str
+    ) -> list[CorporateAction]:
+        """A contract's corporate actions over a range of days.
+
+        This method is blocking.
+
+        Args:
+            contract: The contract, carrying its ``conId``.
+            startDate: The first day, ``YYYYMMDD``.
+            endDate: The last day, ``YYYYMMDD``.
+        """
+        return self._run(self.reqCorporateActionsAsync(contract, startDate, endDate))
+
+    async def reqCorporateActionsAsync(
+        self, contract: Contract, startDate: str, endDate: str
+    ) -> list[CorporateAction]:
+        eclient = self._eclient
+        reqId = self.client.getReqId()
+        self._send(
+            "req_adjustments", reqId, contract.conId, contract.secType,
+            contract.exchange, startDate, endDate,
+        )
+        # Registered as ib_async registers a request, so a refusal under its
+        # number ends it as ib_async ends any request. The answer comes on no
+        # callback: the engine holds it under the number until it is taken.
+        future = self.wrapper.startReq(reqId, contract)
+        try:
+            while self._waiting(reqId, future):
+                actions = eclient.adjustments_for(reqId)
+                if actions is None:
+                    await asyncio.sleep(PASS_INTERVAL)
+                else:
+                    self.wrapper._endReq(reqId, [
+                        CorporateAction(
+                            a["kind"], a["date"], a["value"], a["currency"],
+                            a["announce_date"], a["record_date"], a["pay_date"],
+                            a["payment_type"], a["distribution_type"],
+                        )
+                        for a in actions
+                    ])
+        finally:
+            if self._waiting(reqId, future):
+                # Given up before the answer came, on a timeout among other
+                # ways: the venue is told to stop serving the query.
+                self.wrapper._endReq(reqId)
+                if self.isConnected():
+                    self._send("cancel_adjustments", reqId)
+        return self._answer(future)
+
+    def reqSpreadScan(
+        self, contract: Contract, scan: SpreadScan, timeout: float = 10
+    ) -> list[ScannedStrategy]:
+        """An underlying, scanned by the venue for strategies worth putting on.
+
+        This method is blocking. It subscribes, takes the first answer and
+        cancels, as :meth:`reqScannerData` does; the subscription's quotes
+        reach ``contract``'s ticker meanwhile. The engine keeps a scan's
+        answer for as long as the underlying's market data is subscribed, so
+        a scan made while it still is — by the program's own
+        :meth:`reqMktData`, or by a scan just ended — can be answered with the
+        strategies the last scan found.
+
+        Args:
+            contract: The underlying, carrying its ``conId``.
+            scan: What to look for, as the engine's ``SpreadScan`` takes it.
+            timeout: Seconds to wait for the answer once the scan has been
+                asked for, or 0 for no limit. Unanswered, the scan found
+                nothing: ``[]``.
+        """
+        return self._run(self.reqSpreadScanAsync(contract, scan, timeout))
+
+    async def reqSpreadScanAsync(
+        self, contract: Contract, scan: SpreadScan, timeout: float = 10
+    ) -> list[ScannedStrategy]:
+        eclient = self._eclient
+        reqId = self.client.getReqId()
+        # The scan goes out beside a market data subscription on the
+        # underlying, whose quotes reach the underlying's ticker as any
+        # subscription's do.
+        ticker = self.wrapper.startTicker(reqId, contract, "spreadScan")
+        future = self.wrapper.startReq(reqId, contract)
+        answered = False
+        try:
+            self._send("req_spread_scan", reqId, contract, scan)
+            async with asyncio.timeout(timeout or None):
+                while self._waiting(reqId, future):
+                    found = eclient.scanned_strategies(reqId)
+                    if not found:
+                        await asyncio.sleep(PASS_INTERVAL)
+                        continue
+                    self.wrapper._endReq(reqId, [
+                        ScannedStrategy(
+                            [tuple(leg) for leg in s["legs"]], s["kind"], s["aggression"],
+                            [_stated(v) for v in s["figures"]],
+                            [_stated(v) for v in s["breakEvens"]],
+                            _stated(s["lastFigure"]),
+                        )
+                        for s in found
+                    ])
+                    answered = True
+        except TimeoutError:
+            pass
+        finally:
+            givenUp = self._waiting(reqId, future)
+            if givenUp:
+                self.wrapper._endReq(reqId)
+            self.wrapper.endTicker(ticker, "spreadScan")
+            # A subscription that is up is cancelled. One the venue refused is
+            # not: there is nothing to cancel, and the cancel would be refused.
+            if (answered or givenUp) and self.isConnected():
+                self._send("cancel_mkt_data", reqId)
+        return self._answer(future)
+
+    def _waiting(self, reqId: int, future: asyncio.Future) -> bool:
+        """Whether this session still waits on one of its requests: not once
+        it is answered or ended, and not once a disconnect has dropped it, as
+        ib_async's disconnect drops every request its wrapper holds."""
+        return not future.done() and self.wrapper._futures.get(reqId) is future
+
+    @staticmethod
+    def _answer(future: asyncio.Future):
+        """A request's answer, or the error that ended it. One a disconnect
+        dropped has neither: the session it was asked on is gone."""
+        if not future.done():
+            raise ConnectionError("Not connected")
+        return future.result()
+
+    def positionsElsewhere(self) -> list[PositionElsewhere]:
+        """Holdings the venue reports that this broker does not hold itself:
+        positions held away at another broker, and rows shown but not held.
+
+        Kept out of :meth:`positions`, so the account is not overstated.
+        """
+        return [
+            PositionElsewhere(
+                row["con_id"], row["symbol"], row["sec_type"], row["currency"],
+                row["position"], row["avg_cost"], row["held"],
+            )
+            for row in self._eclient.positions_elsewhere()
+        ]
+
+    def accountValuesElsewhere(self, held: str) -> list[AccountValue]:
+        """The account figures for one of the sets :meth:`positionsElsewhere`
+        names: ``'Away'``, ``'DisplayOnly'`` or ``'Aside'``.
+
+        Kept out of :meth:`accountValues` and ``accountValueEvent``, so the
+        account is not overstated. A figure stated in two currencies is two
+        rows.
+        """
+        eclient = self._eclient
+        account = eclient.get_account_id()
+        return [
+            AccountValue(account, tag, value, currency, "")
+            for tag, value, currency in eclient.values_elsewhere(held)
+        ]
 
     def tickerExtras(self, ticker: Ticker) -> TickerExtras:
         """What the venue has stated for ``ticker``'s market data request
@@ -383,7 +609,7 @@ class IB(ib_async.ib.IB):
 
     def reqPing(self) -> None:
         """Measure the round trip to the venue; :meth:`lastRtt` reads it."""
-        self._eclient.req_ping()
+        self._send("req_ping")
 
     def lastRtt(self) -> float | None:
         """The latest round trip to the venue in milliseconds, or None."""

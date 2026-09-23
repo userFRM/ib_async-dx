@@ -8,7 +8,8 @@
 * A Rust toolchain, 1.89 or newer. The engine installs from its repository,
   and installing it compiles it.
 
-ib_async 2.1 is a dependency of this package, and pip installs it with it.
+ib_async 2.1, ib_async's current release, is a dependency of this package, and
+pip installs it with it.
 Nothing is on PyPI yet: ib_async-dx and the engine both install from their
 repositories.
 
@@ -53,15 +54,16 @@ venue's second-factor approval, which waits on a device: `connect` returns once
 it has been answered. A paper session presents no second factor. Use a paper
 account while you are writing something; a live account is a live account.
 
-That wait is why `connect`'s `timeout` does not bound the login. The login runs
-off ib_async's event loop, so the loop keeps turning while it waits, and
-`timeout` bounds the requests ib_async makes once the session is open, as it
-does against a gateway.
+`connect`'s `timeout` does not bound the login, which a gateway also makes
+before a program connects. The login runs off ib_async's event loop, so the
+loop keeps turning while it waits, and `timeout` bounds the requests ib_async
+makes once the session is open, as it does against a gateway.
 
 > [!IMPORTANT]
-> One session per login. Opening a second takes the first away, and the venue
-> says which host took it. A program here and a gateway on the same login take
-> the session from each other; use a second login to run both.
+> One program per login. Each program is its own session on the login, and a
+> second program on the same login, or a gateway, takes the session from the
+> first; the venue says which host took it. Programs that share one gateway
+> login under their own client ids each need a login of their own here.
 
 > [!CAUTION]
 > Credentials are the account. Never commit them, never paste them into an
@@ -110,9 +112,9 @@ ib.connect(
 )
 ```
 
-`connectAsync` takes the same. `readonly=True` also makes the session refuse to
-send anything that places, changes or withdraws an order; ib_async's own
-`readonly` only skips the order requests it makes as it connects.
+`connectAsync` takes the same. `readonly=True` makes a read-only session,
+which refuses to send anything that places, changes or withdraws an order, as a
+gateway set to read-only does.
 
 **The session is kept between runs.** With `sessionFile=None` it is kept in
 `~/.ibkr_dx/session-<user>-<paper|live>`: readable by its owner only, sealed
@@ -148,6 +150,6 @@ spelled `username`, `password`, `paper`, `session_file`, `client_id` and
   carries, and how ib_async's own tests run here
 * [Beyond ib_async](./beyond.md) — the two bugs fixed, and the calls ib_async
   has no name for
-* [Notebooks](./notebooks.md) — seven of ib_async's eight notebook subjects,
+* [Notebooks](./notebooks.md) — all eight of ib_async's notebook subjects,
   with no gateway
 * [Limits](./limits.md) — read this before you depend on a call
