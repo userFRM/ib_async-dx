@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      # The engine is built from source with its test hooks: three suites drive
+      # a session without a venue, and a released wheel does not carry them.
+      - uses: actions/checkout@v4
+        with:
+          repository: userFRM/ibkr-dx
+          path: ibkr-dx
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ibkr-dx
+      - name: Build the engine
+        run: |
+          pip install maturin
+          maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
+          pip install dist/*.whl
+      - name: Install this package
+        run: pip install -e ".[bridge]" pytest pytest-asyncio
+      - name: Test
+        run: pytest tests/python -q
