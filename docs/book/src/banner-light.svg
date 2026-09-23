@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" width="100%" height="100%">
+  <style>
+    /* Light mode */
+    .txt-primary { fill: #0F172A; }
+    .txt-secondary { fill: #1E293B; }
+    .txt-tertiary { fill: #475569; }
+
+    .box-outline { stroke: #94A3B8; }
+
+    .icon-stroke {
+      stroke: #475569;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .icon-fill {
+      fill: #475569;
+      stroke: none;
+    }
+
+    .grid-line {
+      stroke: #000000;
+      stroke-opacity: 0.06;
+    }
+  </style>
+
+  <defs>
+    <!-- Background grid -->
+    <pattern id="grid-pattern" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M 80 0 L 0 0 0 80" fill="none" class="grid-line" stroke-width="1.5" />
+    </pattern>
+
+    <!-- Fade the grid toward the edges: in a mask, white shows and black hides -->
+    <radialGradient id="fade-gradient" cx="50%" cy="50%" r="75%">
+      <stop offset="30%" stop-color="white" />
+      <stop offset="85%" stop-color="black" />
+    </radialGradient>
+
+    <mask id="fade-mask">
+      <rect width="100%" height="100%" fill="url(#fade-gradient)" />
+    </mask>
+
+    <!-- Server icon holes, in the icon's own coordinates (it spans 0..46 x 0..44) -->
+    <mask id="server-holes" maskUnits="userSpaceOnUse" x="-4" y="-4" width="54" height="52">
+      <rect x="-4" y="-4" width="54" height="52" fill="white" />
+      <circle cx="8" cy="6" r="2.5" fill="black" />
+      <circle cx="8" cy="22" r="2.5" fill="black" />
+      <circle cx="8" cy="38" r="2.5" fill="black" />
+    </mask>
+  </defs>
+
+  <!-- Background grid -->
+  <rect width="100%" height="100%" fill="url(#grid-pattern)" mask="url(#fade-mask)" />
+
+  <!-- Main logo -->
+  <text x="800" y="195"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="116" font-weight="900" text-anchor="middle" letter-spacing="-2">
+    <tspan class="txt-primary">ib_async-</tspan><tspan fill="#DE1A22">dx</tspan>
+  </text>
+
+  <!-- Subtitle -->
+  <text x="800" y="255"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="32" font-weight="500" class="txt-secondary"
+        text-anchor="middle" letter-spacing="0.5">
+    ib_async, without the gateway
+  </text>
+
+  <!-- Features -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+     font-size="22" font-weight="400" class="txt-tertiary" text-anchor="middle">
+    <!-- Python logo -->
+    <svg x="482" y="282" width="30" height="30" viewBox="16 16 32 32">
+      <path class="txt-tertiary" d="M31.885 16c-8.124 0-7.617 3.523-7.617 3.523l.01 3.65h7.752v1.095H21.197S16 23.678 16 31.876c0 8.196 4.537 7.906 4.537 7.906h2.708v-3.804s-.146-4.537 4.465-4.537h7.688s4.32.07 4.32-4.175v-7.019S40.374 16 31.885 16zm-4.275 2.454a1.394 1.394 0 1 1 0 2.79 1.393 1.393 0 0 1-1.395-1.395c0-.771.624-1.395 1.395-1.395z"/>
+      <path class="txt-tertiary" d="M32.115 47.833c8.124 0 7.617-3.523 7.617-3.523l-.01-3.65H31.97v-1.095h10.832S48 40.155 48 31.958c0-8.197-4.537-7.906-4.537-7.906h-2.708v3.803s.146 4.537-4.465 4.537h-7.688s-4.32-.07-4.32 4.175v7.019s-.656 4.247 7.833 4.247zm4.275-2.454a1.393 1.393 0 0 1-1.395-1.395 1.394 1.394 0 1 1 1.395 1.395z"/>
+    </svg>
+    <circle cx="557" cy="298" r="4.5" fill="#DE1A22" />
+
+    <text x="690" y="305">drop-in for ib_async</text>
+    <circle cx="822" cy="298" r="4.5" fill="#DE1A22" />
+
+    <text x="914" y="305">no gateway</text>
+    <circle cx="1007" cy="298" r="4.5" fill="#DE1A22" />
+
+    <text x="1080" y="305">no JVM</text>
+  </g>
+
+  <!-- Diagram -->
+  <g>
+    <!-- Connecting lines -->
+    <line x1="510" y1="390" x2="640" y2="390" stroke="#DE1A22" stroke-width="3" />
+    <circle cx="575" cy="390" r="8" fill="#DE1A22" />
+
+    <line x1="960" y1="390" x2="1090" y2="390" stroke="#DE1A22" stroke-width="3" />
+    <circle cx="1025" cy="390" r="8" fill="#DE1A22" />
+
+    <!-- Left box -->
+    <rect x="300" y="340" width="210" height="100" rx="10" fill="none" class="box-outline" stroke-width="2.5" />
+
+    <!-- Left box content centered at (405, 390) -->
+    <g transform="translate(405 390)">
+      <!-- icon, symmetric about x = 0 -->
+      <g class="icon-stroke" stroke-width="3" transform="translate(0 -18)">
+        <path d="M -14 -9 L -28 0 L -14 9" />
+        <line x1="6" y1="-15" x2="-6" y2="15" />
+        <path d="M 14 -9 L 28 0 L 14 9" />
+      </g>
+      <!-- label -->
+      <text x="0" y="28"
+            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+            font-size="16" class="txt-secondary" text-anchor="middle">
+        Your ib_async code
+      </text>
+    </g>
+
+    <!-- Middle box -->
+    <rect x="640" y="340" width="320" height="100" rx="12" fill="none" stroke="#DE1A22" stroke-width="3" />
+
+    <!-- Middle box content centered at (800, 390) -->
+    <text x="800" y="402"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+          font-size="42" font-weight="900" text-anchor="middle" letter-spacing="-1">
+      <tspan class="txt-primary">ib_async-</tspan><tspan fill="#DE1A22">dx</tspan>
+    </text>
+
+    <!-- Right box -->
+    <rect x="1090" y="340" width="210" height="100" rx="10" fill="none" class="box-outline" stroke-width="2.5" />
+
+    <!-- Right box content centered at (1195, 390) -->
+    <g transform="translate(1195 390)">
+      <!-- icon -->
+      <g class="icon-fill" mask="url(#server-holes)" transform="translate(-23 -31)">
+        <rect x="0" y="0" width="46" height="12" rx="2.5" />
+        <rect x="0" y="16" width="46" height="12" rx="2.5" />
+        <rect x="0" y="32" width="46" height="12" rx="2.5" />
+      </g>
+      <!-- label -->
+      <text x="0" y="28"
+            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+            font-size="16" class="txt-secondary" text-anchor="middle">
+        IBKR servers
+      </text>
+    </g>
+  </g>
+
+  <!-- Footer -->
+  <text x="800" y="500"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="20" font-weight="400" class="txt-tertiary"
+        text-anchor="middle">
+    Change the import and the connect line. Nothing else.
+  </text>
+</svg>

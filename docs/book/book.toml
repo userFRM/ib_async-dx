@@ -1,0 +1,22 @@
+[book]
+title = "ib_async-dx"
+description = "ib_async without the gateway, on the ibkr-dx engine."
+authors = ["ib_async-dx contributors"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "coal"
+git-repository-url = "https://github.com/userFRM/ib_async-dx"
+edit-url-template = "https://github.com/userFRM/ib_async-dx/edit/main/docs/book/{path}"
+site-url = "/ib_async-dx/"
+no-section-label = true
+additional-css = ["theme/custom.css"]
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+runnable = false
