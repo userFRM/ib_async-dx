@@ -1,0 +1,23 @@
+{
+ "about": "reqScannerData cancels its subscription after the answer; a later scan result then finds nothing, where ib_async keeps updating the list and emitting (X20 (3); ib.py:2476-2492; wrapper.py:1420-1449)",
+ "delta": ["X20 (3)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "sub": {"@": "ScannerSubscription", "numberOfRows": 2, "instrument": "STK", "locationCode": "STK.US.MAJOR", "scanCode": "TOP_PERC_GAIN"},
+   "aapl": {"@": "ContractDetails", "contract": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "currency": "USD"}, "marketName": "NMS"},
+   "msft": {"@": "ContractDetails", "contract": {"@": "Contract", "conId": 272093, "symbol": "MSFT", "secType": "STK", "exchange": "SMART", "currency": "USD"}, "marketName": "NMS"}
+  }},
+  {"call": "reqScannerDataAsync", "args": [{"ref": "sub"}], "as": "s"},
+  {"read": [
+   ["scannerData", {"id": "s"}, 0, {"ref": "aapl"}, "", "", "", ""],
+   ["scannerData", {"id": "s"}, 1, {"ref": "msft"}, "", "", "", ""],
+   ["scannerDataEnd", {"id": "s"}]
+  ]},
+  {"read": [
+   ["scannerData", {"id": "s"}, 0, {"ref": "msft"}, "", "", "", ""],
+   ["scannerDataEnd", {"id": "s"}]
+  ]},
+  {"show": "s", "as": "s_after"}
+ ]
+}

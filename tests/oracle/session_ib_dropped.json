@@ -1,0 +1,8 @@
+{
+ "about": "An IB collected while connected disconnects, and its IB-level events end, emitting their done events (X20 (12); ib.py:284-285, 311-318)",
+ "delta": ["X20 (12)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"drop": true}
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "about": "While an open-orders exchange is in flight every open order is recorded for it and fires no openOrderEvent; after its end one does (wrapper.py:668-720)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"msft": {"@": "Contract", "conId": 272093, "symbol": "MSFT", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqOpenOrdersAsync", "as": "r"},
+  {"read": [
+   ["openOrder", 0, {"ref": "msft"}, {"@": "Order", "orderId": 0, "clientId": 0, "permId": 9100, "action": "BUY", "totalQuantity": 10.0, "orderType": "LMT", "lmtPrice": 400.0, "tif": "GTC", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}]
+  ]},
+  {"read": [
+   ["openOrderEnd"]
+  ]},
+  {"read": [
+   ["openOrder", 0, {"ref": "msft"}, {"@": "Order", "orderId": 0, "clientId": 0, "permId": 9101, "action": "SELL", "totalQuantity": 5.0, "orderType": "LMT", "lmtPrice": 410.0, "tif": "GTC", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}]
+  ]}
+ ]
+}

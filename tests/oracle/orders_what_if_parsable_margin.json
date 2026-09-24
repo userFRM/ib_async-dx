@@ -1,0 +1,17 @@
+{
+ "about": "A what-if ends only on an answer whose margin change is not UNSET (wrapper.py:680-683; ib.py:2204-2212)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "whatIfOrderAsync", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "w"},
+  {"read": [
+   ["openOrder", {"id": "w"}, {"ref": "aapl"}, {"@": "Order", "orderId": {"id": "w"}, "clientId": 1, "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY", "whatIf": true}, {"@": "OrderState", "status": "PreSubmitted", "initMarginChange": "1.7976931348623157E308", "maintMarginChange": "1.7976931348623157E308"}]
+  ]},
+  {"read": [
+   ["openOrder", {"id": "w"}, {"ref": "aapl"}, {"@": "Order", "orderId": {"id": "w"}, "clientId": 1, "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY", "whatIf": true}, {"@": "OrderState", "status": "PreSubmitted", "initMarginBefore": "25000.5", "maintMarginBefore": "20000.25", "equityWithLoanBefore": "100000.0", "initMarginChange": "4625.0", "maintMarginChange": "3700.0", "equityWithLoanChange": "-1.0", "initMarginAfter": "29625.5", "maintMarginAfter": "23700.25", "equityWithLoanAfter": "99999.0", "commission": 1.0, "minCommission": 1.7976931348623157e308, "maxCommission": 1.7976931348623157e308, "commissionCurrency": "USD"}]
+  ]}
+ ]
+}

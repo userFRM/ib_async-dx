@@ -1,0 +1,16 @@
+{
+ "about": "Completed orders become trades keyed by permId unless one is already known (wrapper.py:722-733; ib.py:2273-2276)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "msft": {"@": "Contract", "conId": 272093, "symbol": "MSFT", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}
+  }},
+  {"call": "reqCompletedOrdersAsync", "args": [false], "as": "c"},
+  {"read": [
+   ["completedOrder", {"ref": "aapl"}, {"@": "Order", "orderId": 5, "clientId": 1, "permId": 9005, "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Filled", "completedTime": "20240102 14:59:00 America/New_York", "completedStatus": "Filled Size: 100"}],
+   ["completedOrder", {"ref": "msft"}, {"@": "Order", "orderId": 0, "clientId": 0, "permId": 9006, "action": "SELL", "totalQuantity": 10.0, "orderType": "MKT", "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Cancelled", "completedTime": "20240102 14:58:00 America/New_York", "completedStatus": "Cancelled by Trader"}],
+   ["completedOrdersEnd"]
+  ]}
+ ]
+}

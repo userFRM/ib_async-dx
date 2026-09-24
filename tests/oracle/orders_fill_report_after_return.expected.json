@@ -1,0 +1,55 @@
+{
+ "scenario": "orders_fill_report_after_return",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_executions", "args": {"req_id": 1, "exec_filter": {"@": "ExecutionFilter"}}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "r": [
+     {"@": "Fill", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "execution": {"@": "Execution", "exec_id": "0000e0d5.65930001.01.01", "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}, "acct_number": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 10.0, "price": 184.0, "perm_id": 8001, "client_id": 1, "order_id": 1, "cum_qty": 10.0, "avg_price": 184.0}, "commission_report": {"@": "CommissionReport"}, "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}}
+    ]
+   },
+   "state": {
+    "fills": [
+     {"@": "Fill", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "execution": {"@": "Execution", "exec_id": "0000e0d5.65930001.01.01", "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}, "acct_number": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 10.0, "price": 184.0, "perm_id": 8001, "client_id": 1, "order_id": 1, "cum_qty": 10.0, "avg_price": 184.0}, "commission_report": {"@": "CommissionReport"}, "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {
+    "fills": [
+     {"@": "Fill", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "execution": {"@": "Execution", "exec_id": "0000e0d5.65930001.01.01", "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}, "acct_number": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 10.0, "price": 184.0, "perm_id": 8001, "client_id": 1, "order_id": 1, "cum_qty": 10.0, "avg_price": 184.0}, "commission_report": {"@": "CommissionReport", "exec_id": "0000e0d5.65930001.01.01", "commission": 0.35, "currency": "USD"}, "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}}
+    ]
+   }
+  },
+  {
+   "log": [],
+   "results": {
+    "r_after": [
+     {"@": "Fill", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "execution": {"@": "Execution", "exec_id": "0000e0d5.65930001.01.01", "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}, "acct_number": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 10.0, "price": 184.0, "perm_id": 8001, "client_id": 1, "order_id": 1, "cum_qty": 10.0, "avg_price": 184.0}, "commission_report": {"@": "CommissionReport", "exec_id": "0000e0d5.65930001.01.01", "commission": 0.35, "currency": "USD"}, "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}}
+    ]
+   },
+   "state": {
+    "fills": [
+     {"@": "Fill", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "execution": {"@": "Execution", "exec_id": "0000e0d5.65930001.01.01", "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}, "acct_number": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 10.0, "price": 184.0, "perm_id": 8001, "client_id": 1, "order_id": 1, "cum_qty": 10.0, "avg_price": 184.0}, "commission_report": {"@": "CommissionReport", "exec_id": "0000e0d5.65930001.01.01", "commission": 0.35, "currency": "USD"}, "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}}
+    ]
+   }
+  }
+ ],
+ "pending": []
+}

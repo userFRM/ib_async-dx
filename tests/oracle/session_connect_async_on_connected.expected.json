@@ -1,0 +1,132 @@
+{
+ "scenario": "session_connect_async_on_connected",
+ "delta": [
+  "X20 (10)"
+ ],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "api_start", "on": "Client", "args": []},
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"send": "req_positions", "args": {}},
+    {"send": "req_open_orders", "args": {}},
+    {"send": "req_completed_orders", "args": {"api_only": false}},
+    {"send": "req_account_updates", "args": {"subscribe": true, "acct_code": "DU1"}},
+    {"send": "req_account_updates_multi", "args": {"req_id": 1, "account": "DU1", "model_code": "", "ledger_and_nlv": false}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"send": "req_executions", "args": {"req_id": 2, "exec_filter": {"@": "ExecutionFilter"}}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"emit": "connected_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "c1": {"@": "IB"}
+   },
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "global_error_event", "on": "util", "args": [{"@": "ConnectionError", "message": "Socket disconnect"}]},
+    {"emit": "api_end", "on": "Client", "args": []},
+    {"emit": "disconnected_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "api_start", "on": "Client", "args": []},
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"send": "req_positions", "args": {}},
+    {"send": "req_open_orders", "args": {}},
+    {"send": "req_completed_orders", "args": {"api_only": false}},
+    {"send": "req_account_updates", "args": {"subscribe": true, "acct_code": "DU1"}},
+    {"send": "req_account_updates_multi", "args": {"req_id": 5, "account": "DU1", "model_code": "", "ledger_and_nlv": false}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"send": "req_executions", "args": {"req_id": 6, "exec_filter": {"@": "ExecutionFilter"}}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"emit": "connected_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "c2": {"@": "IB"}
+   },
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "place_order", "args": {"order_id": 7, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}}},
+    {"emit": "new_order_event", "on": "IB", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "PendingSubmit"}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}]}]}
+   ],
+   "results": {
+    "t": {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "PendingSubmit"}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}]}
+   },
+   "state": {
+    "trades": [
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "PendingSubmit"}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}]}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "open_order_event", "on": "IB", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "aux_price": 0.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "PendingSubmit"}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}]}]},
+    {"emit": "order_status_event", "on": "IB", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "aux_price": 0.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "Submitted", "remaining": 100.0, "perm_id": 9005, "client_id": 2}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}, {"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "Submitted"}]}]},
+    {"emit": "status_event", "on": "Trade", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "aux_price": 0.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "Submitted", "remaining": 100.0, "perm_id": 9005, "client_id": 2}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}, {"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "Submitted"}]}]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {
+    "trades": [
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "aux_price": 0.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "Submitted", "remaining": 100.0, "perm_id": 9005, "client_id": 2}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}, {"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "Submitted"}]}
+    ]
+   }
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "9": {
+    "log": [
+     {"send": "place_order", "args": {"order_id": 7, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}}},
+     {"emit": "new_order_event", "on": "IB", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": -1, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "PendingSubmit"}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}]}]}
+    ],
+    "results": {"t": {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": -1, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "PendingSubmit"}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}]}},
+    "state": {"trades": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": -1, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "PendingSubmit"}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}]}]}
+   },
+   "10": {
+    "log": [
+     {"emit": "open_order_event", "on": "IB", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "aux_price": 0.0, "tif": "DAY", "account": "DU1"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "Submitted"}}]},
+     {"emit": "order_status_event", "on": "IB", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "aux_price": 0.0, "tif": "DAY", "account": "DU1"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "Submitted", "remaining": 100.0, "perm_id": 9005, "client_id": 2}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "Submitted"}]}]},
+     {"emit": "status_event", "on": "Trade", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "aux_price": 0.0, "tif": "DAY", "account": "DU1"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "Submitted", "remaining": 100.0, "perm_id": 9005, "client_id": 2}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "Submitted"}]}]},
+     {"emit": "update_event", "on": "IB", "args": []}
+    ],
+    "state": {"trades": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": -1, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "PendingSubmit"}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "PendingSubmit"}]}, {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 7, "client_id": 2, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "aux_price": 0.0, "tif": "DAY", "account": "DU1"}, "order_status": {"@": "OrderStatus", "order_id": 7, "status": "Submitted", "remaining": 100.0, "perm_id": 9005, "client_id": 2}, "log": [{"@": "TradeLogEntry", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "status": "Submitted"}]}]}
+   }
+  },
+  "pending": []
+ }
+}

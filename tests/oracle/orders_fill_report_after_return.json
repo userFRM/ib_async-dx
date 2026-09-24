@@ -1,0 +1,16 @@
+{
+ "about": "A commission report updates in place the fill reqExecutions already returned (X24; wrapper.py:800-868; ib.py:2278-2285)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqExecutionsAsync", "as": "r"},
+  {"read": [
+   ["execDetails", {"id": "r"}, {"ref": "aapl"}, {"@": "Execution", "execId": "0000e0d5.65930001.01.01", "time": {"dt": "2024-01-02T14:30:00+00:00", "tz": "UTC"}, "acctNumber": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 10.0, "price": 184.0, "permId": 8001, "clientId": 1, "orderId": 1, "cumQty": 10.0, "avgPrice": 184.0}],
+   ["execDetailsEnd", {"id": "r"}]
+  ]},
+  {"read": [
+   ["commissionReport", {"@": "CommissionReport", "execId": "0000e0d5.65930001.01.01", "commission": 0.35, "currency": "USD", "realizedPNL": 1.7976931348623157e308, "yield_": 1.7976931348623157e308, "yieldRedemptionDate": 0}]
+  ]},
+  {"show": "r", "as": "r_after"}
+ ]
+}

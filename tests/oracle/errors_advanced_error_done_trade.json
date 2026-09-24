@@ -1,0 +1,17 @@
+{
+ "about": "An error on a done trade records its advanced reject JSON and changes nothing else (wrapper.py:1652-1668)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"read": [
+   ["orderStatus", {"id": "t"}, "Filled", 100.0, 0.0, 185.0, 9001, 0, 185.0, 1, "", 0.0]
+  ]},
+  {"read": [
+   {"cb": "error", "args": [{"id": "t"}, 201, "Order rejected - reason:The order was already filled", "{\"rejectCode\":\"SPENT\"}"], "origin": {"Order": {"id": {"id": "t"}, "op": "Venue"}}}
+  ]}
+ ]
+}

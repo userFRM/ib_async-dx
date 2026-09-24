@@ -1,0 +1,21 @@
+{
+ "about": "reqTickers whose first snapshot fails with RaiseRequestErrors on still ends every snapshot ticker, so a later notice under the second carries no contract (X20 (4); ib.py:2182-2202; wrapper.py:416-419, 1626-1628)",
+ "delta": ["X20 (4)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "msft": {"@": "Contract", "conId": 272093, "symbol": "MSFT", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}
+  }},
+  {"set": "RaiseRequestErrors", "value": true},
+  {"call": "reqTickersAsync", "args": [{"ref": "aapl"}, {"ref": "msft"}], "as": "r"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "r"}, 200, "No security definition has been found for the request", ""], "origin": {"Request": {"id": {"id": "r"}, "ends": true}}}
+  ]},
+  {"read": [
+   {"cb": "error", "args": [{"id": "r", "n": 1}, 10167, "Requested market data is not subscribed. Displaying delayed market data.", ""], "origin": {"Request": {"id": {"id": "r", "n": 1}, "ends": false}}},
+   ["priceSizeTick", {"id": "r", "n": 1}, 1, 400.0, 100.0],
+   ["tickSnapshotEnd", {"id": "r", "n": 1}]
+  ]}
+ ]
+}

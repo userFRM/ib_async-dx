@@ -1,0 +1,83 @@
+{
+ "scenario": "requests_single_value_error",
+ "delta": [
+  "§3.3 single-value Err"
+ ],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_head_time_stamp", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "what_to_show": "TRADES", "use_rth": true, "format_date": 1}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [1, 162, "Historical Market Data Service error message:No head time stamp", {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "head": {"raise": {"@": "RequestError", "message": "Historical Market Data Service error message:No head time stamp", "req_id": 1, "code": 162}}
+   },
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_fundamental_data", "args": {"req_id": 2, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "report_type": "ReportsFinSummary", "fundamental_data_options": []}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [2, 430, "We are sorry, but fundamentals data for the security specified is not available.", {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "fundamentals": {"raise": {"@": "RequestError", "message": "We are sorry, but fundamentals data for the security specified is not available.", "req_id": 2, "code": 430}}
+   },
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_contract_details", "args": {"req_id": 3, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [3, 200, "No security definition has been found for the request", {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "details": []
+   },
+   "state": {}
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "2": {
+    "log": [
+     {"emit": "error_event", "on": "IB", "args": [1, 162, "Historical Market Data Service error message:No head time stamp", {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}]},
+     {"emit": "update_event", "on": "IB", "args": []},
+     {"send": "cancel_head_time_stamp", "args": {"req_id": 1}}
+    ],
+    "results": {"head": []},
+    "state": {}
+   },
+   "4": {
+    "log": [
+     {"emit": "error_event", "on": "IB", "args": [2, 430, "We are sorry, but fundamentals data for the security specified is not available.", {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}]},
+     {"emit": "update_event", "on": "IB", "args": []}
+    ],
+    "results": {"fundamentals": []},
+    "state": {}
+   }
+  },
+  "pending": []
+ }
+}

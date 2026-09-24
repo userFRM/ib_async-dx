@@ -1,0 +1,33 @@
+{
+ "about": "The warning and error table: 110 on a PendingSubmit trade cancels it, 399 on a working one reads ValidationError, 202 cancels, a farm notice under -1 only reaches errorEvent, and 110 on a what-if ends the request (wrapper.py:1580-1669)",
+ "delta": ["§3.3 single-value Err"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o1": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.001, "tif": "DAY"},
+   "o2": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"},
+   "o3": {"@": "Order", "action": "SELL", "totalQuantity": 50.0, "orderType": "LMT", "lmtPrice": 186.0, "tif": "DAY"},
+   "o4": {"@": "Order", "action": "BUY", "totalQuantity": 10.0, "orderType": "LMT", "lmtPrice": 185.001, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o1"}], "as": "t1"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "t1"}, 110, "The price does not conform to the minimum price variation for this contract.", ""], "origin": {"Order": {"id": {"id": "t1"}, "op": "Place"}}}
+  ]},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o2"}], "as": "t2"},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o3"}], "as": "t3"},
+  {"read": [
+   ["orderStatus", {"id": "t2"}, "Submitted", 0.0, 100.0, 0.0, 9002, 0, 0.0, 1, "", 0.0],
+   ["orderStatus", {"id": "t3"}, "Submitted", 0.0, 50.0, 0.0, 9003, 0, 0.0, 1, "", 0.0]
+  ]},
+  {"read": [
+   {"cb": "error", "args": [{"id": "t2"}, 399, "Order Message:\nBUY 100 AAPL NASDAQ.NMS\nWarning: your order will not be placed at the exchange until 2024-01-03 09:30:00 US/Eastern", ""], "origin": {"Order": {"id": {"id": "t2"}, "op": "Venue"}}},
+   {"cb": "error", "args": [{"id": "t3"}, 202, "Order Canceled - reason:", ""], "origin": {"Order": {"id": {"id": "t3"}, "op": "Venue"}}},
+   {"cb": "error", "args": [-1, 2104, "Market data farm connection is OK:usfarm", ""], "origin": "Session"}
+  ]},
+  {"call": "whatIfOrderAsync", "args": [{"ref": "aapl"}, {"ref": "o4"}], "as": "w"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "w"}, 110, "The price does not conform to the minimum price variation for this contract.", ""], "origin": {"Order": {"id": {"id": "w"}, "op": "Place"}}}
+  ]}
+ ]
+}

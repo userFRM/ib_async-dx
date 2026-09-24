@@ -1,0 +1,17 @@
+{
+ "about": "10225 on a kept-up-to-date bar list with a datetime end re-requests it with that end written as a request writes it (X20 (11); wrapper.py:1708-1721; ib.py:2353)",
+ "delta": ["X20 (11)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqHistoricalDataAsync", "args": [{"ref": "aapl"}, {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "3600 S", "30 mins", "TRADES", true, 1, true], "as": "h"},
+  {"read": [
+   ["historicalData", {"id": "h"}, {"@": "BarData", "date": "20240102 09:00:00 US/Eastern", "open": 184.0, "high": 185.0, "low": 183.9, "close": 184.8, "volume": 10000.0, "average": 184.5, "barCount": 120}],
+   ["historicalData", {"id": "h"}, {"@": "BarData", "date": "20240102 09:30:00 US/Eastern", "open": 184.8, "high": 185.2, "low": 184.7, "close": 185.0, "volume": 12000.0, "average": 185.0, "barCount": 140}],
+   ["historicalDataEnd", {"id": "h"}, "20240102 09:00:00 US/Eastern", "20240102 10:00:00 US/Eastern"]
+  ]},
+  {"read": [
+   {"cb": "error", "args": [{"id": "h"}, 10225, "Bust event occurred, current subscription is deactivated. Please resubscribe real-time bars immediately.", ""], "origin": {"Request": {"id": {"id": "h"}, "ends": true}}}
+  ]}
+ ]
+}

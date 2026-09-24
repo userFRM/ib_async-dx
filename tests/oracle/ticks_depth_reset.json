@@ -1,0 +1,19 @@
+{
+ "about": "Depth: levels inserted on both sides, then 317 resets the book, appending a delete record per level before it is cleared (wrapper.py:1309-1367, 1676-1693)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqMktDepth", "args": [{"ref": "aapl"}], "as": "d"},
+  {"read": [
+   ["updateMktDepth", {"id": "d"}, 0, 0, 1, 185.0, 300.0],
+   ["updateMktDepth", {"id": "d"}, 1, 0, 1, 184.99, 200.0],
+   ["updateMktDepth", {"id": "d"}, 0, 0, 0, 185.05, 100.0]
+  ]},
+  {"read": [
+   {"cb": "error", "args": [{"id": "d"}, 317, "Market depth data has been RESET. Please empty deep book contents before applying any new entries.", ""], "origin": {"Request": {"id": {"id": "d"}, "ends": false}}}
+  ]},
+  {"read": [
+   ["updateMktDepth", {"id": "d"}, 0, 0, 1, 185.01, 500.0]
+  ]}
+ ]
+}

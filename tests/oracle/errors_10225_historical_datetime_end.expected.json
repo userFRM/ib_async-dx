@@ -1,0 +1,63 @@
+{
+ "scenario": "errors_10225_historical_datetime_end",
+ "delta": [
+  "X20 (11)"
+ ],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_historical_data", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "20240102 15:00:00 UTC", "duration_str": "3600 S", "bar_size_setting": "30 mins", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}}
+   ],
+   "state": {
+    "realtime_bars": [
+     {"@": "BarDataList", "bars": [], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "duration_str": "3600 S", "bar_size_setting": "30 mins", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "h": {"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:00:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 185.0, "low": 183.9, "close": 184.8, "volume": 10000.0, "average": 184.5, "bar_count": 120}, {"@": "BarData", "date": {"dt": "2024-01-02T09:30:00-05:00", "tz": "US/Eastern"}, "open": 184.8, "high": 185.2, "low": 184.7, "close": 185.0, "volume": 12000.0, "average": 185.0, "bar_count": 140}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "duration_str": "3600 S", "bar_size_setting": "30 mins", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}
+   },
+   "state": {
+    "realtime_bars": [
+     {"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:00:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 185.0, "low": 183.9, "close": 184.8, "volume": 10000.0, "average": 184.5, "bar_count": 120}, {"@": "BarData", "date": {"dt": "2024-01-02T09:30:00-05:00", "tz": "US/Eastern"}, "open": 184.8, "high": 185.2, "low": 184.7, "close": 185.0, "volume": 12000.0, "average": 185.0, "bar_count": 140}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "duration_str": "3600 S", "bar_size_setting": "30 mins", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"send": "cancel_historical_data", "args": {"req_id": 1}},
+    {"send": "req_historical_data", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "20240102 15:00:00 UTC", "duration_str": "3600 S", "bar_size_setting": "30 mins", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}},
+    {"emit": "error_event", "on": "IB", "args": [1, 10225, "Bust event occurred, current subscription is deactivated. Please resubscribe real-time bars immediately.", null]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {
+    "realtime_bars": [
+     {"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:00:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 185.0, "low": 183.9, "close": 184.8, "volume": 10000.0, "average": 184.5, "bar_count": 120}, {"@": "BarData", "date": {"dt": "2024-01-02T09:30:00-05:00", "tz": "US/Eastern"}, "open": 184.8, "high": 185.2, "low": 184.7, "close": 185.0, "volume": 12000.0, "average": 185.0, "bar_count": 140}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "duration_str": "3600 S", "bar_size_setting": "30 mins", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}
+    ]
+   }
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "3": {
+    "log": [
+     {"send": "cancel_historical_data", "args": {"req_id": 1}},
+     {"send": "req_historical_data", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "duration_str": "3600 S", "bar_size_setting": "30 mins", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}},
+     {"emit": "error_event", "on": "IB", "args": [1, 10225, "Bust event occurred, current subscription is deactivated. Please resubscribe real-time bars immediately.", null]},
+     {"emit": "update_event", "on": "IB", "args": []}
+    ],
+    "state": {"realtime_bars": [{"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:00:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 185.0, "low": 183.9, "close": 184.8, "volume": 10000.0, "average": 184.5, "bar_count": 120}, {"@": "BarData", "date": {"dt": "2024-01-02T09:30:00-05:00", "tz": "US/Eastern"}, "open": 184.8, "high": 185.2, "low": 184.7, "close": 185.0, "volume": 12000.0, "average": 185.0, "bar_count": 140}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "duration_str": "3600 S", "bar_size_setting": "30 mins", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}]}
+   }
+  },
+  "pending": []
+ }
+}

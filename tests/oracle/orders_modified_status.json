@@ -1,0 +1,22 @@
+{
+ "about": "A modify logs Modify and emits modifyEvent; the unchanged Submitted status that acknowledges it logs Modified (ib.py:793-802; wrapper.py:769-792)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"read": [
+   ["orderStatus", {"id": "t"}, "Submitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0]
+  ]},
+  {"set": "lmtPrice", "on": "o", "value": 184.5},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "m"},
+  {"read": [
+   ["orderStatus", {"id": "t"}, "Submitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0]
+  ]},
+  {"read": [
+   ["orderStatus", {"id": "t"}, "Submitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0]
+  ]}
+ ]
+}

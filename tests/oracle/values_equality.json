@@ -1,0 +1,23 @@
+{
+ "about": "Equality by value for Trade (its order by identity), PnL, PnLSingle and CommissionReport (order.py:179-183, 402-442; objects.py)",
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "currency": "USD"},
+   "o": {"@": "Order", "orderId": 1, "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0},
+   "o_copy": {"@": "Order", "orderId": 1, "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0}
+  }},
+  {"let": {
+   "t1": {"@": "Trade", "contract": {"ref": "aapl"}, "order": {"ref": "o"}},
+   "t2": {"@": "Trade", "contract": {"ref": "aapl"}, "order": {"ref": "o"}},
+   "t3": {"@": "Trade", "contract": {"ref": "aapl"}, "order": {"ref": "o_copy"}}
+  }},
+  {"eq": [{"ref": "t1"}, {"ref": "t2"}], "as": "trade_same_order"},
+  {"eq": [{"ref": "t1"}, {"ref": "t3"}], "as": "trade_equal_order"},
+  {"eq": [{"@": "PnL", "account": "DU1", "dailyPnL": 1.0, "unrealizedPnL": 2.0, "realizedPnL": 3.0}, {"@": "PnL", "account": "DU1", "dailyPnL": 1.0, "unrealizedPnL": 2.0, "realizedPnL": 3.0}], "as": "pnl_equal"},
+  {"eq": [{"@": "PnL", "account": "DU1"}, {"@": "PnL", "account": "DU1"}], "as": "pnl_nan"},
+  {"eq": [{"@": "PnLSingle", "account": "DU1", "conId": 265598, "position": 100.0, "dailyPnL": 1.0, "unrealizedPnL": 2.0, "realizedPnL": 0.0, "value": 18500.0}, {"@": "PnLSingle", "account": "DU1", "conId": 265598, "position": 100.0, "dailyPnL": 1.0, "unrealizedPnL": 2.0, "realizedPnL": 0.0, "value": 18500.0}], "as": "pnl_single_equal"},
+  {"eq": [{"@": "PnLSingle", "account": "DU1", "conId": 265598, "position": 100.0, "dailyPnL": 1.0, "unrealizedPnL": 2.0, "realizedPnL": 0.0, "value": 18500.0}, {"@": "PnLSingle", "account": "DU1", "conId": 265598, "position": 50.0, "dailyPnL": 1.0, "unrealizedPnL": 2.0, "realizedPnL": 0.0, "value": 18500.0}], "as": "pnl_single_differs"},
+  {"eq": [{"@": "CommissionReport", "execId": "x.01", "commission": 1.0, "currency": "USD"}, {"@": "CommissionReport", "execId": "x.01", "commission": 1.0, "currency": "USD"}], "as": "commission_equal"},
+  {"eq": [{"@": "CommissionReport", "execId": "x.01", "commission": 1.0, "currency": "USD"}, {"@": "CommissionReport", "execId": "x.01", "commission": 1.5, "currency": "USD"}], "as": "commission_differs"}
+ ]
+}

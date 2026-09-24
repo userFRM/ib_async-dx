@@ -1,0 +1,74 @@
+{
+ "scenario": "requests_tickers_error",
+ "delta": [
+  "X20 (4)"
+ ],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_mkt_data", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "generic_tick_list": "", "snapshot": true, "regulatory_snapshot": false, "mkt_data_options": []}},
+    {"send": "req_mkt_data", "args": {"req_id": 2, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "generic_tick_list": "", "snapshot": true, "regulatory_snapshot": false, "mkt_data_options": []}}
+   ],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}},
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [1, 200, "No security definition has been found for the request", {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "r": {"raise": {"@": "RequestError", "message": "No security definition has been found for the request", "req_id": 1, "code": 200}}
+   },
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}},
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [2, 10167, "Requested market data is not subscribed. Displaying delayed market data.", null]},
+    {"emit": "tick_event", "on": "IB", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "bid": 400.0, "bid_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]},
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"emit": "update_event", "on": "Ticker", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 400.0, "bid_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]}]},
+    {"emit": "pending_tickers_event", "on": "IB", "args": [[{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 400.0, "bid_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]}]]}
+   ],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}},
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 400.0, "bid_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]}
+    ]
+   }
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "4": {
+    "log": [
+     {"emit": "error_event", "on": "IB", "args": [2, 10167, "Requested market data is not subscribed. Displaying delayed market data.", {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}]},
+     {"emit": "tick_event", "on": "IB", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "bid": 400.0, "bid_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]},
+     {"emit": "update_event", "on": "IB", "args": []},
+     {"emit": "update_event", "on": "Ticker", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 400.0, "bid_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]}]},
+     {"emit": "pending_tickers_event", "on": "IB", "args": [[{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 400.0, "bid_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]}]]}
+    ],
+    "state": {"tickers": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}, {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 400.0, "bid_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 400.0, "size": 100.0}]}]}
+   }
+  },
+  "pending": []
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "about": "An acknowledgement, a fill and its charge in one read, in the venue's order, ending Filled with the commission events (EC19; wrapper.py:668-868)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "MKT", "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"read": [
+   ["openOrder", {"id": "t"}, {"ref": "aapl"}, {"@": "Order", "orderId": {"id": "t"}, "clientId": 1, "permId": 9001, "action": "BUY", "totalQuantity": 100.0, "orderType": "MKT", "lmtPrice": 0.0, "auxPrice": 0.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}],
+   ["orderStatus", {"id": "t"}, "Submitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0],
+   ["execDetails", -1, {"ref": "aapl"}, {"@": "Execution", "execId": "0000e0d5.65940003.01.01", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "acctNumber": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 100.0, "price": 185.03, "permId": 9001, "clientId": 1, "orderId": {"id": "t"}, "cumQty": 100.0, "avgPrice": 185.03}],
+   ["orderStatus", {"id": "t"}, "Filled", 100.0, 0.0, 185.03, 9001, 0, 185.03, 1, "", 0.0],
+   ["openOrder", {"id": "t"}, {"ref": "aapl"}, {"@": "Order", "orderId": {"id": "t"}, "clientId": 1, "permId": 9001, "action": "BUY", "totalQuantity": 100.0, "orderType": "MKT", "lmtPrice": 0.0, "auxPrice": 0.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Filled"}],
+   ["commissionReport", {"@": "CommissionReport", "execId": "0000e0d5.65940003.01.01", "commission": 1.0, "currency": "USD", "realizedPNL": 1.7976931348623157e308, "yield_": 1.7976931348623157e308, "yieldRedemptionDate": 0}]
+  ]}
+ ]
+}

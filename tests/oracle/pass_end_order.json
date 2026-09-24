@@ -1,0 +1,25 @@
+{
+ "about": "A pass ends with updateEvent, then each pending ticker stamped just before its own updateEvent, in the order it was added, then pendingTickersEvent (wrapper.py:1725-1743; design 4.2)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "msft": {"@": "Contract", "conId": 272093, "symbol": "MSFT", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}
+  }},
+  {"call": "reqMktData", "args": [{"ref": "aapl"}], "as": "a"},
+  {"call": "reqMktData", "args": [{"ref": "msft"}], "as": "m"},
+  {"read": [
+   ["priceSizeTick", {"id": "m"}, 1, 400.0, 100.0],
+   ["priceSizeTick", {"id": "a"}, 1, 185.0, 300.0]
+  ]},
+  {"advance": 1.5},
+  {"read": [
+   ["priceSizeTick", {"id": "a"}, 2, 185.05, 200.0],
+   ["priceSizeTick", {"id": "m"}, 2, 400.1, 50.0]
+  ]},
+  {"advance": 0.25},
+  {"read": [
+   ["tickSize", {"id": "a"}, 8, 1000.0]
+  ]}
+ ]
+}

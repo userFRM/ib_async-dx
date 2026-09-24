@@ -1,0 +1,16 @@
+{
+ "about": "A modify of a done trade is sent, then placeOrder raises, with no log entry and no event (ib.py:790-797)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"read": [
+   ["orderStatus", {"id": "t"}, "Filled", 100.0, 0.0, 185.0, 9001, 0, 185.0, 1, "", 0.0]
+  ]},
+  {"set": "lmtPrice", "on": "o", "value": 186.0},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "m"}
+ ]
+}

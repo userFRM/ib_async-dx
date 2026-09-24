@@ -1,0 +1,14 @@
+{
+ "scenario": "errors_order_error_before_open_order",
+ "delta": [],
+ "steps": [
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [7, 201, "Order rejected - reason:The account is not permitted to trade this contract", null]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  }
+ ],
+ "pending": []
+}

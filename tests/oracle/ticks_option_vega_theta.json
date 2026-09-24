@@ -1,0 +1,13 @@
+{
+ "about": "Option greeks: a model computation whose vega and theta are -2 reads them as None, as its other greeks at their sentinels (X20 (1); wrapper.py:1369-1409)",
+ "delta": ["X20 (1)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"call": {"@": "Contract", "conId": 600000001, "symbol": "AAPL", "secType": "OPT", "lastTradeDateOrContractMonth": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}}},
+  {"call": "reqMktData", "args": [{"ref": "call"}], "as": "t"},
+  {"read": [
+   ["tickOptionComputation", {"id": "t"}, 13, 0, 0.25, 0.55, 3.2, -1.0, -2.0, -2.0, -2.0, 185.0],
+   ["tickOptionComputation", {"id": "t"}, 10, 0, 0.26, 0.54, 3.1, 0.1, 0.02, 0.18, -0.05, 185.0]
+  ]}
+ ]
+}

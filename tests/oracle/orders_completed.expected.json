@@ -1,0 +1,34 @@
+{
+ "scenario": "orders_completed",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_completed_orders", "args": {"api_only": false}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "c": [
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 5, "client_id": 1, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY", "account": "DU1"}, "order_status": {"@": "OrderStatus", "order_id": 5, "status": "Filled"}},
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9006, "action": "SELL", "total_quantity": 10.0, "order_type": "MKT", "tif": "DAY", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Cancelled"}}
+    ]
+   },
+   "state": {
+    "trades": [
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "order_id": 5, "client_id": 1, "perm_id": 9005, "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY", "account": "DU1"}, "order_status": {"@": "OrderStatus", "order_id": 5, "status": "Filled"}},
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9006, "action": "SELL", "total_quantity": 10.0, "order_type": "MKT", "tif": "DAY", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Cancelled"}}
+    ]
+   }
+  }
+ ],
+ "pending": []
+}

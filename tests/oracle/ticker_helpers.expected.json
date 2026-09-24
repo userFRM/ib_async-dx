@@ -1,0 +1,116 @@
+{
+ "scenario": "ticker_helpers",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_mkt_data", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "generic_tick_list": "", "snapshot": false, "regulatory_snapshot": false, "mkt_data_options": []}}
+   ],
+   "results": {
+    "t": {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}
+   },
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}
+    ]
+   }
+  },
+  {
+   "log": [],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}
+    ]
+   }
+  },
+  {
+   "log": [],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}
+    ]
+   }
+  },
+  {
+   "log": [],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}
+    ]
+   }
+  },
+  {
+   "log": [],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "tick_event", "on": "IB", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "ask": 185.1, "ask_size": 200.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}]}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}]},
+    {"emit": "tick_event", "on": "IB", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "bid": 185.0, "bid_size": 300.0, "ask": 185.1, "ask_size": 200.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 185.0, "size": 300.0}]}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 185.0, "size": 300.0}]},
+    {"emit": "tick_event", "on": "IB", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "bid": 185.0, "bid_size": 300.0, "ask": 185.1, "ask_size": 200.0, "last": 185.05, "last_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 185.0, "size": 300.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.05, "size": 100.0}]}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.05, "size": 100.0}]},
+    {"emit": "tick_event", "on": "IB", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 200.0, "last": 185.05, "last_size": 100.0, "prev_bid_size": 300.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 185.0, "size": 300.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.05, "size": 100.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 0, "price": 185.0, "size": 400.0}]}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 0, "price": 185.0, "size": 400.0}]},
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"emit": "update_event", "on": "Ticker", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 200.0, "last": 185.05, "last_size": 100.0, "prev_bid_size": 300.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 185.0, "size": 300.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.05, "size": 100.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 0, "price": 185.0, "size": 400.0}]}]},
+    {"emit": "bidasks", "on": "helper", "args": [{"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, 185.1, 200.0]},
+    {"emit": "bidasks", "on": "helper", "args": [{"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, 185.0, 300.0]},
+    {"emit": "bidasks", "on": "helper", "args": [{"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, 185.0, 400.0]},
+    {"emit": "trades", "on": "helper", "args": [{"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, 185.05, 100.0]},
+    {"emit": "midpoints", "on": "helper", "args": [{"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, 185.05, 0]},
+    {"emit": "pending_tickers_event", "on": "IB", "args": [[{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 200.0, "last": 185.05, "last_size": 100.0, "prev_bid_size": 300.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 185.0, "size": 300.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.05, "size": 100.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 0, "price": 185.0, "size": 400.0}]}]]}
+   ],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 200.0, "last": 185.05, "last_size": 100.0, "prev_bid_size": 300.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 185.0, "size": 300.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.05, "size": 100.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 0, "price": 185.0, "size": 400.0}]}
+    ]
+   }
+  },
+  {
+   "log": [],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 200.0, "last": 185.05, "last_size": 100.0, "prev_bid_size": 300.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 2, "price": 185.1, "size": 200.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 1, "price": 185.0, "size": 300.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.05, "size": 100.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "tick_type": 0, "price": 185.0, "size": 400.0}]}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "tick_event", "on": "IB", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 200.0, "last": 185.1, "last_size": 50.0, "prev_bid_size": 300.0, "prev_last": 185.05, "prev_last_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.1, "size": 50.0}]}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.1, "size": 50.0}]},
+    {"emit": "tick_event", "on": "IB", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 150.0, "last": 185.1, "last_size": 50.0, "prev_bid_size": 300.0, "prev_ask_size": 200.0, "prev_last": 185.05, "prev_last_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.1, "size": 50.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 3, "price": 185.1, "size": 150.0}]}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 3, "price": 185.1, "size": 150.0}]},
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"emit": "update_event", "on": "Ticker", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "timestamp": 1704207601.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 150.0, "last": 185.1, "last_size": 50.0, "prev_bid_size": 300.0, "prev_ask_size": 200.0, "prev_last": 185.05, "prev_last_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.1, "size": 50.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 3, "price": 185.1, "size": 150.0}]}]},
+    {"emit": "bidasks", "on": "helper", "args": [{"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, 185.1, 150.0]},
+    {"emit": "trades", "on": "helper", "args": [{"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, 185.1, 50.0]},
+    {"emit": "update_event", "on": "BarList", "args": [{"@": "BarList", "bars": [{"@": "Bar", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "open": 185.05, "high": 185.1, "low": 185.05, "close": 185.1, "volume": 150.0, "count": 2}]}, true]},
+    {"emit": "tickbars", "on": "helper", "args": [{"@": "BarList", "bars": [{"@": "Bar", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "open": 185.05, "high": 185.1, "low": 185.05, "close": 185.1, "volume": 150.0, "count": 2}]}]},
+    {"emit": "midpoints", "on": "helper", "args": [{"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, 185.05, 0]},
+    {"emit": "pending_tickers_event", "on": "IB", "args": [[{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "timestamp": 1704207601.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 150.0, "last": 185.1, "last_size": 50.0, "prev_bid_size": 300.0, "prev_ask_size": 200.0, "prev_last": 185.05, "prev_last_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.1, "size": 50.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 3, "price": 185.1, "size": 150.0}]}]]}
+   ],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "timestamp": 1704207601.0, "bid": 185.0, "bid_size": 400.0, "ask": 185.1, "ask_size": 150.0, "last": 185.1, "last_size": 50.0, "prev_bid_size": 300.0, "prev_ask_size": 200.0, "prev_last": 185.05, "prev_last_size": 100.0, "ticks": [{"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 4, "price": 185.1, "size": 50.0}, {"@": "TickData", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "tick_type": 3, "price": 185.1, "size": 150.0}]}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"emit": "update_event", "on": "Ticker", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "timestamp": 1704207601.0, "bid": 185.0, "bid_size": 400.0, "bid_exchange": "Q", "ask": 185.1, "ask_size": 150.0, "last": 185.1, "last_size": 50.0, "prev_bid_size": 300.0, "prev_ask_size": 200.0, "prev_last": 185.05, "prev_last_size": 100.0}]},
+    {"emit": "pending_tickers_event", "on": "IB", "args": [[{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "timestamp": 1704207601.0, "bid": 185.0, "bid_size": 400.0, "bid_exchange": "Q", "ask": 185.1, "ask_size": 150.0, "last": 185.1, "last_size": 50.0, "prev_bid_size": 300.0, "prev_ask_size": 200.0, "prev_last": 185.05, "prev_last_size": 100.0}]]}
+   ],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "timestamp": 1704207601.0, "bid": 185.0, "bid_size": 400.0, "bid_exchange": "Q", "ask": 185.1, "ask_size": 150.0, "last": 185.1, "last_size": 50.0, "prev_bid_size": 300.0, "prev_ask_size": 200.0, "prev_last": 185.05, "prev_last_size": 100.0}
+    ]
+   }
+  }
+ ],
+ "pending": []
+}

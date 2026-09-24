@@ -1,0 +1,27 @@
+{
+ "scenario": "session_client_id_after_disconnect",
+ "delta": [],
+ "steps": [
+  {
+   "log": [
+    {"emit": "disconnected_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "client_id": 7
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "connected": false
+   },
+   "state": {}
+  }
+ ],
+ "pending": []
+}

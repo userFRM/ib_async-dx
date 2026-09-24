@@ -1,0 +1,22 @@
+{
+ "about": "connectAsync: the handshake, the startup requests at once, executions after them, then connectedEvent (ib.py:2027-2108; client.py:206-236, 384-410)",
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "connectAsync", "kwargs": {"host": "127.0.0.1", "port": 7497, "clientId": 1}, "as": "c"},
+  {"logon": {"next_id": 1, "accounts": ["DU1"]}},
+  {"read": [
+   ["position", "DU1", {"ref": "aapl"}, 100.0, 185.0],
+   ["positionEnd"],
+   ["openOrderEnd"],
+   ["completedOrdersEnd"],
+   ["updateAccountValue", "NetLiquidation", "100000.00", "USD", "DU1"],
+   ["updatePortfolio", {"ref": "aapl"}, 100.0, 186.0, 18600.0, 185.0, 100.0, 0.0, "DU1"],
+   ["accountDownloadEnd", "DU1"],
+   ["accountUpdateMulti", {"id": "c"}, "DU1", "", "NetLiquidation", "100000.00", "USD"],
+   ["accountUpdateMultiEnd", {"id": "c"}]
+  ]},
+  {"read": [
+   ["execDetailsEnd", {"id": "c", "n": 1}]
+  ]}
+ ]
+}

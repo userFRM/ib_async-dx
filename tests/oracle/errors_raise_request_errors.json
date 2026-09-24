@@ -1,0 +1,16 @@
+{
+ "about": "A request ended by its error: what arrived with RaiseRequestErrors off, a RequestError with it on (wrapper.py:1645-1651; ib.py:142-148)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"nope": {"@": "Contract", "symbol": "NOPE", "secType": "STK", "exchange": "SMART", "currency": "USD"}}},
+  {"call": "reqContractDetailsAsync", "args": [{"ref": "nope"}], "as": "r1"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "r1"}, 200, "No security definition has been found for the request", ""], "origin": {"Request": {"id": {"id": "r1"}, "ends": true}}}
+  ]},
+  {"set": "RaiseRequestErrors", "value": true},
+  {"call": "reqContractDetailsAsync", "args": [{"ref": "nope"}], "as": "r2"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "r2"}, 200, "No security definition has been found for the request", ""], "origin": {"Request": {"id": {"id": "r2"}, "ends": true}}}
+  ]}
+ ]
+}

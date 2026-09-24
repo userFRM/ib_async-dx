@@ -1,0 +1,39 @@
+{
+ "about": "connectAsync on a connected IB reconnects after the old socket's close; orders placed after it are keyed by the connect's client id (X20 (10); ib.py:2038-2039, 780-814; wrapper.py:335, 361-368, 668-703)",
+ "delta": ["X20 (10)"],
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "connectAsync", "kwargs": {"host": "127.0.0.1", "port": 7497, "clientId": 1}, "as": "c1"},
+  {"logon": {"next_id": 1, "accounts": ["DU1"]}},
+  {"read": [
+   ["positionEnd"],
+   ["openOrderEnd"],
+   ["completedOrdersEnd"],
+   ["accountDownloadEnd", "DU1"],
+   ["accountUpdateMultiEnd", {"id": "c1"}]
+  ]},
+  {"read": [
+   ["execDetailsEnd", {"id": "c1", "n": 1}]
+  ]},
+  {"call": "connectAsync", "kwargs": {"host": "127.0.0.1", "port": 7497, "clientId": 2}, "as": "c2"},
+  {"logon": {"next_id": 5, "accounts": ["DU1"]}},
+  {"read": [
+   ["positionEnd"],
+   ["openOrderEnd"],
+   ["completedOrdersEnd"],
+   ["accountDownloadEnd", "DU1"],
+   ["accountUpdateMultiEnd", {"id": "c2"}]
+  ]},
+  {"read": [
+   ["execDetailsEnd", {"id": "c2", "n": 1}]
+  ]},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"read": [
+   ["openOrder", {"id": "t"}, {"ref": "aapl"}, {"@": "Order", "orderId": {"id": "t"}, "clientId": 2, "permId": 9005, "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "auxPrice": 0.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}],
+   ["orderStatus", {"id": "t"}, "Submitted", 0.0, 100.0, 0.0, 9005, 0, 0.0, 2, "", 0.0]
+  ]}
+ ]
+}

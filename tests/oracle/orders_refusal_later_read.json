@@ -1,0 +1,14 @@
+{
+ "about": "placeOrder returns its PendingSubmit trade; the refusal comes in a later read and cancels it (ib.py:803-814; wrapper.py:1652-1668)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 1000000.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "t"}, 201, "Order rejected - reason:YOUR ORDER IS NOT ACCEPTED. IN ORDER TO OBTAIN THE DESIRED POSITION YOUR EQUITY WITH LOAN VALUE [100000.00 USD] MUST EXCEED THE INITIAL MARGIN [46250000.00 USD]", ""], "origin": {"Order": {"id": {"id": "t"}, "op": "Place"}}}
+  ]}
+ ]
+}

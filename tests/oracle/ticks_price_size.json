@@ -1,0 +1,24 @@
+{
+ "about": "Quotes: a price with its size, a size alone, a size of 0 emptying bid and ask, a price-only tick, an unchanged size, a generic tick (wrapper.py:980-1106, 1255-1277)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqMktData", "args": [{"ref": "aapl"}], "as": "t"},
+  {"read": [
+   ["priceSizeTick", {"id": "t"}, 1, 185.0, 300.0],
+   ["priceSizeTick", {"id": "t"}, 2, 185.05, 200.0],
+   ["priceSizeTick", {"id": "t"}, 4, 185.02, 100.0],
+   ["tickSize", {"id": "t"}, 0, 400.0],
+   ["tickSize", {"id": "t"}, 0, 400.0],
+   ["tickSize", {"id": "t"}, 5, 150.0],
+   ["tickSize", {"id": "t"}, 8, 125000.0]
+  ]},
+  {"read": [
+   ["priceSizeTick", {"id": "t"}, 1, 184.9, 0.0],
+   ["tickSize", {"id": "t"}, 3, 0.0],
+   ["priceSizeTick", {"id": "t"}, 9, 183.5, 0.0],
+   ["tickGeneric", {"id": "t"}, 24, 0.215],
+   ["tickString", {"id": "t"}, 32, "PQ"]
+  ]}
+ ]
+}

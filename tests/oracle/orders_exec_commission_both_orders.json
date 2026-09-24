@@ -1,0 +1,29 @@
+{
+ "about": "An execution then its commission, and a commission that arrives before its execution, which finds no fill and is dropped (wrapper.py:800-868)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o1": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"},
+   "o2": {"@": "Order", "action": "SELL", "totalQuantity": 40.0, "orderType": "LMT", "lmtPrice": 186.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o1"}], "as": "t1"},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o2"}], "as": "t2"},
+  {"read": [
+   ["openOrder", {"id": "t1"}, {"ref": "aapl"}, {"@": "Order", "orderId": {"id": "t1"}, "clientId": 1, "permId": 9001, "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "auxPrice": 0.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}],
+   ["openOrder", {"id": "t2"}, {"ref": "aapl"}, {"@": "Order", "orderId": {"id": "t2"}, "clientId": 1, "permId": 9002, "action": "SELL", "totalQuantity": 40.0, "orderType": "LMT", "lmtPrice": 186.0, "auxPrice": 0.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}]
+  ]},
+  {"read": [
+   ["execDetails", -1, {"ref": "aapl"}, {"@": "Execution", "execId": "0000e0d5.65940001.01.01", "time": {"dt": "2024-01-02T15:00:01+00:00", "tz": "UTC"}, "acctNumber": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 100.0, "price": 185.0, "permId": 9001, "clientId": 1, "orderId": {"id": "t1"}, "cumQty": 100.0, "avgPrice": 185.0}]
+  ]},
+  {"read": [
+   ["commissionReport", {"@": "CommissionReport", "execId": "0000e0d5.65940001.01.01", "commission": 1.0, "currency": "USD", "realizedPNL": 1.7976931348623157e308, "yield_": 1.7976931348623157e308, "yieldRedemptionDate": 0}]
+  ]},
+  {"read": [
+   ["commissionReport", {"@": "CommissionReport", "execId": "0000e0d5.65940002.01.01", "commission": 1.02, "currency": "USD", "realizedPNL": 40.0, "yield_": 1.7976931348623157e308, "yieldRedemptionDate": 0}]
+  ]},
+  {"read": [
+   ["execDetails", -1, {"ref": "aapl"}, {"@": "Execution", "execId": "0000e0d5.65940002.01.01", "time": {"dt": "2024-01-02T15:00:02+00:00", "tz": "UTC"}, "acctNumber": "DU1", "exchange": "ISLAND", "side": "SLD", "shares": 40.0, "price": 186.0, "permId": 9002, "clientId": 1, "orderId": {"id": "t2"}, "cumQty": 40.0, "avgPrice": 186.0}]
+  ]}
+ ]
+}

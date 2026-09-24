@@ -1,0 +1,25 @@
+{
+ "about": "A refused placement and a refused modify, told apart by what the engine says each error is about: the first cancels even under 321, the second leaves the order working (X22; wrapper.py:1603-1668)",
+ "delta": ["X22"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o1": {"@": "Order", "action": "BUY", "totalQuantity": 0.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"},
+   "o2": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o1"}], "as": "t1"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "t1"}, 321, "Error validating request.-'bW' : cause - The order size cannot be zero", ""], "origin": {"Order": {"id": {"id": "t1"}, "op": "Place"}}}
+  ]},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o2"}], "as": "t2"},
+  {"read": [
+   ["orderStatus", {"id": "t2"}, "Submitted", 0.0, 100.0, 0.0, 9002, 0, 0.0, 1, "", 0.0]
+  ]},
+  {"set": "lmtPrice", "on": "o2", "value": 190.0},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o2"}]},
+  {"read": [
+   {"cb": "error", "args": [{"id": "t2"}, 201, "Order rejected - reason:The modification was refused", ""], "origin": {"Order": {"id": {"id": "t2"}, "op": "Modify"}}}
+  ]}
+ ]
+}

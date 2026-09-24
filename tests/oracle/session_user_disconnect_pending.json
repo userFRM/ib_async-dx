@@ -1,0 +1,17 @@
+{
+ "about": "A user disconnect(): disconnectedEvent, every object event done, the reset, every outstanding request failed with NotConnected, and run() returns (X11, X20 (6), X20 (8); ib.py:387-406)",
+ "delta": ["X11", "X20 (6)", "X20 (8)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"call": "reqMktData", "args": [{"ref": "aapl"}], "as": "k"},
+  {"call": "reqRealTimeBars", "args": [{"ref": "aapl"}, 5, "TRADES", true], "as": "b"},
+  {"call": "reqContractDetailsAsync", "args": [{"ref": "aapl"}], "as": "r"},
+  {"call": "run", "as": "running"},
+  {"call": "disconnect"}
+ ]
+}

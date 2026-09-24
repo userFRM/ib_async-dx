@@ -1,0 +1,12 @@
+{
+ "about": "A peer close: apiError, the global error failing what is pending, then apiEnd, whose first slot is disconnectedEvent, ahead of a later apiEnd handler; after apiEnd.clear() a close fires neither (ib.py:281; client.py:418-438; wrapper.py:361-368)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"call": "reqCurrentTimeAsync", "as": "q"},
+  {"handler": "later", "on": "client.apiEnd"},
+  {"peer_close": true},
+  {"connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]}},
+  {"clear": "client.apiEnd"},
+  {"peer_close": true}
+ ]
+}

@@ -20,5 +20,9 @@ Issues = "https://github.com/userFRM/ib_async-dx/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["python/ib_async_dx"]
 
+# The Rust crate beside the package ships through cargo, not in this sdist.
+[tool.hatch.build.targets.sdist]
+exclude = ["/Cargo.toml", "/Cargo.lock", "/src", "/examples", "/tests/*.rs", "/tests/oracle"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]

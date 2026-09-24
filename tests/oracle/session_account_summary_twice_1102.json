@@ -1,0 +1,19 @@
+{
+ "about": "accountSummary with an empty cache, twice at once: each asks, with no cancel; a 1102 asks again (ib.py:2232-2261, 414-418)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"call": "accountSummaryAsync", "as": "a1"},
+  {"call": "accountSummaryAsync", "as": "a2"},
+  {"read": [
+   ["accountSummary", {"id": "a1"}, "DU1", "NetLiquidation", "100000.00", "USD"],
+   ["accountSummaryEnd", {"id": "a1"}]
+  ]},
+  {"read": [
+   ["accountSummary", {"id": "a2"}, "DU1", "NetLiquidation", "100000.00", "USD"],
+   ["accountSummaryEnd", {"id": "a2"}]
+  ]},
+  {"read": [
+   {"cb": "error", "args": [-1, 1102, "Connectivity between IB and Trader Workstation has been restored - data maintained.", ""], "origin": "Session"}
+  ]}
+ ]
+}

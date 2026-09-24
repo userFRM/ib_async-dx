@@ -1,0 +1,14 @@
+{
+ "about": "10225 on real-time bars cancels and re-requests them before errorEvent fires (wrapper.py:1694-1707, 1723)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqRealTimeBars", "args": [{"ref": "aapl"}, 5, "TRADES", true], "as": "b"},
+  {"read": [
+   ["realtimeBar", {"id": "b"}, 1704207600, 185.0, 185.1, 184.9, 185.05, 1000.0, 185.01, 12]
+  ]},
+  {"read": [
+   {"cb": "error", "args": [{"id": "b"}, 10225, "Bust event occurred, current subscription is deactivated. Please resubscribe real-time bars immediately.", ""], "origin": {"Request": {"id": {"id": "b"}, "ends": true}}}
+  ]}
+ ]
+}

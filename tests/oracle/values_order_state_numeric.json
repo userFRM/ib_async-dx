@@ -1,0 +1,10 @@
+{
+ "about": "OrderState.numeric and formatted: Python's float() and round(), UNSET and unparsable as None, comma thousands (order.py:327-375)",
+ "steps": [
+  {"let": {"s": {"@": "OrderState", "status": "PreSubmitted", "initMarginBefore": "0.125", "maintMarginBefore": "", "equityWithLoanBefore": "1.7976931348623157E308", "initMarginChange": "2.675", "maintMarginChange": "1234.5", "equityWithLoanChange": "300000.21", "initMarginAfter": "431.342000000001", "maintMarginAfter": "nan", "equityWithLoanAfter": " 1_000 ", "commission": 1.25, "minCommission": 1.7976931348623157e308, "maxCommission": 0.0, "commissionCurrency": "USD"}}},
+  {"call": "numeric", "on": "s", "as": "numeric_2"},
+  {"call": "numeric", "on": "s", "args": [-2], "as": "numeric_minus_2"},
+  {"call": "formatted", "on": "s", "as": "formatted_2"},
+  {"call": "formatted", "on": "s", "args": [0], "as": "formatted_0"}
+ ]
+}

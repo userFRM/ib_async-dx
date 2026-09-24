@@ -1,0 +1,14 @@
+{
+ "about": "Order conditions: And and Or set the conjunction and return the condition itself (order.py:494-500)",
+ "steps": [
+  {"let": {
+   "price": {"@": "PriceCondition", "price": 190.0, "conId": 265598, "exch": "SMART", "isMore": false},
+   "time": {"@": "TimeCondition", "time": "20240102 16:00:00 US/Eastern"},
+   "volume": {"@": "VolumeCondition", "volume": 100000, "conId": 265598, "exch": "SMART"}
+  }},
+  {"call": "Or", "on": "price", "as": "price_or"},
+  {"call": "And", "on": "time", "as": "time_and"},
+  {"call": "Or", "on": "volume", "as": "volume_or"},
+  {"eq": [{"ref": "price_or"}, {"ref": "price"}], "as": "same_condition"}
+ ]
+}

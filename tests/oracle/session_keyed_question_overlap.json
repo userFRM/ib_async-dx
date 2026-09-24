@@ -1,0 +1,18 @@
+{
+ "about": "Two overlapping calls of one keyed question: the second waits for the first's end and each gets its own answer; ib_async replaces the first's future, which is never answered (X13; wrapper.py:370-382)",
+ "delta": ["X13"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"msft": {"@": "Contract", "conId": 272093, "symbol": "MSFT", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqOpenOrdersAsync", "as": "r1"},
+  {"call": "reqOpenOrdersAsync", "as": "r2"},
+  {"read": [
+   ["openOrder", 0, {"ref": "msft"}, {"@": "Order", "orderId": 0, "clientId": 0, "permId": 9100, "action": "BUY", "totalQuantity": 10.0, "orderType": "LMT", "lmtPrice": 400.0, "tif": "GTC", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}],
+   ["openOrderEnd"]
+  ]},
+  {"read": [
+   ["openOrder", 0, {"ref": "msft"}, {"@": "Order", "orderId": 0, "clientId": 0, "permId": 9100, "action": "BUY", "totalQuantity": 10.0, "orderType": "LMT", "lmtPrice": 400.0, "tif": "GTC", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}],
+   ["openOrderEnd"]
+  ]}
+ ]
+}

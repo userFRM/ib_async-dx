@@ -1,0 +1,11 @@
+{
+ "about": "reqUserInfo returns the white-branding id; ib_async returns [] (wrapper.py:1571-1572; ib.py:2021-2023, 2624-2628)",
+ "delta": ["req_user_info"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"call": "reqUserInfoAsync", "as": "u"},
+  {"read": [
+   ["userInfo", {"id": "u"}, "WB-123"]
+  ]}
+ ]
+}

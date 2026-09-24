@@ -1,0 +1,20 @@
+{
+ "about": "A request whose result is one value, ended by an error, raises it whatever RaiseRequestErrors says; ib_async returns [] (design 3.3; wrapper.py:1645-1651; ib.py:2429-2474)",
+ "delta": ["§3.3 single-value Err"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqHeadTimeStampAsync", "args": [{"ref": "aapl"}, "TRADES", true, 1], "as": "head"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "head"}, 162, "Historical Market Data Service error message:No head time stamp", ""], "origin": {"Request": {"id": {"id": "head"}, "ends": true}}}
+  ]},
+  {"call": "reqFundamentalDataAsync", "args": [{"ref": "aapl"}, "ReportsFinSummary"], "as": "fundamentals"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "fundamentals"}, 430, "We are sorry, but fundamentals data for the security specified is not available.", ""], "origin": {"Request": {"id": {"id": "fundamentals"}, "ends": true}}}
+  ]},
+  {"call": "reqContractDetailsAsync", "args": [{"ref": "aapl"}], "as": "details"},
+  {"read": [
+   {"cb": "error", "args": [{"id": "details"}, 200, "No security definition has been found for the request", ""], "origin": {"Request": {"id": {"id": "details"}, "ends": true}}}
+  ]}
+ ]
+}

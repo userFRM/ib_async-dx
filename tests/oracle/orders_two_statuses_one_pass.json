@@ -1,0 +1,15 @@
+{
+ "about": "Two statuses of one order in one pass: each is applied and emitted in turn (wrapper.py:735-792)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"read": [
+   ["orderStatus", {"id": "t"}, "PreSubmitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0],
+   ["orderStatus", {"id": "t"}, "Submitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0]
+  ]}
+ ]
+}

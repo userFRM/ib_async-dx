@@ -1,0 +1,46 @@
+{
+ "scenario": "session_peer_close_api_end_handler",
+ "delta": [],
+ "steps": [
+  {
+   "log": [
+    {"send": "req_current_time", "args": {}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "api_error", "on": "Client", "args": ["Peer closed connection."]},
+    {"emit": "global_error_event", "on": "util", "args": [{"@": "ConnectionError", "message": "Socket disconnect"}]},
+    {"emit": "api_end", "on": "Client", "args": []},
+    {"emit": "disconnected_event", "on": "IB", "args": []},
+    {"handler": "later"}
+   ],
+   "results": {
+    "q": {"raise": {"@": "ConnectionError", "message": "Socket disconnect"}}
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "api_error", "on": "Client", "args": ["Peer closed connection."]},
+    {"emit": "global_error_event", "on": "util", "args": [{"@": "ConnectionError", "message": "Socket disconnect"}]},
+    {"emit": "api_end", "on": "Client", "args": []}
+   ],
+   "state": {}
+  }
+ ],
+ "pending": []
+}

@@ -1,0 +1,82 @@
+{
+ "scenario": "session_late_historical_after_timeout",
+ "delta": [
+  "X20 (3)"
+ ],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_historical_data", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}}
+   ],
+   "state": {
+    "realtime_bars": [
+     {"@": "BarDataList", "bars": [], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"send": "cancel_historical_data", "args": {"req_id": 1}}
+   ],
+   "results": {
+    "h": {"@": "BarDataList", "bars": [], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}
+   },
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "h_after": {"@": "BarDataList", "bars": [], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}
+   },
+   "state": {}
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "2": {
+    "log": [
+     {"send": "cancel_historical_data", "args": {"req_id": 1}}
+    ],
+    "results": {"h": {"@": "BarDataList", "bars": [], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}},
+    "state": {"realtime_bars": [{"@": "BarDataList", "bars": [], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}]}
+   },
+   "3": {
+    "log": [
+     {"emit": "update_event", "on": "IB", "args": []}
+    ],
+    "state": {"realtime_bars": [{"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:58:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 184.5, "low": 183.9, "close": 184.4, "volume": 1000.0, "average": 184.2, "bar_count": 10}, {"@": "BarData", "date": {"dt": "2024-01-02T09:59:00-05:00", "tz": "US/Eastern"}, "open": 184.4, "high": 184.6, "low": 184.3, "close": 184.5, "volume": 800.0, "average": 184.45, "bar_count": 8}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}]}
+   },
+   "4": {
+    "log": [
+     {"emit": "bar_update_event", "on": "IB", "args": [{"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:58:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 184.5, "low": 183.9, "close": 184.4, "volume": 1000.0, "average": 184.2, "bar_count": 10}, {"@": "BarData", "date": {"dt": "2024-01-02T09:59:00-05:00", "tz": "US/Eastern"}, "open": 184.4, "high": 184.6, "low": 184.3, "close": 184.5, "volume": 800.0, "average": 184.45, "bar_count": 8}, {"@": "BarData", "date": {"dt": "2024-01-02T10:00:00-05:00", "tz": "US/Eastern"}, "open": 184.5, "high": 184.8, "low": 184.5, "close": 184.8, "volume": 100.0, "average": 184.7, "bar_count": 1}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}, true]},
+     {"emit": "update_event", "on": "BarDataList", "args": [{"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:58:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 184.5, "low": 183.9, "close": 184.4, "volume": 1000.0, "average": 184.2, "bar_count": 10}, {"@": "BarData", "date": {"dt": "2024-01-02T09:59:00-05:00", "tz": "US/Eastern"}, "open": 184.4, "high": 184.6, "low": 184.3, "close": 184.5, "volume": 800.0, "average": 184.45, "bar_count": 8}, {"@": "BarData", "date": {"dt": "2024-01-02T10:00:00-05:00", "tz": "US/Eastern"}, "open": 184.5, "high": 184.8, "low": 184.5, "close": 184.8, "volume": 100.0, "average": 184.7, "bar_count": 1}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}, true]},
+     {"emit": "update_event", "on": "IB", "args": []}
+    ],
+    "state": {"realtime_bars": [{"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:58:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 184.5, "low": 183.9, "close": 184.4, "volume": 1000.0, "average": 184.2, "bar_count": 10}, {"@": "BarData", "date": {"dt": "2024-01-02T09:59:00-05:00", "tz": "US/Eastern"}, "open": 184.4, "high": 184.6, "low": 184.3, "close": 184.5, "volume": 800.0, "average": 184.45, "bar_count": 8}, {"@": "BarData", "date": {"dt": "2024-01-02T10:00:00-05:00", "tz": "US/Eastern"}, "open": 184.5, "high": 184.8, "low": 184.5, "close": 184.8, "volume": 100.0, "average": 184.7, "bar_count": 1}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}]}
+   },
+   "5": {
+    "log": [],
+    "results": {"h_after": {"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:58:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 184.5, "low": 183.9, "close": 184.4, "volume": 1000.0, "average": 184.2, "bar_count": 10}, {"@": "BarData", "date": {"dt": "2024-01-02T09:59:00-05:00", "tz": "US/Eastern"}, "open": 184.4, "high": 184.6, "low": 184.3, "close": 184.5, "volume": 800.0, "average": 184.45, "bar_count": 8}, {"@": "BarData", "date": {"dt": "2024-01-02T10:00:00-05:00", "tz": "US/Eastern"}, "open": 184.5, "high": 184.8, "low": 184.5, "close": 184.8, "volume": 100.0, "average": 184.7, "bar_count": 1}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}},
+    "state": {"realtime_bars": [{"@": "BarDataList", "bars": [{"@": "BarData", "date": {"dt": "2024-01-02T09:58:00-05:00", "tz": "US/Eastern"}, "open": 184.0, "high": 184.5, "low": 183.9, "close": 184.4, "volume": 1000.0, "average": 184.2, "bar_count": 10}, {"@": "BarData", "date": {"dt": "2024-01-02T09:59:00-05:00", "tz": "US/Eastern"}, "open": 184.4, "high": 184.6, "low": 184.3, "close": 184.5, "volume": 800.0, "average": 184.45, "bar_count": 8}, {"@": "BarData", "date": {"dt": "2024-01-02T10:00:00-05:00", "tz": "US/Eastern"}, "open": 184.5, "high": 184.8, "low": 184.5, "close": 184.8, "volume": 100.0, "average": 184.7, "bar_count": 1}], "req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "end_date_time": "", "duration_str": "120 S", "bar_size_setting": "1 min", "what_to_show": "TRADES", "use_rth": true, "format_date": 1, "keep_up_to_date": true, "chart_options": []}]}
+   }
+  },
+  "pending": []
+ }
+}

@@ -1,0 +1,9 @@
+{
+ "about": "An order's error before any trade holds its id reaches errorEvent alone (wrapper.py:1589-1590, 1723; design 4.6)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"read": [
+   {"cb": "error", "args": [7, 201, "Order rejected - reason:The account is not permitted to trade this contract", ""], "origin": {"Order": {"id": 7, "op": "Venue"}}}
+  ]}
+ ]
+}

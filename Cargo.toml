@@ -1,0 +1,40 @@
+[package]
+name = "ib_async-dx"
+version = "0.1.0"
+edition = "2024"
+# The engine's own floor.
+rust-version = "1.89"
+description = "ib_async without the gateway: the ib_async API in Rust on the ibkr-dx engine."
+license = "AGPL-3.0-only"
+repository = "https://github.com/userFRM/ib_async-dx"
+
+[lib]
+name = "ib_async_dx"
+
+[features]
+default = []
+# FlexReport, and the HTTP and XML crates it needs. Off by default, so only a
+# program that downloads Flex statements pays for them.
+flex = ["dep:ureq", "dep:native-tls", "dep:roxmltree"]
+
+[dependencies]
+ibkr-dx = { git = "https://github.com/userFRM/ibkr-dx", rev = "93dd8cebd8025b0f83297fb3165aeecaa5ea981c" }
+# The engine's time crate: Timestamp, Zoned, civil, tz. The bundled zone
+# database answers the names a system's may lack, such as `US/Eastern`, as
+# ib_async's `tzdata` does; as the engine does, it is always compiled in.
+jiff = { version = "0.2.28", features = ["tzdb-bundle-always"] }
+# The engine's logging facade. This crate logs to the targets ib_async logs to:
+# "ib_async.ib", "ib_async.client", "ib_async.wrapper", "ib_async.flexreport".
+log = "0.4"
+# Insertion-ordered maps, where ib_async exposes a dict's order.
+indexmap = "2"
+# The Stream trait, for the async faces; no runtime.
+futures-core = "0.3"
+ureq = { version = "2", default-features = false, features = ["native-tls"], optional = true }
+# ureq's TLS connector; already in the engine's tree.
+native-tls = { version = "0.2", optional = true }
+roxmltree = { version = "0.20", optional = true }
+
+[dev-dependencies]
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

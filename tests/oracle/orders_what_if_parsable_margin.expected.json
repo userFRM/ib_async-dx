@@ -1,0 +1,32 @@
+{
+ "scenario": "orders_what_if_parsable_margin",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "place_order", "args": {"order_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "action": "BUY", "total_quantity": 100.0, "order_type": "LMT", "lmt_price": 185.0, "tif": "DAY", "what_if": true}}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "w": {"@": "OrderState", "status": "PreSubmitted", "init_margin_before": "25000.5", "maint_margin_before": "20000.25", "equity_with_loan_before": "100000.0", "init_margin_change": "4625.0", "maint_margin_change": "3700.0", "equity_with_loan_change": "-1.0", "init_margin_after": "29625.5", "maint_margin_after": "23700.25", "equity_with_loan_after": "99999.0", "commission": 1.0, "commission_currency": "USD"}
+   },
+   "state": {}
+  }
+ ],
+ "pending": []
+}

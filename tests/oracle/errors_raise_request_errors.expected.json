@@ -1,0 +1,47 @@
+{
+ "scenario": "errors_raise_request_errors",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_contract_details", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "STK", "symbol": "NOPE", "exchange": "SMART", "currency": "USD"}}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [1, 200, "No security definition has been found for the request", {"@": "Contract", "sec_type": "STK", "symbol": "NOPE", "exchange": "SMART", "currency": "USD"}]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "r1": []
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_contract_details", "args": {"req_id": 2, "contract": {"@": "Contract", "sec_type": "STK", "symbol": "NOPE", "exchange": "SMART", "currency": "USD"}}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [2, 200, "No security definition has been found for the request", {"@": "Contract", "sec_type": "STK", "symbol": "NOPE", "exchange": "SMART", "currency": "USD"}]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "r2": {"raise": {"@": "RequestError", "message": "No security definition has been found for the request", "req_id": 2, "code": 200}}
+   },
+   "state": {}
+  }
+ ],
+ "pending": []
+}

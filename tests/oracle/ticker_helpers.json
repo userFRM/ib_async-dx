@@ -1,0 +1,26 @@
+{
+ "about": "Ticker helpers: bidasks and trades in the ticks' own order, midpoints once per pass with ticks, tickbars of two trades (ticker.py:299-476)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqMktData", "args": [{"ref": "aapl"}], "as": "t"},
+  {"helper": "bidasks", "on": "t", "as": "bidasks"},
+  {"helper": "trades", "on": "t", "as": "trades"},
+  {"helper": "midpoints", "on": "t", "as": "midpoints"},
+  {"helper": "tickbars", "on": "trades", "args": [2], "as": "tickbars"},
+  {"read": [
+   ["priceSizeTick", {"id": "t"}, 2, 185.1, 200.0],
+   ["priceSizeTick", {"id": "t"}, 1, 185.0, 300.0],
+   ["priceSizeTick", {"id": "t"}, 4, 185.05, 100.0],
+   ["tickSize", {"id": "t"}, 0, 400.0]
+  ]},
+  {"advance": 1.0},
+  {"read": [
+   ["priceSizeTick", {"id": "t"}, 4, 185.1, 50.0],
+   ["tickSize", {"id": "t"}, 3, 150.0]
+  ]},
+  {"read": [
+   ["tickString", {"id": "t"}, 32, "Q"]
+  ]}
+ ]
+}

@@ -1,0 +1,39 @@
+{
+ "scenario": "values_order_state_numeric",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "numeric_2": {"@": "OrderState", "status": "PreSubmitted", "init_margin_before": 0.12, "maint_margin_before": null, "equity_with_loan_before": null, "init_margin_change": 2.67, "maint_margin_change": 1234.5, "equity_with_loan_change": 300000.21, "init_margin_after": 431.34, "maint_margin_after": {"f": "nan"}, "equity_with_loan_after": 1000.0, "commission": 1.25, "max_commission": 0.0, "commission_currency": "USD"}
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "numeric_minus_2": {"@": "OrderState", "status": "PreSubmitted", "init_margin_before": 0.0, "maint_margin_before": null, "equity_with_loan_before": null, "init_margin_change": 0.0, "maint_margin_change": 1200.0, "equity_with_loan_change": 300000.0, "init_margin_after": 400.0, "maint_margin_after": {"f": "nan"}, "equity_with_loan_after": 1000.0, "commission": 0.0, "max_commission": 0.0, "commission_currency": "USD"}
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "formatted_2": {"@": "OrderState", "status": "PreSubmitted", "init_margin_before": "0.12", "maint_margin_before": null, "equity_with_loan_before": null, "init_margin_change": "2.67", "maint_margin_change": "1,234.50", "equity_with_loan_change": "300,000.21", "init_margin_after": "431.34", "maint_margin_after": "nan", "equity_with_loan_after": "1,000.00", "commission": "1.25", "max_commission": "0.00", "commission_currency": "USD"}
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "formatted_0": {"@": "OrderState", "status": "PreSubmitted", "init_margin_before": "0", "maint_margin_before": null, "equity_with_loan_before": null, "init_margin_change": "3", "maint_margin_change": "1,234", "equity_with_loan_change": "300,000", "init_margin_after": "431", "maint_margin_after": "nan", "equity_with_loan_after": "1,000", "commission": "1", "max_commission": "0", "commission_currency": "USD"}
+   },
+   "state": {}
+  }
+ ],
+ "pending": []
+}

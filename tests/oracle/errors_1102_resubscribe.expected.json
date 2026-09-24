@@ -1,0 +1,31 @@
+{
+ "scenario": "errors_1102_resubscribe",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [-1, 1102, "Connectivity between IB and Trader Workstation has been restored - data maintained.", null]},
+    {"send": "req_account_summary", "args": {"req_id": 1, "group_name": "All", "tags": "AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousDayEquityWithLoanValue,GrossPositionValue,RegTEquity,RegTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,DayTradesRemainingT+1,DayTradesRemainingT+2,DayTradesRemainingT+3,DayTradesRemainingT+4,Leverage,$LEDGER:ALL"}},
+    {"handler": "h"},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [-1, 1102, "Connectivity between IB and Trader Workstation has been restored - data maintained.", null]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  }
+ ],
+ "pending": []
+}

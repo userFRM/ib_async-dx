@@ -1,0 +1,18 @@
+{
+ "about": "placeOrder and cancelOrder send before they emit; a cancel of an untransmitted PendingSubmit order is Cancelled at once (ib.py:780-855)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o1": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"},
+   "o2": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 184.0, "tif": "DAY", "transmit": false}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o1"}], "as": "t1"},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o2"}], "as": "t2"},
+  {"call": "cancelOrder", "args": [{"ref": "o2"}], "as": "c2"},
+  {"read": [
+   ["orderStatus", {"id": "t1"}, "Submitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0]
+  ]},
+  {"call": "cancelOrder", "args": [{"ref": "o1"}], "as": "c1"}
+ ]
+}

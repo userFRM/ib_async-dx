@@ -1,0 +1,19 @@
+{
+ "about": "reqHistoricalData's timeout cancels, clears and returns the list; a late answer then finds nothing, where ib_async refills the list it returned and keeps its subscription (X20 (3); ib.py:2325-2374)",
+ "delta": ["X20 (3)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqHistoricalDataAsync", "args": [{"ref": "aapl"}, "", "120 S", "1 min", "TRADES", true], "kwargs": {"keepUpToDate": true, "timeout": 5}, "as": "h"},
+  {"advance": 5},
+  {"read": [
+   ["historicalData", {"id": "h"}, {"@": "BarData", "date": "20240102 09:58:00 US/Eastern", "open": 184.0, "high": 184.5, "low": 183.9, "close": 184.4, "volume": 1000.0, "average": 184.2, "barCount": 10}],
+   ["historicalData", {"id": "h"}, {"@": "BarData", "date": "20240102 09:59:00 US/Eastern", "open": 184.4, "high": 184.6, "low": 184.3, "close": 184.5, "volume": 800.0, "average": 184.45, "barCount": 8}],
+   ["historicalDataEnd", {"id": "h"}, "20240102 09:58:00 US/Eastern", "20240102 10:00:00 US/Eastern"]
+  ]},
+  {"read": [
+   ["historicalDataUpdate", {"id": "h"}, {"@": "BarData", "date": "20240102 10:00:00 US/Eastern", "open": 184.5, "high": 184.8, "low": 184.5, "close": 184.8, "volume": 100.0, "average": 184.7, "barCount": 1}]
+  ]},
+  {"show": "h", "as": "h_after"}
+ ]
+}

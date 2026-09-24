@@ -1,0 +1,81 @@
+{
+ "scenario": "session_keyed_question_overlap",
+ "delta": [
+  "X13"
+ ],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_open_orders", "args": {}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_open_orders", "args": {}},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "r1": [
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9100, "action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "lmt_price": 400.0, "tif": "GTC", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Submitted"}}
+    ]
+   },
+   "state": {
+    "trades": [
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9100, "action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "lmt_price": 400.0, "tif": "GTC", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Submitted"}}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "r2": [
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9100, "action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "lmt_price": 400.0, "tif": "GTC", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Submitted"}}
+    ]
+   },
+   "state": {
+    "trades": [
+     {"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9100, "action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "lmt_price": 400.0, "tif": "GTC", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Submitted"}}
+    ]
+   }
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "2": {
+    "log": [
+     {"send": "req_open_orders", "args": {}}
+    ],
+    "state": {}
+   },
+   "3": {
+    "log": [
+     {"emit": "update_event", "on": "IB", "args": []}
+    ],
+    "results": {"r2": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9100, "action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "lmt_price": 400.0, "tif": "GTC", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Submitted"}}]},
+    "state": {"trades": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9100, "action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "lmt_price": 400.0, "tif": "GTC", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Submitted"}}]}
+   },
+   "4": {
+    "log": [
+     {"emit": "open_order_event", "on": "IB", "args": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9100, "action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "lmt_price": 400.0, "tif": "GTC", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Submitted"}}]},
+     {"emit": "update_event", "on": "IB", "args": []}
+    ],
+    "state": {"trades": [{"@": "Trade", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 272093, "symbol": "MSFT", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "order": {"@": "Order", "perm_id": 9100, "action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "lmt_price": 400.0, "tif": "GTC", "account": "DU1"}, "order_status": {"@": "OrderStatus", "status": "Submitted"}}]}
+   }
+  },
+  "pending": [
+   "r1"
+  ]
+ }
+}

@@ -1,0 +1,71 @@
+{
+ "scenario": "values_equality",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "trade_same_order": true
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "trade_equal_order": false
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "pnl_equal": true
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "pnl_nan": false
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "pnl_single_equal": true
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "pnl_single_differs": false
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "commission_equal": true
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "commission_differs": false
+   },
+   "state": {}
+  }
+ ],
+ "pending": []
+}

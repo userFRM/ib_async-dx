@@ -1,0 +1,14 @@
+{
+ "about": "1102 re-requests the account summary from errorEvent's first handler, before the program's; after errorEvent.clear() it re-requests nothing (ib.py:280, 414-418)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"handler": "h", "on": "errorEvent"},
+  {"read": [
+   {"cb": "error", "args": [-1, 1102, "Connectivity between IB and Trader Workstation has been restored - data maintained.", ""], "origin": "Session"}
+  ]},
+  {"clear": "errorEvent"},
+  {"read": [
+   {"cb": "error", "args": [-1, 1102, "Connectivity between IB and Trader Workstation has been restored - data maintained.", ""], "origin": "Session"}
+  ]}
+ ]
+}

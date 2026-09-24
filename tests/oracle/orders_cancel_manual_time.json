@@ -1,0 +1,22 @@
+{
+ "about": "A cancel that states a manual time: the cancel goes, the engine's notice that the time could not takes the warning path, then Cancelled (design 3.4a; ib.py:816-855; wrapper.py:1630-1639)",
+ "delta": ["§3.4a manual cancel time"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 180.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o"}], "as": "t"},
+  {"read": [
+   ["orderStatus", {"id": "t"}, "Submitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0]
+  ]},
+  {"call": "cancelOrder", "args": [{"ref": "o"}, "20240102 15:00:05"], "as": "c"},
+  {"delta": "§3.4a manual cancel time", "read": [
+   {"cb": "error", "args": [{"id": "t"}, 321, "a withdrawal states a time, and this protocol carries no field for it: the cancel names five and none of them is that one, so the order is withdrawn without it. State it where the order was placed to have it recorded. (stated: 20240102 15:00:05)", ""], "origin": {"Order": {"id": {"id": "t"}, "op": "Cancel"}}}
+  ]},
+  {"read": [
+   ["orderStatus", {"id": "t"}, "Cancelled", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0]
+  ]}
+ ]
+}

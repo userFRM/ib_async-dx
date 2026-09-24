@@ -1,0 +1,12 @@
+{
+ "about": "A market rule the session has not seen: the engine's error on errorEvent under -1, and None at the method's 1 s deadline (X5; ib.py:2313-2323)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"call": "reqMarketRuleAsync", "args": [99], "as": "m"},
+  {"read": [
+   {"cb": "error", "args": [-1, 322, "market rule 99 has not been seen on this session. Rules arrive with the details of a contract that uses them, so ask for such a contract first", ""], "origin": {"Question": {"q": {"MarketRule": 99}, "ends": true}}}
+  ]},
+  {"advance": 0.5},
+  {"advance": 0.5}
+ ]
+}

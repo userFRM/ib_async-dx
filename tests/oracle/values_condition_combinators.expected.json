@@ -1,0 +1,39 @@
+{
+ "scenario": "values_condition_combinators",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "price_or": {"@": "PriceCondition", "conjunction": "o", "is_more": false, "price": 190.0, "con_id": 265598, "exch": "SMART"}
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "time_and": {"@": "TimeCondition", "time": "20240102 16:00:00 US/Eastern"}
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "volume_or": {"@": "VolumeCondition", "conjunction": "o", "volume": 100000, "con_id": 265598, "exch": "SMART"}
+   },
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "same_condition": true
+   },
+   "state": {}
+  }
+ ],
+ "pending": []
+}

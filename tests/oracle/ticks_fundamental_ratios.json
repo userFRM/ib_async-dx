@@ -1,0 +1,14 @@
+{
+ "about": "Tick 47: each value an int, a float or text as Python reads it, -99999.99 as NaN; a malformed one leaves the ticker as it was (wrapper.py:1208-1221, 1249-1252)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqMktData", "args": [{"ref": "aapl"}, "258"], "as": "t"},
+  {"read": [
+   ["tickString", {"id": "t"}, 47, "TTMNPMGN=24.5;NLOW=-99999.99;CURRENCY=USD;QTOTD2EQ=3;AFEEPSNTM=1e3;;"]
+  ]},
+  {"read": [
+   ["tickString", {"id": "t"}, 47, "TTMNPMGN=25.0;BROKEN"]
+  ]}
+ ]
+}

@@ -1,0 +1,36 @@
+{
+ "scenario": "requests_user_info",
+ "delta": [
+  "req_user_info"
+ ],
+ "steps": [
+  {
+   "log": [
+    {"send": "req_user_info", "args": {"req_id": 1}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "u": "WB-123"
+   },
+   "state": {}
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "1": {
+    "log": [
+     {"emit": "update_event", "on": "IB", "args": []}
+    ],
+    "results": {"u": []},
+    "state": {}
+   }
+  },
+  "pending": []
+ }
+}

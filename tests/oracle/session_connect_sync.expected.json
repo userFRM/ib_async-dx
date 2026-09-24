@@ -1,0 +1,68 @@
+{
+ "scenario": "session_connect_sync",
+ "delta": [],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "api_start", "on": "Client", "args": []},
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"send": "req_positions", "args": {}},
+    {"send": "req_open_orders", "args": {}},
+    {"send": "req_completed_orders", "args": {"api_only": false}},
+    {"send": "req_account_updates", "args": {"subscribe": true, "acct_code": "DU1"}},
+    {"send": "req_account_updates_multi", "args": {"req_id": 1, "account": "DU1", "model_code": "", "ledger_and_nlv": false}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "position_event", "on": "IB", "args": [{"@": "Position", "account": "DU1", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "position": 100.0, "avg_cost": 185.0}]},
+    {"emit": "account_value_event", "on": "IB", "args": [{"@": "AccountValue", "account": "DU1", "tag": "NetLiquidation", "value": "100000.00", "currency": "USD", "model_code": ""}]},
+    {"emit": "update_portfolio_event", "on": "IB", "args": [{"@": "PortfolioItem", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "position": 100.0, "market_price": 186.0, "market_value": 18600.0, "average_cost": 185.0, "unrealized_pnl": 100.0, "realized_pnl": 0.0, "account": "DU1"}]},
+    {"emit": "account_value_event", "on": "IB", "args": [{"@": "AccountValue", "account": "DU1", "tag": "NetLiquidation", "value": "100000.00", "currency": "USD", "model_code": ""}]},
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"send": "req_executions", "args": {"req_id": 2, "exec_filter": {"@": "ExecutionFilter"}}}
+   ],
+   "state": {
+    "positions": [
+     {"@": "Position", "account": "DU1", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "position": 100.0, "avg_cost": 185.0}
+    ],
+    "portfolio": [
+     {"@": "PortfolioItem", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "position": 100.0, "market_price": 186.0, "market_value": 18600.0, "average_cost": 185.0, "unrealized_pnl": 100.0, "realized_pnl": 0.0, "account": "DU1"}
+    ],
+    "account_values": [
+     {"@": "AccountValue", "account": "DU1", "tag": "NetLiquidation", "value": "100000.00", "currency": "USD", "model_code": ""}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"emit": "connected_event", "on": "IB", "args": []}
+   ],
+   "results": {
+    "c": {"@": "IB"}
+   },
+   "state": {
+    "positions": [
+     {"@": "Position", "account": "DU1", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "position": 100.0, "avg_cost": 185.0}
+    ],
+    "portfolio": [
+     {"@": "PortfolioItem", "contract": {"@": "Contract", "sec_type": "STK", "con_id": 265598, "symbol": "AAPL", "exchange": "SMART", "primary_exchange": "NASDAQ", "currency": "USD"}, "position": 100.0, "market_price": 186.0, "market_value": 18600.0, "average_cost": 185.0, "unrealized_pnl": 100.0, "realized_pnl": 0.0, "account": "DU1"}
+    ],
+    "account_values": [
+     {"@": "AccountValue", "account": "DU1", "tag": "NetLiquidation", "value": "100000.00", "currency": "USD", "model_code": ""}
+    ]
+   }
+  }
+ ],
+ "pending": []
+}

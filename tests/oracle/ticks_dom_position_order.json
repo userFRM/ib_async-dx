@@ -1,0 +1,19 @@
+{
+ "about": "Depth levels listed in position order, whatever order they arrive in (X20 (2); wrapper.py:1348-1357)",
+ "delta": ["X20 (2)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqMktDepth", "args": [{"ref": "aapl"}], "as": "d"},
+  {"read": [
+   ["updateMktDepthL2", {"id": "d"}, 1, "MM2", 0, 1, 184.99, 200.0, false],
+   ["updateMktDepthL2", {"id": "d"}, 0, "MM1", 0, 1, 185.0, 300.0, false],
+   ["updateMktDepthL2", {"id": "d"}, 2, "MM3", 0, 0, 185.1, 50.0, false],
+   ["updateMktDepthL2", {"id": "d"}, 0, "MM4", 0, 0, 185.05, 100.0, false]
+  ]},
+  {"read": [
+   ["updateMktDepthL2", {"id": "d"}, 1, "MM2", 1, 1, 184.98, 250.0, false],
+   ["updateMktDepthL2", {"id": "d"}, 0, "MM1", 2, 1, 185.0, 0.0, false]
+  ]}
+ ]
+}

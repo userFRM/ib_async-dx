@@ -1,0 +1,9 @@
+{
+ "about": "After a disconnect the client keeps its clientId while the IB reads as not connected (client.py:119-132, 238-243; ib.py:387-411)",
+ "connected": {"client_id": 7, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"call": "disconnect"},
+  {"get": "client.clientId", "as": "client_id"},
+  {"call": "isConnected", "as": "connected"}
+ ]
+}

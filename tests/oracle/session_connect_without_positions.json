@@ -1,0 +1,20 @@
+{
+ "about": "A startup sync whose fetchFields leaves out POSITIONS asks for no positions; ib_async asks regardless (X12; ib.py:2056)",
+ "delta": ["X12"],
+ "steps": [
+  {"call": "connectAsync", "kwargs": {"host": "127.0.0.1", "port": 7497, "clientId": 1, "fetchFields": {"@": "StartupFetch", "value": 62}}, "as": "c"},
+  {"logon": {"next_id": 1, "accounts": ["DU1"]}},
+  {"read": [
+   ["openOrderEnd"],
+   ["completedOrdersEnd"],
+   ["accountDownloadEnd", "DU1"],
+   ["accountUpdateMultiEnd", {"id": "c"}]
+  ]},
+  {"read": [
+   ["positionEnd"]
+  ]},
+  {"read": [
+   ["execDetailsEnd", {"id": "c", "n": 1}]
+  ]}
+ ]
+}

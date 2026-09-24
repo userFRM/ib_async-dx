@@ -1,0 +1,21 @@
+{
+ "about": "A handler's disconnect() inside a read: its callback and emission run to their end, the read's later callbacks are dropped, and updateEvent still fires (design 4.2; client.py:123, 243, 365-367, 415-416; X20 (6))",
+ "delta": ["X20 (6)"],
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o1": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 185.0, "tif": "DAY"},
+   "o2": {"@": "Order", "action": "SELL", "totalQuantity": 100.0, "orderType": "LMT", "lmtPrice": 190.0, "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o1"}], "as": "t1"},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o2"}], "as": "t2"},
+  {"handler": "closes", "on": "orderStatusEvent", "do": [{"call": "disconnect"}]},
+  {"read": [
+   ["orderStatus", {"id": "t1"}, "Submitted", 0.0, 100.0, 0.0, 9001, 0, 0.0, 1, "", 0.0],
+   ["orderStatus", {"id": "t2"}, "Submitted", 0.0, 100.0, 0.0, 9002, 0, 0.0, 1, "", 0.0]
+  ]},
+  {"show": "t1", "as": "t1_after"},
+  {"show": "t2", "as": "t2_after"}
+ ]
+}

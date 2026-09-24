@@ -1,0 +1,20 @@
+{
+ "about": "Tick-by-tick records of each kind on one ticker, each one tick_event; a tick that appends nothing fires none (wrapper.py:1111-1195; spec 5.3)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {"aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}}},
+  {"call": "reqTickByTickData", "args": [{"ref": "aapl"}, "AllLast"], "as": "a"},
+  {"call": "reqTickByTickData", "args": [{"ref": "aapl"}, "BidAsk"], "as": "b"},
+  {"call": "reqTickByTickData", "args": [{"ref": "aapl"}, "MidPoint"], "as": "m"},
+  {"read": [
+   ["tickByTickAllLast", {"id": "a"}, 1, 1704207601, 185.02, 50.0, {"@": "TickAttribLast", "pastLimit": false, "unreported": false}, "NASDAQ", ""],
+   ["tickByTickBidAsk", {"id": "b"}, 1704207601, 185.0, 185.05, 300.0, 200.0, {"@": "TickAttribBidAsk", "bidPastLow": false, "askPastHigh": false}],
+   ["tickByTickMidPoint", {"id": "m"}, 1704207601, 185.025],
+   ["tickString", {"id": "a"}, 84, "Q"]
+  ]},
+  {"read": [
+   ["tickByTickAllLast", {"id": "a"}, 1, 1704207602, -1.0, 0.0, {"@": "TickAttribLast", "pastLimit": false, "unreported": true}, "", ""],
+   ["tickByTickBidAsk", {"id": "b"}, 1704207602, 0.0, 185.06, 0.0, 100.0, {"@": "TickAttribBidAsk", "bidPastLow": false, "askPastHigh": false}]
+  ]}
+ ]
+}

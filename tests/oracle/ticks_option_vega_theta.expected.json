@@ -1,0 +1,51 @@
+{
+ "scenario": "ticks_option_vega_theta",
+ "delta": [
+  "X20 (1)"
+ ],
+ "steps": [
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [
+    {"send": "req_mkt_data", "args": {"req_id": 1, "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}, "generic_tick_list": "", "snapshot": false, "regulatory_snapshot": false, "mkt_data_options": []}}
+   ],
+   "results": {
+    "t": {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}}
+   },
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}}
+    ]
+   }
+  },
+  {
+   "log": [
+    {"emit": "update_event", "on": "IB", "args": []},
+    {"emit": "update_event", "on": "Ticker", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.26, "delta": 0.54, "opt_price": 3.1, "pv_dividend": 0.1, "gamma": 0.02, "vega": 0.18, "theta": -0.05, "und_price": 185.0}, "model_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.25, "delta": 0.55, "opt_price": 3.2, "und_price": 185.0}}]},
+    {"emit": "pending_tickers_event", "on": "IB", "args": [[{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.26, "delta": 0.54, "opt_price": 3.1, "pv_dividend": 0.1, "gamma": 0.02, "vega": 0.18, "theta": -0.05, "und_price": 185.0}, "model_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.25, "delta": 0.55, "opt_price": 3.2, "und_price": 185.0}}]]}
+   ],
+   "state": {
+    "tickers": [
+     {"@": "Ticker", "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.26, "delta": 0.54, "opt_price": 3.1, "pv_dividend": 0.1, "gamma": 0.02, "vega": 0.18, "theta": -0.05, "und_price": 185.0}, "model_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.25, "delta": 0.55, "opt_price": 3.2, "und_price": 185.0}}
+    ]
+   }
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "2": {
+    "log": [
+     {"emit": "update_event", "on": "IB", "args": []},
+     {"emit": "update_event", "on": "Ticker", "args": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.26, "delta": 0.54, "opt_price": 3.1, "pv_dividend": 0.1, "gamma": 0.02, "vega": 0.18, "theta": -0.05, "und_price": 185.0}, "model_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.25, "delta": 0.55, "opt_price": 3.2, "vega": -2.0, "theta": -2.0, "und_price": 185.0}}]},
+     {"emit": "pending_tickers_event", "on": "IB", "args": [[{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.26, "delta": 0.54, "opt_price": 3.1, "pv_dividend": 0.1, "gamma": 0.02, "vega": 0.18, "theta": -0.05, "und_price": 185.0}, "model_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.25, "delta": 0.55, "opt_price": 3.2, "vega": -2.0, "theta": -2.0, "und_price": 185.0}}]]}
+    ],
+    "state": {"tickers": [{"@": "Ticker", "contract": {"@": "Contract", "sec_type": "OPT", "con_id": 600000001, "symbol": "AAPL", "last_trade_date_or_contract_month": "20240119", "strike": 190.0, "right": "C", "multiplier": "100", "exchange": "SMART", "currency": "USD"}, "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "timestamp": 1704207600.0, "bid_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.26, "delta": 0.54, "opt_price": 3.1, "pv_dividend": 0.1, "gamma": 0.02, "vega": 0.18, "theta": -0.05, "und_price": 185.0}, "model_greeks": {"@": "OptionComputation", "tick_attrib": 0, "implied_vol": 0.25, "delta": 0.55, "opt_price": 3.2, "vega": -2.0, "theta": -2.0, "und_price": 185.0}}]}
+   }
+  },
+  "pending": []
+ }
+}

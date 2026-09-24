@@ -1,0 +1,21 @@
+{
+ "about": "A position written after a fill follows that fill's events, and a position the venue stated before a fill comes ahead of it (design 4.4; EC2; wrapper.py:597-617, 800-842)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"},
+   "o1": {"@": "Order", "action": "BUY", "totalQuantity": 100.0, "orderType": "MKT", "tif": "DAY"},
+   "o2": {"@": "Order", "action": "BUY", "totalQuantity": 50.0, "orderType": "MKT", "tif": "DAY"}
+  }},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o1"}], "as": "t1"},
+  {"call": "placeOrder", "args": [{"ref": "aapl"}, {"ref": "o2"}], "as": "t2"},
+  {"read": [
+   ["execDetails", -1, {"ref": "aapl"}, {"@": "Execution", "execId": "0000e0d5.65940004.01.01", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "acctNumber": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 100.0, "price": 185.0, "permId": 9001, "clientId": 1, "orderId": {"id": "t1"}, "cumQty": 100.0, "avgPrice": 185.0}],
+   ["position", "DU1", {"ref": "aapl"}, 100.0, 185.0]
+  ]},
+  {"read": [
+   ["position", "DU1", {"ref": "aapl"}, 150.0, 185.1],
+   ["execDetails", -1, {"ref": "aapl"}, {"@": "Execution", "execId": "0000e0d5.65940005.01.01", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "acctNumber": "DU1", "exchange": "ISLAND", "side": "BOT", "shares": 50.0, "price": 185.3, "permId": 9002, "clientId": 1, "orderId": {"id": "t2"}, "cumQty": 50.0, "avgPrice": 185.3}]
+  ]}
+ ]
+}

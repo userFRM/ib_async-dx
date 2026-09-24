@@ -1,0 +1,52 @@
+{
+ "scenario": "session_ib_dropped",
+ "delta": [
+  "X20 (12)"
+ ],
+ "steps": [
+  {
+   "log": [
+    {"emit": "disconnected_event", "on": "IB", "args": []},
+    {"done": "connected_event", "on": "IB"},
+    {"done": "disconnected_event", "on": "IB"},
+    {"done": "update_event", "on": "IB"},
+    {"done": "pending_tickers_event", "on": "IB"},
+    {"done": "bar_update_event", "on": "IB"},
+    {"done": "new_order_event", "on": "IB"},
+    {"done": "order_modify_event", "on": "IB"},
+    {"done": "cancel_order_event", "on": "IB"},
+    {"done": "open_order_event", "on": "IB"},
+    {"done": "order_status_event", "on": "IB"},
+    {"done": "exec_details_event", "on": "IB"},
+    {"done": "commission_report_event", "on": "IB"},
+    {"done": "update_portfolio_event", "on": "IB"},
+    {"done": "position_event", "on": "IB"},
+    {"done": "account_value_event", "on": "IB"},
+    {"done": "account_summary_event", "on": "IB"},
+    {"done": "pnl_event", "on": "IB"},
+    {"done": "pnl_single_event", "on": "IB"},
+    {"done": "scanner_data_event", "on": "IB"},
+    {"done": "tick_news_event", "on": "IB"},
+    {"done": "news_bulletin_event", "on": "IB"},
+    {"done": "wsh_meta_event", "on": "IB"},
+    {"done": "wsh_event", "on": "IB"},
+    {"done": "error_event", "on": "IB"},
+    {"done": "timeout_event", "on": "IB"},
+    {"done": "tick_event", "on": "IB"}
+   ],
+   "state": {}
+  }
+ ],
+ "pending": [],
+ "ib_async": {
+  "steps": {
+   "0": {
+    "log": [
+     {"emit": "disconnected_event", "on": "IB", "args": []}
+    ],
+    "state": {}
+   }
+  },
+  "pending": []
+ }
+}

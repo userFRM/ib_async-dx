@@ -1,0 +1,31 @@
+{
+ "scenario": "session_market_rule_unknown",
+ "delta": [],
+ "steps": [
+  {
+   "log": [
+    {"send": "req_market_rule", "args": {"market_rule_id": 99}}
+   ],
+   "state": {}
+  },
+  {
+   "log": [
+    {"emit": "error_event", "on": "IB", "args": [-1, 322, "market rule 99 has not been seen on this session. Rules arrive with the details of a contract that uses them, so ask for such a contract first", null]},
+    {"emit": "update_event", "on": "IB", "args": []}
+   ],
+   "state": {}
+  },
+  {
+   "log": [],
+   "state": {}
+  },
+  {
+   "log": [],
+   "results": {
+    "m": null
+   },
+   "state": {}
+  }
+ ],
+ "pending": []
+}
