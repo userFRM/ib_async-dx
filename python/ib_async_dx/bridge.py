@@ -48,49 +48,6 @@ from . import _messages
 _logger = logging.getLogger(__name__)
 
 
-#: The requests a gateway reads a free-form option list on: the argument
-#: their client carries it in, the gateway's name for the message, and the
-#: keys it takes there. An order carries its own, `orderMiscOptions`. The two
-#: option computations take no key at all.
-MISC_OPTIONS = {
-    "reqMktData": ("mktDataOptions", "ReqMktData(1)", ("manual",)),
-    "placeOrder": ("orderMiscOptions", "PlaceOrder(3)", ("manual",)),
-    "reqMktDepth": ("mktDepthOptions", "ReqMktDepth(10)", ("manual",)),
-    "reqHistoricalData": ("chartOptions", "ReqHistoricalData(20)", ("manual",)),
-    "reqScannerSubscription": (
-        "scannerSubscriptionOptions", "ReqScannerSubscription(22)", ("manual",)
-    ),
-    "reqRealTimeBars": ("realTimeBarsOptions", "ReqRealTimeBars(50)", ("manual",)),
-    "calculateImpliedVolatility": ("implVolOptions", "ReqCalcImpliedVolatility(54)", ()),
-    "calculateOptionPrice": ("optPrcOptions", "ReqCalcOptionPrice(55)", ()),
-    "reqNewsArticle": ("newsArticleOptions", "ReqNewsArticle(84)", ("manual",)),
-    "reqHistoricalNews": ("historicalNewsOptions", "ReqHistoricalNews(86)", ("manual",)),
-    "reqHistoricalTicks": ("miscOptions", "ReqHistoricalTicks(96)", ("manual",)),
-}
-
-
-def _misc_options_refusal(request, options):
-    """How a gateway refuses an option list on ``request``, or None.
-
-    A gateway refuses a key the request does not take with 10337, and a value
-    of ``manual`` other than 0 or 1 with 10338.
-    """
-    _, named, keys = MISC_OPTIONS[request]
-    for option in options or []:
-        key, value = str(option.tag), str(option.value)
-        if key not in keys:
-            return 10337, (
-                f"Misc options key={key} is invalid in {named} request. "
-                f"Valid keys are: {', '.join(keys)}"
-            )
-        if value not in ("0", "1"):
-            return 10338, (
-                f"Misc options value={value} is invalid for key={key} in {named} "
-                "request. Valid values are: 0, 1"
-            )
-    return None
-
-
 @dataclasses.dataclass
 class IbcLogin:
     """The login an ``IBC`` was started with, as a gateway it launched would
@@ -181,6 +138,9 @@ class IbkrDxClient:
         #: When the session started, and the requests sent on it.
         self._since = time.time()
         self._sent = 0
+        #: The market data type the session's subscriptions ask for, as the
+        #: engine holds it: live until the program names another.
+        self._marketDataType = 1
 
         # The engine, with ib_async's own wrapper as the callback target: this
         # client already resolves a callback under the reference client's
@@ -240,6 +200,7 @@ class IbkrDxClient:
         self.host, self.port, self.clientId = host, int(port), int(clientId)
         self.connState = IbkrDxClient.CONNECTING
         self._since, self._sent = time.time(), 0
+        self._marketDataType = 1
         self._callbacks.reset()
         self._loop = asyncio.get_running_loop()
         self._callbacks.thread = threading.get_ident()
@@ -684,8 +645,6 @@ class IbkrDxClient:
         venue has retired them for the account, and otherwise says so and
         places the order without it.
         """
-        if self._refused_options("placeOrder", orderId, order.orderMiscOptions):
-            return
         for name, spelled, refusal, warning in _RETIRED:
             unset = getattr(_TheirOrder, name)
             if getattr(order, name) == unset:
@@ -699,33 +658,11 @@ class IbkrDxClient:
             setattr(order, name, unset)
         self._send_theirs("place_order", orderId, contract, order)
 
-    def _refused_options(self, request, reqId, options):
-        """Whether a gateway refuses ``request`` for its option list; if it
-        does, refused as a gateway refuses it, once the call has returned.
-
-        A gateway checks the list unless the venue exempts the account
-        (``NOAPIMISCVLD`` among its granted features). The one key it takes,
-        ``manual``, is not carried by the engine.
-        """
-        if not options:
-            return False
-        engine = self._connected()
-        if "NOAPIMISCVLD" in engine.enabled_features():
-            return False
-        refusal = _misc_options_refusal(request, options)
-        if refusal is None:
-            return False
-        self._sent += 1
-        self._callbacks.refused.append((reqId, *refusal, ""))
-        return True
-
     def reqMktData(self, reqId, contract, genericTickList, snapshot,
                    regulatorySnapshot, mktDataOptions):
-        if self._refused_options("reqMktData", reqId, mktDataOptions):
-            return
         self._send_theirs(
             "req_mkt_data", reqId, contract, genericTickList, snapshot,
-            regulatorySnapshot,
+            regulatorySnapshot, mktDataOptions,
         )
 
     def cancelMktData(self, reqId):
@@ -736,13 +673,19 @@ class IbkrDxClient:
     def reqHistoricalData(self, reqId, contract, endDateTime, durationStr,
                           barSizeSetting, whatToShow, useRTH, formatDate,
                           keepUpToDate, chartOptions):
-        if self._refused_options("reqHistoricalData", reqId, chartOptions):
-            return
         self._send_theirs(
             "req_historical_data", reqId, contract, endDateTime, durationStr,
             barSizeSetting, whatToShow, 1 if useRTH else 0, formatDate,
-            keepUpToDate, [],
+            keepUpToDate, chartOptions,
         )
+
+    def reqMarketDataType(self, marketDataType):
+        """The type the subscriptions after this one ask for. Held as the
+        engine holds it, which keeps the type it had for a number naming
+        none, so `IB.reqMktDataEx` can put it back."""
+        self._send_theirs("req_market_data_type", marketDataType)
+        if marketDataType in (1, 2, 3, 4):
+            self._marketDataType = marketDataType
 
     # These two stay written out. `__getattr__` forwards every argument
     # through `_as_ours`, which turns None into an empty list — right for an
@@ -766,14 +709,17 @@ class IbkrDxClient:
 
         theirs = getattr(_TheirClient, name, None)
         request = _our_name_for(name, self._client)
-        if hasattr(self._client, request):
+        if name not in _HANDSHAKE and hasattr(self._client, request):
             def forward(*args):
                 return self._send_theirs(request, *args)
         elif callable(theirs):
             def forward(*args):
-                # A request their client makes and the engine does not carry:
-                # the handshake a program makes with the gateway it connects
-                # to. A gateway never answers it, and nothing answers it here.
+                # A request their client makes that no gateway answers: the
+                # handshake a program makes with the gateway it connects to.
+                # Their client sends it and hears nothing, so it is counted
+                # as sent and nothing answers it here. The engine's own
+                # verify calls answer as ibapi's client does, which refuses
+                # them locally; ib_async's does not, so they are not called.
                 self._connected()
                 self._sent += 1
         else:
@@ -786,15 +732,10 @@ class IbkrDxClient:
             return forward
 
         signature = inspect.signature(theirs)
-        options = MISC_OPTIONS.get(name, (None,))[0]
 
         def carried(*args, **kwargs):
             call = signature.bind(self, *args, **kwargs)
             call.apply_defaults()
-            if options and self._refused_options(
-                name, call.arguments["reqId"], call.arguments[options]
-            ):
-                return None
             return forward(*call.args[1:])
 
         return carried
@@ -810,6 +751,13 @@ _OUR_NAME = {
     "maxCommission": "maxCommissionAndFees",
     "commissionCurrency": "commissionAndFeesCurrency",
 }
+
+
+# The handshake requests their client can send a gateway, which never answers
+# them (verifyRequest and the three after it).
+_HANDSHAKE = frozenset({
+    "verifyRequest", "verifyMessage", "verifyAndAuthRequest", "verifyAndAuthMessage",
+})
 
 
 def _our_name_for(their_name, carrier):

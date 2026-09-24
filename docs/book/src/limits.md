@@ -42,21 +42,21 @@ so.
   does: a request is one sent, and what reaches ib_async's wrapper one
   received. Its byte counts are zero: the engine does not count the bytes of
   its connections.
-* **An option list is checked as a gateway checks one, and `manual` is not
-  carried.** On nine of the eleven requests a gateway reads a list on —
-  `reqMktData`, `placeOrder` (the order's `orderMiscOptions`), `reqMktDepth`,
-  `reqHistoricalData`, `reqScannerSubscription`, `reqRealTimeBars`,
-  `reqNewsArticle`, `reqHistoricalNews` and `reqHistoricalTicks` — the one key
-  taken is `manual`, valued 0 or 1. The other two,
-  `calculateImpliedVolatility` and `calculateOptionPrice`, take no key at
-  all. Another key is refused with 10337 and another value with 10338, on
-  `errorEvent` under the request's number, and the request is not sent. Where
-  the venue exempts the account from the check (`NOAPIMISCVLD` among its
-  `enabledFeatures()`), nothing is refused. `manual` itself is taken and not
-  applied: the engine has no field for it.
-* **Some options are taken and not applied**: `fundamentalDataOptions`, and
-  `ignoreSize` on `reqHistoricalTicks`. The request has nowhere to put them,
-  and goes out without them.
+* **The engine checks each option list as a gateway checks it.** On nine of
+  the eleven requests a gateway reads a list on — `reqMktData`, `placeOrder`
+  (the order's `orderMiscOptions`), `reqMktDepth`, `reqHistoricalData`,
+  `reqScannerSubscription`, `reqRealTimeBars`, `reqNewsArticle`,
+  `reqHistoricalNews` and `reqHistoricalTicks` — the one key taken is
+  `manual`, valued 0 or 1, and it changes nothing a gateway sends. The other
+  two, `calculateImpliedVolatility` and `calculateOptionPrice`, take no key at
+  all. An entry with no key or no value is refused with 320, a key the request
+  does not take with 10337 and another value with 10338, on `errorEvent` under
+  the request's number, and the request is not sent. Where the venue lifts the
+  checks for the account (`NOAPIMISCVLD` among its `enabledFeatures()`), no
+  key or value is refused on those grounds, and a `manual` that does not read
+  as the number 0 or 1 is still refused, with 321. `reqFundamentalData` reads
+  no list, as a gateway reads none: `fundamentalDataOptions` is taken, and
+  nothing in it is checked or applied.
 * **An account named on an account request is checked as a gateway checks
   it.** `groupName` on `reqAccountSummary`, the account on `reqAccountUpdates`,
   and the account on `reqPnL` and `reqPnLSingle` are refused where a gateway

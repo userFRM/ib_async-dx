@@ -562,61 +562,77 @@ def test_a_subscription_over_leaves_no_size_behind(connect):
     assert not kept(reqIds[1]), "a snapshot answered"
 
 
-class Exempt(Placing):
-    features = ["NOAPIMISCVLD"]
-
-
-def test_an_option_list_is_checked_as_a_gateway_checks_one(connect, monkeypatch):
-    """A gateway takes one key in a request's option list, `manual`, valued 0
-    or 1, and refuses a request stating another with 10337, or another value
-    with 10338, on errorEvent, once the call has returned. A non-empty list
-    raised NotImplementedError here on two requests, and went out dropped on
-    the other seven. The two option computations take no key at all, and
-    went out with theirs dropped."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Placing)
+def test_an_option_list_is_checked_as_a_gateway_checks_one(connect):
+    """The engine checks a request's option list as a gateway checks it: one
+    key, `manual`, valued 0 or 1, and none at all on the two option
+    computations. A request stating another key is refused with 10337, and
+    another value with 10338, in the gateway's words, on errorEvent under the
+    request's number once the call has returned, and nothing goes out."""
     ib = connect()
     heard = []
-    ib.errorEvent += lambda reqId, code, text, contract: heard.append((code, text))
+    ib.errorEvent += lambda reqId, code, text, contract: heard.append((reqId, code, text))
     engine = ib.client._client
+    engine._test_take_commands()
     TagValue = ib_async.TagValue
-    ib.reqMktData(SPY, mktDataOptions=[TagValue("snapshotMode", "1")])
-    ib.reqRealTimeBars(SPY, 5, "TRADES", False, [TagValue("manual", "2")])
+    bars = ib.reqRealTimeBars(SPY, 5, "TRADES", False, [TagValue("manual", "2")])
     order = ib_async.LimitOrder("BUY", 1, 1.0)
     order.orderMiscOptions = [TagValue("rth", "1")]
     trade = ib.placeOrder(SPY, order)
-    ib.client._pass_once()
-    assert [code for code, _ in heard] == [10337, 10338, 10337]
-    assert heard[0][1] == (
-        "Misc options key=snapshotMode is invalid in ReqMktData(1) request. "
-        "Valid keys are: manual"
-    )
-    assert heard[1][1] == (
-        "Misc options value=2 is invalid for key=manual in ReqRealTimeBars(50) request. "
-        "Valid values are: 0, 1"
-    )
-    assert engine.asked == [], "nothing went out"
-    assert trade.orderStatus.status == "Cancelled"
-
-    heard.clear()
-    engine._test_take_commands()
-    ib.client.calculateImpliedVolatility(90, SPY, 1.5, 100.0, [TagValue("manual", "1")])
     ib.client.calculateOptionPrice(91, SPY, 0.2, 100.0, [TagValue("manual", "0")])
     ib.client._pass_once()
     assert heard == [
-        (10337, "Misc options key=manual is invalid in ReqCalcImpliedVolatility(54) request. "
-                "Valid keys are: "),
-        (10337, "Misc options key=manual is invalid in ReqCalcOptionPrice(55) request. "
-                "Valid keys are: "),
+        (bars.reqId, 10338, "Misc options value=2 is invalid for key=manual in "
+                            "ReqRealTimeBars(50) request. Valid values are: 0, 1"),
+        (order.orderId, 10337, "Misc options key=rth is invalid in PlaceOrder(3) "
+                               "request. Valid keys are: manual"),
+        (91, 10337, "Misc options key=manual is invalid in ReqCalcOptionPrice(55) "
+                    "request. Valid keys are: "),
     ]
     assert engine._test_take_commands() == [], "nothing went out"
+    assert trade.orderStatus.status == "Cancelled"
 
+    # Handed to the engine as its own, which takes `manual`.
     ib.reqMktData(SPY, mktDataOptions=[TagValue("manual", "1")])
-    assert engine.asked[-1][0] == "req_mkt_data", "manual is taken"
+    name, args = engine.asked[-1]
+    assert name == "req_mkt_data"
+    assert [(o.tag, o.value) for o in args[-1]] == [("manual", "1")]
 
-    monkeypatch.setattr(ibkr_dx, "EClient", Exempt)
-    exempt = connect()
-    exempt.placeOrder(SPY, order)
-    assert exempt.client._client.asked[-1][0] == "place_order", "unless the venue exempts it"
+
+def test_implVolOptions_takes_no_key(connect):
+    """ib_async's calculateImpliedVolatility, stating a key: the engine
+    refuses it with 10337 under the request's number, as a gateway does, and
+    nothing is computed."""
+    ib = connect()
+    heard = []
+    ib.errorEvent += lambda reqId, code, text, contract: heard.append((reqId, code, text))
+    engine = ib.client._client
+    engine._test_take_commands()
+    ib.RaiseRequestErrors = True
+    with pytest.raises(ib_async.RequestError) as refused:
+        ib.calculateImpliedVolatility(SPY, 1.5, 100.0, [ib_async.TagValue("manual", "1")])
+    text = (
+        "Misc options key=manual is invalid in ReqCalcImpliedVolatility(54) "
+        "request. Valid keys are: "
+    )
+    assert heard == [(refused.value.reqId, 10337, text)]
+    assert refused.value.code == 10337
+    assert engine._test_take_commands() == [], "nothing went out"
+
+
+def test_reqMktDataEx_hands_its_option_list_to_the_engine(connect):
+    """With a market data type named, the list is checked by the engine's
+    reqMktData, asked under that type for this request alone."""
+    ib = connect()
+    engine = ib.client._client
+    TagValue = ib_async.TagValue
+    ib.reqMarketDataType(2)
+    set_to = []
+    engine.req_market_data_type = set_to.append
+    ib.reqMktDataEx(SPY, mktDataOptions=[TagValue("manual", "1")], marketDataType=3)
+    name, args = engine.asked[-1]
+    assert name == "req_mkt_data"
+    assert [(o.tag, o.value) for o in args[-1]] == [("manual", "1")]
+    assert set_to == [3, 2], "this request's type, then the session's again"
 
 
 def test_a_ping_reaches_the_engine(connect):

@@ -52,7 +52,7 @@ def test_an_outage_leaves_the_session_open_and_an_end_closes_it():
         client.reqCurrentTime()
 
 
-def test_a_request_their_client_makes_and_the_engine_does_not_carry_goes_unanswered():
+def test_the_handshake_goes_unanswered_as_over_a_gateway():
     """As over a gateway, which never answers the handshake requests their
     client can send (`verifyRequest` and the three after it): they go out and
     nothing comes back. They raised here. A name their client does not have

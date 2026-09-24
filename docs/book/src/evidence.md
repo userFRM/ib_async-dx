@@ -14,12 +14,12 @@ test, a script, or a recorded server response — not from reading the code.
 
 | Suite | Count | Needs a session |
 | --- | ---: | --- |
-| `tests/python` | 300 | 2 of them. The other 298 run offline |
+| `tests/python` | 302 | 2 of them. The other 300 run offline |
 | `tests/ib_async_upstream` | ib_async's own suite, 3 tests at 2.1.0 (`ab629f34c1`), written to run on the engine; not run against the venue at this revision | Yes |
 | `scripts/` | 3 checks against a paper account; not run against the venue at this revision | Yes |
 
 CI builds the engine from source with its test hooks, at the engine commit this
-package is tested against (`93dd8ceb`), and runs `tests/python` on every push
+package is tested against (`6cfe6f13`), and runs `tests/python` on every push
 to `main` and every pull request, on Python 3.11, 3.13 and free-threaded
 3.14t, against this package installed from the wheel and from the source
 distribution it builds, never from the checkout. It also installs the wheel
@@ -94,7 +94,7 @@ All offline, on the engine's test session, in
 | A refused new order reaches its `Trade`, and one refused with 321 is cancelled | `test_a_refused_new_order_reaches_its_trade` |
 | A what-if refused with 321 ends with the refusal, as `RequestError` where `RaiseRequestErrors` is set | `test_a_what_if_refused_with_321_ends_with_the_refusal` |
 | 321 on an order already working stays a warning, and the order is kept | `test_321_on_an_order_already_working_stays_a_warning` |
-| An option list is checked as a gateway checks one: 10337 for another key, none taken on the two option computations, 10338 for another value, in the gateway's words, nothing sent, and no check where the venue exempts the account | `test_an_option_list_is_checked_as_a_gateway_checks_one` |
+| The engine checks an option list as a gateway checks one: 10337 for another key, none taken on the two option computations, 10338 for another value, in the gateway's words, under the request's number, nothing sent | `test_an_option_list_is_checked_as_a_gateway_checks_one`, `test_implVolOptions_takes_no_key` |
 | An order stating an attribute the venue no longer takes goes out without it, with the notice a gateway gives, and where the venue has retired them for the account is refused as a gateway refuses it | `test_an_order_stating_a_retired_attribute_goes_out_without_it`, `test_where_the_venue_has_retired_them_the_order_is_refused` |
 | A handler asking again on every refusal is answered a refusal a pass, and does not hold the loop | `test_a_handler_that_asks_again_on_every_refusal_does_not_hold_the_loop` |
 | A wrapper that raises is logged, and the session carries on | `test_a_wrapper_that_raises_is_logged_and_the_session_carries_on` |
@@ -106,6 +106,7 @@ All offline, on the engine's test session, in
 | `fetchFields` without `POSITIONS` asks for no positions at connect; ib_async 2.1 asks anyway | `test_fetchFields_without_positions_asks_for_no_positions` |
 | `reqUserInfo` answers the White Branding ID; ib_async 2.1 answers `[]` | `test_reqUserInfo_answers_the_white_branding_id` |
 | `reqMktDataEx` asks with the market data type named, and `None` keeps the session's | `test_reqMktDataEx_asks_with_the_market_data_type_named` |
+| `reqMktDataEx` hands its option list to the engine, asked under the type named for that request alone | `test_reqMktDataEx_hands_its_option_list_to_the_engine` |
 | `reqCurrentTimeInMillis` answers an int of milliseconds, within 2 s of the local clock on a session with no venue | `test_reqCurrentTimeInMillis_is_the_venues_clock` |
 | The option model is read by the ticker's request, and an unstated figure is `None` | `test_the_option_model_is_read_by_the_tickers_request` |
 | What the engine states arrives in `TickerExtras`, `OrderPreset` and `CompetingSession` | `test_what_the_engine_states_is_carried_in_this_packages_types` |
@@ -188,7 +189,7 @@ All offline, in `tests/python`.
 | `readonly` reaches the session | `test_ib_async_transport.py::test_readonly_reaches_the_session_through_the_adapter` |
 | An outage leaves the session connected; a session the engine ends fires `disconnectedEvent` once, stops delivery and refuses requests | `test_ib_async_transport.py::test_an_outage_leaves_the_session_open_and_an_end_closes_it` |
 | Ending a session is not reported as a session that went away | `test_ib_async_transport.py::test_ending_a_session_is_not_a_session_that_went_away` |
-| A request their client makes and the engine does not carry is taken and answered by nothing, as over a gateway | `test_ib_async_transport.py::test_a_request_their_client_makes_and_the_engine_does_not_carry_goes_unanswered` |
+| The handshake their client can send, `verifyRequest` and the three after it, is taken and answered by nothing, as over a gateway | `test_ib_async_transport.py::test_the_handshake_goes_unanswered_as_over_a_gateway` |
 | Their suite's own `ib_async.IB()` is this package's in the runner | `test_ib_async_transport.py::test_their_suite_builds_this_packages_IB_where_it_builds_its_own` |
 | Every request their client writes as a message reads back into the message it was, an order field for field, and reaches the engine as the request it names, an order whole whatever parts of the message it writes; an order carries what their client writes and nothing else; a message that does not read is refused with 320, and one naming no request is logged and unanswered; nothing is sent while not connected | `test_a_raw_message_is_the_request_it_names.py` (171) |
 | Each of ib_async's eight notebook subjects has a notebook here, and each is Python that connects through `ib_async_dx` on a paper session | `test_the_notebooks_are_ib_asyncs_subjects.py` (2) |

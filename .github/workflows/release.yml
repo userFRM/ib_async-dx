@@ -17,7 +17,7 @@ permissions:
 
 env:
   # The engine commit the package is tested against, as in tests.yml.
-  ENGINE_REF: 93dd8cebd8025b0f83297fb3165aeecaa5ea981c
+  ENGINE_REF: 6cfe6f134a069228bbd4035b7eae2ac5b31159e9
 
 jobs:
   gate:

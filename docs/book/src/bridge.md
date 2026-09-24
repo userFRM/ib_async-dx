@@ -156,10 +156,11 @@ A few details are worth knowing:
   `placeOrder` handed back, which their wrapper marks as it marks one a gateway
   refused: `Cancelled` for an error, and, on `ib_async_dx.IB`, for 321, which
   ib_async counts as a warning ([why](./beyond.md#ib_asyncs-bugs-fixed)).
-- An option list is checked as a gateway checks one: the one key taken is
-  `manual`, valued 0 or 1, none is taken on the two option computations, and
-  another key or value is refused with 10337 or 10338, under the request's
-  number, with nothing sent. `manual` is not carried: see
+- The engine checks an option list as a gateway checks one: the one key
+  taken is `manual`, valued 0 or 1, none is taken on the two option
+  computations, and an entry with no key or no value, another key or another
+  value is refused with 320, 10337 or 10338, under the request's number, with
+  nothing sent. `reqFundamentalData` reads no list. See
   [Limits](./limits.md).
 - An order's status names the client that placed it, as a gateway's does, so
   their wrapper finds the `Trade` an order another client placed is kept under.
@@ -254,11 +255,10 @@ Each is what ib_async over a gateway does too.
   completed among them. ib_async 2.1's request cannot ask for more.
   `reqCompletedOrders()` asks the venue.
 - `numIds` on `reqIds` changes nothing: ids are handed out one at a time.
-- A request their client makes that the engine does not carry — `verifyRequest`
-  and the three after it, the handshake a program makes with the gateway it
-  connects to — is taken, and nothing answers it, as a gateway answers
-  nothing. A name their client does not have is a missing attribute, as on
-  theirs.
+- The handshake a program makes with the gateway it connects to —
+  `verifyRequest` and the three after it — is taken, and nothing answers it,
+  as a gateway answers nothing. A name their client does not have is a missing
+  attribute, as on theirs.
 - Callbacks that reach nothing in ib_async over a gateway reach nothing here.
   Their wrapper has no handler for `displayGroupList`, `displayGroupUpdated`,
   `rerouteMktDataReq`, `rerouteMktDepthReq` or `replaceFAEnd`, discards

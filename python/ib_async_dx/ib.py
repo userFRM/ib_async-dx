@@ -467,7 +467,20 @@ class IB(ib_async.ib.IB):
             )
         reqId = self.client.getReqId()
         ticker = self.wrapper.startTicker(reqId, contract, "mktData")
-        if self.client._refused_options("reqMktData", reqId, mktDataOptions):
+        if mktDataOptions:
+            # The engine checks an option list on its reqMktData, which asks
+            # with the session's type; its per-request call takes no list. So
+            # a list goes out on reqMktData, with the session's type made this
+            # request's for the call and put back after it.
+            engine = self._eclient
+            engine.req_market_data_type(marketDataType)
+            try:
+                self.client.reqMktData(
+                    reqId, contract, genericTickList, snapshot, regulatorySnapshot,
+                    mktDataOptions,
+                )
+            finally:
+                engine.req_market_data_type(self.client._marketDataType)
             return ticker
         self._send(
             "req_mkt_data_ex", reqId, contract, genericTickList, snapshot,

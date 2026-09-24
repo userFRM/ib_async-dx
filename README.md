@@ -112,7 +112,7 @@ The engine first, then this package:
 ```bash
 # The engine, at the commit this package is tested against. It compiles
 # from source, so it needs the Rust toolchain.
-pip install "git+https://github.com/userFRM/ibkr-dx@93dd8cebd8025b0f83297fb3165aeecaa5ea981c"
+pip install "git+https://github.com/userFRM/ibkr-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
 
 # This package, which brings ib_async 2.1 with it.
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
@@ -221,9 +221,10 @@ parser reads.
 after the call that caused it has returned, so a refused new order is marked on
 its `Trade` as ib_async marks one a gateway refused. An order is carried as
 their client writes it, and one stating an attribute the venue no longer takes
-is answered as a gateway answers it. An option list is checked as a gateway
-checks one: `manual`, valued 0 or 1, is the one key it takes, none on the two
-option computations, and another key or value is refused with 10337 or 10338.
+is answered as a gateway answers it. The engine checks an option list as a
+gateway checks one: `manual`, valued 0 or 1, is the one key it takes, none on
+the two option computations, and another key or value is refused with 10337 or
+10338.
 Orders and requests are numbered from one counter, as their client numbers
 them, starting past every order id the account has used, where a gateway's next
 valid id starts. `readonly=True` makes a read-only session, which refuses
@@ -267,8 +268,6 @@ has each of them.
 
 | | Today |
 | --- | --- |
-| `manual` in an option list | Checked as a gateway checks it, and not carried: the engine has no field for it. Any other key or value is refused as a gateway refuses it. |
-| `fundamentalDataOptions`, and `ignoreSize` on `reqHistoricalTicks` | Taken and not applied: the request has nowhere to put them, and goes out without them. |
 | `bboExchange`, `modelCode`, `groupName`, the account on `reqAccountUpdates`, `ledgerAndNLV` | Taken and not applied: the venue answers these requests the same way whatever they name. [Limits](https://userfrm.github.io/ib_async-dx/limits.html) says why for each. |
 | The byte counts in `connectionStats()` | Zero: the engine does not count the bytes of its connections. The message counts are carried. |
 | `TickerExtras.statedRows`, [beyond ib_async](#beyond-ib_async) | Coming; it needs an addition to the engine first. |
@@ -333,7 +332,7 @@ opens a paper session.
 
 ```bash
 git clone https://github.com/userFRM/ib_async-dx && cd ib_async-dx
-pip install "git+https://github.com/userFRM/ibkr-dx@93dd8cebd8025b0f83297fb3165aeecaa5ea981c"
+pip install "git+https://github.com/userFRM/ibkr-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
 pip install -e . jupyter python-dotenv pandas
 jupyter lab notebooks
 ```
@@ -446,7 +445,7 @@ Claims here rest on tests, and the tests are counted rather than described:
 
 | Suite | Count | Needs a session |
 | --- | ---: | :---: |
-| Python | 298 | No |
+| Python | 300 | No |
 | Python, live | 2 | Yes |
 | ib_async's own suite, at 2.1.0 | 3 | Yes |
 | Paper-account scripts | 3 | Yes |
@@ -462,7 +461,7 @@ Locally:
 
 ```bash
 git clone https://github.com/userFRM/ibkr-dx
-git -C ibkr-dx checkout 93dd8cebd8025b0f83297fb3165aeecaa5ea981c
+git -C ibkr-dx checkout 6cfe6f134a069228bbd4035b7eae2ac5b31159e9
 pip install maturin
 maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
 pip install dist/*.whl
