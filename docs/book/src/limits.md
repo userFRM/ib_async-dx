@@ -57,16 +57,15 @@ so.
 * **Some options are taken and not applied**: `fundamentalDataOptions`, and
   `ignoreSize` on `reqHistoricalTicks`. The request has nowhere to put them,
   and goes out without them.
-* **Some arguments are taken and not applied**, because the venue answers the
-  request the same way whatever they name:
-  * `groupName` on `reqAccountSummary`, the account on `reqAccountUpdates`, and
-    `modelCode` on `reqPnL` and `reqPnLSingle`: a session holds one account,
-    and the venue states its figures without being asked which. Another
-    account named on `reqPnL` or `reqPnLSingle` is refused.
-  * `ledgerAndNLV` on `reqAccountUpdatesMulti`: the venue states the ledger and
-    the net liquidation among the account's figures without being asked.
-  * `bboExchange` on `reqSmartComponents`: the venue states one table of
-    routing components for the session, and the whole table comes back.
+* **An account named on an account request is checked as a gateway checks
+  it.** `groupName` on `reqAccountSummary`, the account on `reqAccountUpdates`,
+  and the account on `reqPnL` and `reqPnLSingle` are refused where a gateway
+  refuses them, in its words. On a login holding one account, the account
+  named on `reqAccountUpdates` is ignored, as a gateway ignores it. On a login
+  holding several, what `reqAccountSummary` and `reqAccountUpdates` name is
+  answered with the figures of the account the session opened under, and
+  `errorEvent` says so under 321; `reqPnL` and `reqPnLSingle` naming another
+  account are refused. `modelCode` on them is taken and not applied.
 * **`IBC` launches nothing, and holds the login it names.** `ib_async_dx.IBC`
   is ib_async's with no gateway to launch: the engine logs in on `connect`,
   and rebuilds a dropped connection on the session it already holds. Starting

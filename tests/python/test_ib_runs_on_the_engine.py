@@ -641,11 +641,16 @@ def test_an_extra_while_not_connected_raises(connect):
 def test_the_routing_components_arrive_as_their_records(connect):
     """A record ib_async makes whole, answered from the engine. Built empty
     and filled a field at a time, it could not be made: the callback raised,
-    and the session closed."""
+    and the session closed.
+
+    Asked by the BBO exchange a quote's tickReqParams names, as a gateway is
+    asked; a name no quote was acknowledged under is refused as a gateway
+    refuses it, and the session stays up."""
     ib = connect()
     ib.RequestTimeout = 2
     ib.client._client._test_note_reference_data(4, "ARCA", "P", "", "", "")
-    assert ib.reqSmartComponents("SMART") == [ib_async.SmartComponent(4, "ARCA", "P")]
+    assert ib.reqSmartComponents("a60001") == [ib_async.SmartComponent(4, "ARCA", "P")]
+    assert ib.reqSmartComponents("SMART") == []
     assert ib.isConnected()
 
 
