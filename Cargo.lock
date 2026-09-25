@@ -387,8 +387,8 @@ dependencies = [
 
 [[package]]
 name = "ibkr-dx"
-version = "0.1.0"
-source = "git+https://github.com/userFRM/ibkr-dx?rev=93dd8cebd8025b0f83297fb3165aeecaa5ea981c#93dd8cebd8025b0f83297fb3165aeecaa5ea981c"
+version = "0.2.0"
+source = "git+https://github.com/userFRM/ibkr-dx?rev=e3f4307ad4d158cabba85dab07c40758c9559724#e3f4307ad4d158cabba85dab07c40758c9559724"
 dependencies = [
  "aes",
  "base64",
@@ -405,6 +405,7 @@ dependencies = [
  "nix",
  "num-bigint",
  "rand",
+ "serde_json",
  "sha1",
  "sha2",
  "tracing-appender",

@@ -66,14 +66,6 @@ fn int(field: &str, v: i64) -> Result<i32, Refusal> {
     i32::try_from(v).map_err(|_| uncarried(&format!("Order.{field}"), v, "past the TWS API's int"))
 }
 
-/// A condition's `int` in the engine's field for it. The engine at this pin
-/// holds `trigger_method` as `u8` and `percent` as `u32`, so a value outside
-/// those is refused rather than changed. Once the engine holds both as the
-/// TWS API's `int`, this cannot fail, and every value is sent as given.
-fn carried<T: TryFrom<i32>>(field: &str, v: i32) -> Result<T, Refusal> {
-    T::try_from(v).map_err(|_| uncarried(field, v, "past what the engine holds"))
-}
-
 /// A callback value that did not convert, naming the field.
 fn bad(field: &str, value: &str, why: impl std::fmt::Display) -> Error {
     Error::Value(format!("{field} {value:?}: {why}"))
@@ -244,18 +236,18 @@ impl From<&e::Contract> for Contract {
     }
 }
 
-impl TryFrom<&OrderCondition> for e::OrderCondition {
-    type Error = Refusal;
-
-    fn try_from(c: &OrderCondition) -> Result<Self, Refusal> {
+/// Every value is sent as given: the engine holds `trigger_method` and
+/// `percent` as the TWS API's `int`.
+impl From<&OrderCondition> for e::OrderCondition {
+    fn from(c: &OrderCondition) -> Self {
         let and = |conjunction: &str| conjunction == "a";
-        Ok(match c {
+        match c {
             OrderCondition::Price(c) => e::OrderCondition::Price {
                 con_id: c.con_id,
                 exchange: c.exch.clone(),
                 price: e::price_from_f64(c.price),
                 is_more: c.is_more,
-                trigger_method: carried("PriceCondition.trigger_method", c.trigger_method)?,
+                trigger_method: c.trigger_method,
                 is_conjunction_connection: and(&c.conjunction),
             },
             OrderCondition::Time(c) => e::OrderCondition::Time {
@@ -264,7 +256,7 @@ impl TryFrom<&OrderCondition> for e::OrderCondition {
                 is_conjunction_connection: and(&c.conjunction),
             },
             OrderCondition::Margin(c) => e::OrderCondition::Margin {
-                percent: carried("MarginCondition.percent", c.percent)?,
+                percent: c.percent,
                 is_more: c.is_more,
                 is_conjunction_connection: and(&c.conjunction),
             },
@@ -288,7 +280,7 @@ impl TryFrom<&OrderCondition> for e::OrderCondition {
                 is_more: c.is_more,
                 is_conjunction_connection: and(&c.conjunction),
             },
-        })
+        }
     }
 }
 
@@ -309,7 +301,7 @@ impl From<&e::OrderCondition> for OrderCondition {
                 price: *price as f64 / e::PRICE_SCALE as f64,
                 con_id: *con_id,
                 exch: exchange.clone(),
-                trigger_method: i32::from(*trigger_method),
+                trigger_method: *trigger_method,
                 ..PriceCondition::default()
             }),
             e::OrderCondition::Time {
@@ -329,10 +321,7 @@ impl From<&e::OrderCondition> for OrderCondition {
             } => OrderCondition::Margin(MarginCondition {
                 conjunction: conjunction(*is_conjunction_connection),
                 is_more: *is_more,
-                // The engine holds a `u32` at this pin, saturated here past
-                // the TWS API's `int`; once it holds the `int`, this is the
-                // value as stated.
-                percent: i32::try_from(*percent).unwrap_or(i32::MAX),
+                percent: *percent,
                 ..MarginCondition::default()
             }),
             e::OrderCondition::Execution {
@@ -391,11 +380,7 @@ impl TryFrom<&Order> for e::Order {
         let delta_neutral_con_id = int("delta_neutral_con_id", o.delta_neutral_con_id)?;
         let reference_contract_id = int("reference_contract_id", o.reference_contract_id)?;
         let ref_futures_con_id = int("ref_futures_con_id", o.ref_futures_con_id)?;
-        let conditions = o
-            .conditions
-            .iter()
-            .map(e::OrderCondition::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
+        let conditions = o.conditions.iter().map(Into::into).collect();
         for (set, code, name) in [
             (o.e_trade_only, 10268, "EtradeOnly"),
             (o.firm_quote_only, 10269, "FirmQuoteOnly"),
@@ -1457,7 +1442,7 @@ mod tests {
                 ..VolumeCondition::default()
             }),
         ];
-        let sent: Vec<e::OrderCondition> = ours.iter().map(|c| c.try_into().unwrap()).collect();
+        let sent: Vec<e::OrderCondition> = ours.iter().map(Into::into).collect();
         assert_eq!(
             sent[0],
             e::OrderCondition::Price {

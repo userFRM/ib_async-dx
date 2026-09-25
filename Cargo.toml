@@ -18,7 +18,7 @@ default = []
 flex = ["dep:ureq", "dep:native-tls", "dep:roxmltree"]
 
 [dependencies]
-ibkr-dx = { git = "https://github.com/userFRM/ibkr-dx", rev = "93dd8cebd8025b0f83297fb3165aeecaa5ea981c" }
+ibkr-dx = { git = "https://github.com/userFRM/ibkr-dx", rev = "e3f4307ad4d158cabba85dab07c40758c9559724" }
 # The engine's time crate: Timestamp, Zoned, civil, tz. The bundled zone
 # database answers the names a system's may lack, such as `US/Eastern`, as
 # ib_async's `tzdata` does; as the engine does, it is always compiled in.
