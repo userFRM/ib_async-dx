@@ -676,7 +676,9 @@ impl IBHandle {
             .request_timeout
             .and_then(|t| now.checked_add(t));
         let (p, logon) = self.begin_connect(opts, true, None)?;
-        wait_connect(p, &logon, request, login)
+        wait_connect(p, &logon, request, login)?;
+        self.warn_competing();
+        Ok(())
     }
 
     /// `connect`'s async form: ib_async's `connectAsync`. Dropping the future
@@ -686,7 +688,28 @@ impl IBHandle {
         let mut guard = TakeBack(Some(logon));
         let r = p.await;
         guard.0 = None;
-        r
+        r?;
+        self.warn_competing();
+        Ok(())
+    }
+
+    /// Says at WARN that another session held the account when this one
+    /// connected.
+    fn warn_competing(&self) {
+        if let Ok(Some(s)) = self.competing_session() {
+            let holding = if s.read_only {
+                ", holding the account, so this session may only read"
+            } else {
+                ""
+            };
+            log::warn!(
+                target: LOG_IB,
+                "Another session was logged in on this account when this one connected: \
+                 from {}, logged in at {} UTC{holding}",
+                s.origin,
+                s.logged_in_at.strftime("%Y%m%d-%H:%M:%S"),
+            );
+        }
     }
 
     /// Closes the session and gives ib_async's status line, `None` when no
