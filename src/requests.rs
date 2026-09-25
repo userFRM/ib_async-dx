@@ -487,12 +487,14 @@ impl Requests {
         lane.next()
     }
 
-    /// Whether an open-orders exchange an IB method asked is in flight: until
-    /// its end, every open order that is not a what-if belongs to it and
-    /// fires no `open_order_event` (wr:706-712).
-    pub(crate) fn records_open_orders(&self) -> bool {
+    /// Whether an exchange of `q` an IB method asked is in flight, its
+    /// waiters there or gone: until its end, every open order that is not a
+    /// what-if belongs to an open-orders one and fires no
+    /// `open_order_event` (wr:706-712), and completed orders are kept only
+    /// for a completed-orders one (wr:722-730).
+    pub(crate) fn records(&self, q: Question) -> bool {
         self.lanes
-            .get(&ReqKey::Question(Question::OpenOrders))
+            .get(&ReqKey::question(q))
             .and_then(|l| l.in_flight.as_ref())
             .is_some_and(|x| x.records)
     }
@@ -872,19 +874,19 @@ mod tests {
         let key = ReqKey::question(Question::OpenOrders);
         // A `Client` call only sends.
         assert_eq!(r.ask(Ask::OpenOrders, None), Some(Ask::OpenOrders));
-        assert!(!r.records_open_orders());
+        assert!(!r.records(Question::OpenOrders));
         // `req_all_open_orders` waits in the same lane.
         let (_p, x) = waiting::<Vec<i32>>(&mut r, key);
         let token = x.token;
         assert_eq!(r.ask(Ask::AllOpenOrders, Some(x)), None);
         assert_eq!(r.answered(Question::OpenOrders).1, Some(Ask::AllOpenOrders));
-        assert!(r.records_open_orders());
+        assert!(r.records(Question::OpenOrders));
         // Its waiter gone, it still takes them until its end.
         r.retire(token, &mut heap);
-        assert!(r.records_open_orders());
+        assert!(r.records(Question::OpenOrders));
         let (execs, _) = r.answered(Question::AllOpenOrders);
         assert!(execs.is_empty());
-        assert!(!r.records_open_orders());
+        assert!(!r.records(Question::OpenOrders));
     }
 
     #[test]

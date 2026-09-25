@@ -558,6 +558,13 @@ impl TryFrom<&Order> for e::Order {
 
 impl From<&e::Order> for Order {
     fn from(o: &e::Order) -> Self {
+        // Where the engine's default for a field is not its unset number,
+        // an order placed without the field carries that default, as
+        // `TryFrom<&Order>` sends `None`: read back, it is ib_async's unset,
+        // as a gateway reports the field.
+        let d = e::Order::default();
+        let given = |v: f64, default: f64| stated(v).filter(|v| *v != default);
+        let given_int = |v: i32, default: i32| stated_int(v).filter(|v| *v != default);
         Order {
             order_id: o.order_id,
             client_id: i64::from(o.client_id),
@@ -585,11 +592,11 @@ impl From<&e::Order> for Order {
             good_till_date: o.good_till_date.clone(),
             rule_80_a: o.rule80a.clone(),
             all_or_none: o.all_or_none,
-            min_qty: stated_int(o.min_qty),
+            min_qty: given_int(o.min_qty, d.min_qty),
             percent_offset: stated(o.percent_offset),
             override_percentage_constraints: o.override_percentage_constraints,
             trail_stop_price: stated(o.trail_stop_price),
-            trailing_percent: stated(o.trailing_percent),
+            trailing_percent: given(o.trailing_percent, d.trailing_percent),
             fa_group: o.fa_group.clone(),
             // ib_async's own four, which the engine does not carry: their
             // defaults.
@@ -615,7 +622,7 @@ impl From<&e::Order> for Order {
             randomize_price: o.randomize_price,
             randomize_size: o.randomize_size,
             volatility: stated(o.volatility),
-            volatility_type: stated_int(o.volatility_type),
+            volatility_type: given_int(o.volatility_type, d.volatility_type),
             delta_neutral_order_type: o.delta_neutral_order_type.clone(),
             delta_neutral_aux_price: stated(o.delta_neutral_aux_price),
             delta_neutral_con_id: i64::from(o.delta_neutral_con_id),
@@ -627,7 +634,7 @@ impl From<&e::Order> for Order {
             delta_neutral_short_sale_slot: o.delta_neutral_short_sale_slot,
             delta_neutral_designated_location: o.delta_neutral_designated_location.clone(),
             continuous_update: o.continuous_update,
-            reference_price_type: stated_int(o.reference_price_type),
+            reference_price_type: given_int(o.reference_price_type, d.reference_price_type),
             basis_points: stated(o.basis_points),
             basis_points_type: stated_int(o.basis_points_type),
             scale_init_level_size: stated_int(o.scale_init_level_size),
@@ -667,9 +674,12 @@ impl From<&e::Order> for Order {
             reference_change_amount: o.reference_change_amount,
             reference_exchange_id: o.reference_exchange_id.clone(),
             adjusted_order_type: o.adjusted_order_type.clone(),
-            trigger_price: stated(o.trigger_price),
-            adjusted_stop_price: stated(o.adjusted_stop_price),
-            adjusted_stop_limit_price: stated(o.adjusted_stop_limit_price),
+            trigger_price: given(o.trigger_price, d.trigger_price),
+            adjusted_stop_price: given(o.adjusted_stop_price, d.adjusted_stop_price),
+            adjusted_stop_limit_price: given(
+                o.adjusted_stop_limit_price,
+                d.adjusted_stop_limit_price,
+            ),
             adjusted_trailing_amount: stated(o.adjusted_trailing_amount),
             adjustable_trailing_unit: o.adjustable_trailing_unit,
             lmt_price_offset: stated(o.lmt_price_offset),
@@ -682,7 +692,7 @@ impl From<&e::Order> for Order {
                 val: o.soft_dollar_tier_val.clone(),
                 display_name: o.soft_dollar_tier_display_name.clone(),
             },
-            cash_qty: stated(o.cash_qty),
+            cash_qty: given(o.cash_qty, d.cash_qty),
             mifid_2_decision_maker: o.mifid2_decision_maker.clone(),
             mifid_2_decision_algo: o.mifid2_decision_algo.clone(),
             mifid_2_execution_trader: o.mifid2_execution_trader.clone(),
@@ -691,7 +701,7 @@ impl From<&e::Order> for Order {
             is_oms_container: o.is_oms_container,
             discretionary_up_to_limit_price: o.discretionary_up_to_limit_price,
             auto_cancel_date: o.auto_cancel_date.clone(),
-            filled_quantity: stated(o.filled_quantity),
+            filled_quantity: given(o.filled_quantity, d.filled_quantity),
             ref_futures_con_id: i64::from(o.ref_futures_con_id),
             auto_cancel_parent: o.auto_cancel_parent,
             shareholder: o.shareholder.clone(),

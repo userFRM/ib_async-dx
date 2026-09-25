@@ -35,15 +35,7 @@ pub(crate) use ibkr_dx::api::types::{
 // What an error is about, as `Wrapper::error_from` states it, and the
 // question `Wrapper::question_retired` confirms: types/model.rs:2121, 2169,
 // 2184.
-#[cfg_attr(
-    not(test),
-    expect(
-        unused_imports,
-        reason = "Apply tells a refused modify from a refused order by it"
-    )
-)]
-pub(crate) use ibkr_dx::api::types::OrderOp;
-pub(crate) use ibkr_dx::api::types::{ErrorOrigin, Question};
+pub(crate) use ibkr_dx::api::types::{ErrorOrigin, OrderOp, Question};
 
 // `types` (lib.rs:64), with `types::orders` and `types::commands` glob
 // re-exported into it (types/mod.rs:20-25). Lines, in order:

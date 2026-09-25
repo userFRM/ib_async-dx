@@ -1,0 +1,23 @@
+{
+ "about": "Callbacks no request of this session asked for: a completed order with no completed-orders request, which is dropped, a fill and its charge for no known order, a status for no known order, a headline, an account value of a model, and errors whose id numbers no subscription, depth book or bar list (wrapper.py:521-869, 1477-1510, 1670-1723)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "spy": {"@": "Contract", "conId": 756733, "symbol": "SPY", "secType": "STK", "exchange": "SMART", "primaryExchange": "ARCA", "currency": "USD"}
+  }},
+  {"read": [
+   ["completedOrder", {"ref": "spy"}, {"@": "Order", "orderId": 3, "clientId": 1, "permId": 7003, "action": "BUY", "totalQuantity": 1.0, "orderType": "MKT", "lmtPrice": 0.0, "auxPrice": 0.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Filled", "completedTime": "20240102 14:59:00 UTC", "completedStatus": "Filled"}],
+   ["execDetails", -1, {"ref": "spy"}, {"@": "Execution", "execId": "0000e0d5.65940020.01.01", "time": {"dt": "2024-01-02T14:59:00+00:00", "tz": "UTC"}, "acctNumber": "DU1", "exchange": "ARCA", "side": "BOT", "shares": 1.0, "price": 472.65, "permId": 7004, "clientId": 3, "orderId": 8, "cumQty": 1.0, "avgPrice": 472.65}],
+   ["commissionReport", {"@": "CommissionReport", "execId": "0000e0d5.65940020.01.01", "commission": 0.35, "currency": "USD", "realizedPNL": 1.7976931348623157e308, "yield_": 1.7976931348623157e308, "yieldRedemptionDate": 0}],
+   ["orderStatus", 8, "Filled", 1.0, 0.0, 472.65, 7004, 0, 472.65, 3, "", 0.0],
+   ["tickNews", 9, 1704207540000, "BZ", "BZ$1234", "SPY closes higher", "A:800015:L:en"],
+   ["accountUpdateMulti", 11, "DU1", "Model1", "NetLiquidation", "5000.0", "USD"]
+  ]},
+  {"read": [
+   {"cb": "error", "args": [21, 165, "Historical Market Data Service query message:no items retrieved", ""], "origin": {"Request": {"id": 21, "ends": false}}},
+   {"cb": "error", "args": [22, 317, "Market depth data has been RESET. Please empty deep book contents before applying any new entries.", ""], "origin": {"Request": {"id": 22, "ends": false}}},
+   {"cb": "error", "args": [23, 10225, "Bust event occurred, current subscription is deactivated.", ""], "origin": {"Request": {"id": 23, "ends": false}}},
+   {"cb": "error", "args": [24, 200, "No security definition has been found for the request", ""], "origin": {"Request": {"id": 24, "ends": true}}}
+  ]}
+ ]
+}

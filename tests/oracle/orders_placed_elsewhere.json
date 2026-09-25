@@ -1,0 +1,32 @@
+{
+ "about": "Orders another client and the desk placed, as the session hears of them: an open order of each, keyed by its id or its permId, their statuses, an unchanged status that is not reported, a live fill with its charge, the position, portfolio and account value it leaves, a bulletin, and errors that no trade of this session holds (wrapper.py:521-869, 1505-1510, 1580-1723)",
+ "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
+ "steps": [
+  {"let": {
+   "aapl": {"@": "Contract", "conId": 265598, "symbol": "AAPL", "secType": "STK", "exchange": "SMART", "primaryExchange": "NASDAQ", "currency": "USD"}
+  }},
+  {"read": [
+   ["openOrder", 0, {"ref": "aapl"}, {"@": "Order", "orderId": 0, "clientId": 0, "permId": 5001, "action": "BUY", "totalQuantity": 10.0, "orderType": "LMT", "lmtPrice": 180.0, "auxPrice": 0.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "Submitted"}],
+   ["openOrder", 12, {"ref": "aapl"}, {"@": "Order", "orderId": 12, "clientId": 2, "permId": 5002, "action": "SELL", "totalQuantity": 5.0, "orderType": "MKT", "lmtPrice": 0.0, "auxPrice": 0.0, "tif": "DAY", "account": "DU1"}, {"@": "OrderState", "status": "PreSubmitted"}],
+   ["orderStatus", 0, "Submitted", 0.0, 10.0, 0.0, 5001, 0, 0.0, 0, "", 0.0],
+   ["orderStatus", 12, "Submitted", 0.0, 5.0, 0.0, 5002, 0, 0.0, 2, "", 0.0],
+   ["orderStatus", 12, "Submitted", 0.0, 5.0, 0.0, 5002, 0, 0.0, 2, "", 0.0]
+  ]},
+  {"read": [
+   ["execDetails", -1, {"ref": "aapl"}, {"@": "Execution", "execId": "0000e0d5.65940010.01.01", "time": {"dt": "2024-01-02T15:00:00+00:00", "tz": "UTC"}, "acctNumber": "DU1", "exchange": "ISLAND", "side": "SLD", "shares": 5.0, "price": 185.5, "permId": 5002, "clientId": 2, "orderId": 12, "cumQty": 5.0, "avgPrice": 185.5}],
+   ["orderStatus", 12, "Filled", 5.0, 0.0, 185.5, 5002, 0, 185.5, 2, "", 0.0],
+   ["commissionReport", {"@": "CommissionReport", "execId": "0000e0d5.65940010.01.01", "commission": 1.0, "currency": "USD", "realizedPNL": 26.25, "yield_": 1.7976931348623157e308, "yieldRedemptionDate": 0}],
+   ["position", "DU1", {"ref": "aapl"}, 95.0, 180.25],
+   ["updatePortfolio", {"ref": "aapl"}, 95.0, 185.5, 17622.5, 180.25, 498.75, 26.25, "DU1"],
+   ["updateAccountValue", "NetLiquidation", "100026.25", "USD", "DU1"]
+  ]},
+  {"read": [
+   ["orderStatus", 0, "Cancelled", 0.0, 10.0, 0.0, 5001, 0, 0.0, 0, "", 0.0],
+   ["updateNewsBulletin", 3, 1, "Trading halted in XYZ", "NYSE"],
+   {"cb": "error", "args": [12, 202, "Order Canceled - reason:", ""], "origin": {"Order": {"id": 12, "op": "Venue"}}},
+   {"cb": "error", "args": [-1, 2104, "Market data farm connection is OK:usfarm", ""], "origin": "Session"},
+   {"cb": "error", "args": [-1, 1100, "Connectivity between IB and Trader Workstation has been lost.", ""], "origin": "Session"},
+   ["position", "DU1", {"ref": "aapl"}, 0.0, 0.0]
+  ]}
+ ]
+}
