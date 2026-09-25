@@ -2256,7 +2256,7 @@ impl Sink for PassSink<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
     use std::sync::mpsc;
 
     use jiff::Timestamp;
@@ -2266,6 +2266,7 @@ mod tests {
     use crate::engine::{ControlCommand, ErrorOrigin, SharedState, Wrapper};
     use crate::event::RecvError;
     use crate::ib::{ConnectOptions, IB, IBHandle};
+    use crate::objects::{BarDataList, RealTimeBarList, ScanDataList};
     use crate::state::OrderKey;
     use crate::tests::GLOBAL_ERRORS;
 
@@ -2298,9 +2299,15 @@ mod tests {
     /// An engine session on no venue whose loop never runs, and the channel
     /// its commands arrive on.
     fn engine() -> (EClient, mpsc::Receiver<ControlCommand>) {
+        engine_on(thread::spawn(|| {}))
+    }
+
+    /// As `engine`, with `thread` as the engine's: its `disconnect` returns
+    /// once `thread` has ended.
+    fn engine_on(thread: thread::JoinHandle<()>) -> (EClient, mpsc::Receiver<ControlCommand>) {
         let (tx, rx) = mpsc::channel();
         let shared = Arc::new(SharedState::new());
-        let client = EClient::from_parts(shared, tx, thread::spawn(|| {}), "DU123".into());
+        let client = EClient::from_parts(shared, tx, thread, "DU123".into());
         (client, rx)
     }
 
@@ -2394,6 +2401,59 @@ mod tests {
             let e = r.err().map(|e| e.to_string()).unwrap_or_default();
             note(&self.0, format!("waiter {e}"));
             true
+        }
+    }
+
+    /// Registers `waiter` under request `id`, giving its token.
+    fn register(ib: &Arc<Shared>, id: i64, waiter: impl Waiter + 'static) -> Token {
+        let mut c = ib.core();
+        let mut x = c.requests.exec(ReqKey::Id(id));
+        let token = x.token;
+        x.waiter = Some(Box::new(waiter));
+        c.requests.insert(x);
+        token
+    }
+
+    /// The published generation's engine session.
+    fn session(ib: &Arc<Shared>) -> Arc<EClient> {
+        ib.connected().unwrap().1
+    }
+
+    /// Notes whether its IB's state and queue locks are free: when it is
+    /// dropped, and, as a waker, when it is woken.
+    struct Probe {
+        ib: Weak<Shared>,
+        log: Log,
+        name: &'static str,
+    }
+
+    impl Probe {
+        fn note(&self, what: &str) {
+            let free = self
+                .ib
+                .upgrade()
+                .is_some_and(|ib| ib.core.try_lock().is_ok() && ib.queue.q.try_lock().is_ok());
+            note(&self.log, format!("{} {what}, free {free}", self.name));
+        }
+    }
+
+    impl Drop for Probe {
+        fn drop(&mut self) {
+            self.note("dropped");
+        }
+    }
+
+    impl Wake for Probe {
+        fn wake(self: Arc<Self>) {
+            self.note("woken");
+        }
+    }
+
+    fn probe(ib: &Arc<Shared>, log: &Log, name: &'static str) -> Probe {
+        Probe {
+            ib: Arc::downgrade(ib),
+            log: log.clone(),
+            name,
         }
     }
 
@@ -2902,21 +2962,11 @@ mod tests {
 
     #[test]
     fn the_state_a_teardown_resets_is_dropped_after_the_lock() {
-        struct Probe(Weak<Shared>, Log);
-        impl Drop for Probe {
-            fn drop(&mut self) {
-                let free = self
-                    .0
-                    .upgrade()
-                    .is_some_and(|ib| ib.core.try_lock().is_ok());
-                note(&self.1, format!("free {free}"));
-            }
-        }
         let _o = AsOwner::new();
         let (client, _rx) = engine();
         let (ib, _) = connected(client);
         let log = Log::default();
-        let probe = Probe(Arc::downgrade(&ib), log.clone());
+        let probe = probe(&ib, &log, "state");
         let trade = Live::new(Trade::default());
         trade.status_event().connect(move |_| {
             let _ = &probe;
@@ -2927,7 +2977,7 @@ mod tests {
             c.generation
         };
         ib.close(g, Cause::User);
-        assert_eq!(seen(&log), ["free true"]);
+        assert_eq!(seen(&log), ["state dropped, free true"]);
     }
 
     #[test]
@@ -2940,6 +2990,418 @@ mod tests {
         capture.connection_closed();
         ib.lap(&mut capture);
         assert!(ib.is_generation(1));
+    }
+
+    #[test]
+    fn a_read_comes_between_every_group_of_queued_entries() {
+        let _o = AsOwner::new();
+        let (client, _rx) = engine();
+        let (ib, mut capture) = connected(client);
+        let log = Log::default();
+        let l = log.clone();
+        ib.events.error_event.connect(move |_| note(&l, "read"));
+        for class in [Class::Control, Class::Request] {
+            for _ in 0..CMD_GROUP {
+                let l = log.clone();
+                let e = Entry::step(class, move |_| note(&l, "entry"));
+                assert!(ib.queue.try_push(e).is_ok());
+            }
+        }
+        let mut want = Vec::new();
+        for _ in 0..2 {
+            session(&ib).refuse(ErrorOrigin::Session, 2104, "farm ok");
+            ib.lap(&mut capture);
+            want.extend(["entry"; CMD_GROUP]);
+            want.push("read");
+        }
+        assert_eq!(seen(&log), want);
+    }
+
+    #[test]
+    fn a_panic_in_the_owners_own_work_ends_its_generation_and_answers_every_waiter() {
+        struct PanicsWhenAnswered;
+        impl Waiter for PanicsWhenAnswered {
+            fn finish(self: Box<Self>, _: Result<Box<dyn Any + Send>>) -> bool {
+                panic!("answered")
+            }
+        }
+        struct PanicsWhenDropped;
+        impl Waiter for PanicsWhenDropped {
+            fn finish(self: Box<Self>, _: Result<Box<dyn Any + Send>>) -> bool {
+                true
+            }
+        }
+        impl Drop for PanicsWhenDropped {
+            fn drop(&mut self) {
+                panic!("dropped")
+            }
+        }
+        let _g = lock(&GLOBAL_ERRORS);
+        let _o = AsOwner::new();
+        for place in ["a pass", "a retirement", "a command"] {
+            let (client, _rx) = engine();
+            let (ib, mut capture) = connected(client);
+            let log = Log::default();
+            let l = log.clone();
+            ib.events
+                .api_error
+                .connect(move |m| note(&l, format!("apiError {m}")));
+            // A registration only the teardown answers.
+            register(&ib, 9, Noted(log.clone()));
+            let mut replies = Vec::new();
+            let why = match place {
+                "a pass" => {
+                    register(&ib, 7, PanicsWhenAnswered);
+                    let ends = ErrorOrigin::Request { id: 7, ends: true };
+                    session(&ib).refuse(ends, 200, "no");
+                    "answered"
+                }
+                "a retirement" => {
+                    let token = register(&ib, 7, PanicsWhenDropped);
+                    ib.abandon(token);
+                    "dropped"
+                }
+                _ => {
+                    // One command decides its reply and then panics; the
+                    // next panics before it replies.
+                    let (p, reply) = Pending::new(None);
+                    let e = Entry::step(Class::Control, move |_| {
+                        reply.send(Ok(()));
+                        panic!("decided")
+                    });
+                    assert!(ib.queue.try_push(e).is_ok());
+                    replies.push(p);
+                    let (p, reply) = Pending::<()>::new(None);
+                    let e = Entry::step(Class::Control, move |_| {
+                        let _unsent = reply;
+                        panic!("undecided")
+                    });
+                    assert!(ib.queue.try_push(e).is_ok());
+                    replies.push(p);
+                    "decided"
+                }
+            };
+            ib.lap(&mut capture);
+            let internal = format!("internal error: {why}");
+            assert_eq!(
+                seen(&log),
+                [format!("apiError {internal}"), format!("waiter {internal}")],
+                "{place}"
+            );
+            if let [decided, undecided] = &mut replies[..] {
+                assert!(matches!(published(decided), Some(Ok(()))));
+                let r = published(undecided);
+                assert!(
+                    matches!(&r, Some(Err(Error::Connection(m))) if m == "internal error: undecided"),
+                    "{r:?}"
+                );
+            }
+            // The owner goes on, and the next generation starts.
+            assert!(lap_until(&ib, &mut capture, || matches!(
+                ib.core().conn,
+                Conn::Disconnected { .. }
+            )));
+            let (client, _rx) = engine();
+            let (mut p, _) = connect(&ib, Via::Test(Some(Arc::new(client))), opts());
+            ib.lap(&mut capture);
+            assert!(matches!(published(&mut p), Some(Ok(()))), "{place}");
+        }
+    }
+
+    #[test]
+    fn a_teardown_step_that_panics_leaves_the_rest_to_run() {
+        struct Boom;
+        impl Drop for Boom {
+            fn drop(&mut self) {
+                panic!("a dropped value panicked")
+            }
+        }
+        let _g = lock(&GLOBAL_ERRORS);
+        let _o = AsOwner::new();
+        let (client, _rx) = engine();
+        let (ib, mut capture) = connected(client);
+        let log = Log::default();
+        let l = log.clone();
+        ib.events
+            .api_error
+            .connect(move |m| note(&l, format!("apiError {m}")));
+        let l = log.clone();
+        ib.events
+            .disconnected_event
+            .connect(move |()| note(&l, "disconnected"));
+        register(&ib, 7, Noted(log.clone()));
+        // A trade only the state holds, whose handler's value panics when
+        // the reset drops it.
+        let trade = Live::new(Trade::default());
+        let boom = Boom;
+        trade.status_event().connect(move |_| {
+            let _ = &boom;
+        });
+        ib.core().state.trades.insert(OrderKey::Perm(1), trade);
+        session(&ib).shared_state().push_closed();
+        ib.lap(&mut capture);
+        assert_eq!(
+            seen(&log),
+            [
+                "apiError Peer closed connection.",
+                "waiter Socket disconnect",
+                "disconnected"
+            ]
+        );
+        assert!(lap_until(&ib, &mut capture, || matches!(
+            ib.core().conn,
+            Conn::Disconnected { .. }
+        )));
+        let (client, _rx) = engine();
+        let (mut p, _) = connect(&ib, Via::Test(Some(Arc::new(client))), opts());
+        ib.lap(&mut capture);
+        assert!(matches!(published(&mut p), Some(Ok(()))));
+    }
+
+    #[test]
+    fn a_connect_whose_waiter_left_as_its_sync_ended_emits_no_connected_event() {
+        let _o = AsOwner::new();
+        let (ib, mut capture) = (ib(), capture());
+        let log = Log::default();
+        let l = log.clone();
+        ib.events
+            .connected_event
+            .connect(move |()| note(&l, "connected"));
+        let l = log.clone();
+        ib.events
+            .disconnected_event
+            .connect(move |()| note(&l, "disconnected"));
+        let (client, _rx) = engine();
+        let o = ConnectOptions {
+            fetch_fields: StartupFetch::POSITIONS,
+            ..opts()
+        };
+        let (p, _) = connect(&ib, Via::Test(Some(Arc::new(client))), o);
+        ib.lap(&mut capture);
+        // The caller's deadline, reached before the sync's last answer.
+        assert!(p.expire());
+        ib.apply_read(1, vec![Callback::PositionEnd]);
+        ib.lap(&mut capture);
+        assert_eq!(seen(&log), ["disconnected"]);
+    }
+
+    #[test]
+    fn the_read_that_closes_is_applied_whole_before_the_teardown() {
+        let _g = lock(&GLOBAL_ERRORS);
+        let _o = AsOwner::new();
+        let (client, _rx) = engine();
+        let (ib, mut capture) = connected(client);
+        let log = Log::default();
+        let l = log.clone();
+        ib.events
+            .error_event
+            .connect(move |e| note(&l, format!("error {}", e.1)));
+        let l = log.clone();
+        ib.events.update_event.connect(move |()| note(&l, "update"));
+        let l = log.clone();
+        ib.events
+            .api_error
+            .connect(move |m| note(&l, format!("apiError {m}")));
+        let l = log.clone();
+        ib.events
+            .disconnected_event
+            .connect(move |()| note(&l, "disconnected"));
+        register(&ib, 7, Noted(log.clone()));
+        // A record, then the engine's last, taken by one read.
+        let client = session(&ib);
+        client.refuse(ErrorOrigin::Session, 2104, "farm ok");
+        client.shared_state().push_closed();
+        drop(client);
+        ib.lap(&mut capture);
+        assert_eq!(
+            seen(&log),
+            [
+                "error 2104",
+                "update",
+                "apiError Peer closed connection.",
+                "waiter Socket disconnect",
+                "disconnected"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_blocking_connects_own_deadlines_hold_while_the_owner_is_stalled() {
+        let _g = lock(&GLOBAL_ERRORS);
+        let limit = Some(Duration::from_millis(100));
+        for (login, request) in [(limit, None), (None, limit)] {
+            // No owner serves this IB: its connect is never run.
+            let ib = ib();
+            ib.set_config(IBConfig {
+                request_timeout: request,
+                ..IBConfig::default()
+            });
+            let cancel = Arc::new(AtomicBool::new(false));
+            let o = ConnectOptions {
+                config: e::EClientConfig {
+                    cancel: Some(cancel.clone()),
+                    ..e::EClientConfig::default()
+                },
+                logon_timeout: login,
+                ..opts()
+            };
+            let start = Instant::now();
+            assert!(matches!(handle(&ib).connect(o), Err(Error::Timeout)));
+            assert!(start.elapsed() < Duration::from_secs(2));
+            assert!(cancel.load(Ordering::Acquire), "the logon is taken back");
+        }
+    }
+
+    #[test]
+    fn objects_a_client_close_keeps_are_freed_once_the_next_session_starts() {
+        let _o = AsOwner::new();
+        let (client, _rx) = engine();
+        let (ib, mut capture) = connected(client);
+        let trade = Live::new(Trade::default());
+        let ticker = Live::new(Ticker::new(None, IBDefaults::default()));
+        let bars = Live::new(BarDataList::default());
+        let realtime = Live::new(RealTimeBarList::default());
+        let scan = Live::new(ScanDataList::default());
+        {
+            let mut c = ib.core();
+            let s = &mut c.state;
+            s.trades.insert(OrderKey::Perm(1), trade.clone());
+            s.req_id_to_ticker.insert(1, ticker.clone());
+            s.req_id_to_subscriber
+                .insert(2, Bars::Historical(bars.clone()));
+            s.req_id_to_subscriber
+                .insert(3, Bars::RealTime(realtime.clone()));
+            s.req_id_to_subscriber.insert(4, Bars::Scan(scan.clone()));
+        }
+        for e in [
+            Emit::TradeStatus(trade.clone()),
+            Emit::TradeFilled(trade.clone()),
+            Emit::TradeCancelled(trade.clone()),
+            Emit::TickerUpdate(ticker.clone()),
+            Emit::BarsUpdate(Bars::Historical(bars.clone()), true),
+            Emit::BarsUpdate(Bars::RealTime(realtime.clone()), true),
+            Emit::ScanUpdate(scan.clone()),
+        ] {
+            ib.emit(e);
+        }
+        let weak = (
+            trade.downgrade(),
+            ticker.downgrade(),
+            bars.downgrade(),
+            realtime.downgrade(),
+            scan.downgrade(),
+        );
+        drop((trade, ticker, bars, realtime, scan));
+        let alive = || {
+            [
+                weak.0.upgrade().is_some(),
+                weak.1.upgrade().is_some(),
+                weak.2.upgrade().is_some(),
+                weak.3.upgrade().is_some(),
+                weak.4.upgrade().is_some(),
+            ]
+        };
+        // `Client::disconnect` keeps them readable until the next session.
+        ib.close(1, Cause::ClientUser);
+        assert_eq!(alive(), [true; 5]);
+        assert!(lap_until(&ib, &mut capture, || matches!(
+            ib.core().conn,
+            Conn::Disconnected { .. }
+        )));
+        let (client, _rx) = engine();
+        let (mut p, _) = connect(&ib, Via::Test(Some(Arc::new(client))), opts());
+        ib.lap(&mut capture);
+        assert!(matches!(published(&mut p), Some(Ok(()))));
+        assert_eq!(alive(), [false; 5]);
+    }
+
+    #[test]
+    fn what_the_ibs_exit_drops_may_call_back_into_it() {
+        struct Answered {
+            _probe: Probe,
+        }
+        impl Waiter for Answered {
+            fn finish(self: Box<Self>, _: Result<Box<dyn Any + Send>>) -> bool {
+                true
+            }
+        }
+        let _o = AsOwner::new();
+        let (client, _rx) = engine();
+        let (ib, mut capture) = connected(client);
+        let log = Log::default();
+        // A waiter the close fails, a deadline dropped with the heap, and a
+        // handler the exit clears.
+        let _probe = probe(&ib, &log, "waiter");
+        register(&ib, 7, Answered { _probe });
+        let p = probe(&ib, &log, "deadline");
+        let at = ib.clock.now() + Duration::from_secs(3600);
+        ib.core()
+            .heap
+            .insert(at, Box::new(move |_: &Arc<Shared>| drop(p)));
+        let p = probe(&ib, &log, "handler");
+        ib.events.error_event.connect(move |_| {
+            let _ = &p;
+        });
+        ib.queue.latch();
+        ib.lap(&mut capture);
+        // The closer's post, then a full group of controls ahead of an
+        // entry the queue's close drains.
+        assert!(within(|| !lock(&ib.queue.q).entries.is_empty()));
+        for _ in 1..CONTROLS {
+            assert!(
+                ib.queue
+                    .try_push(Entry::step(Class::Control, |_| {}))
+                    .is_ok()
+            );
+        }
+        let p = probe(&ib, &log, "entry");
+        let e = Entry::step(Class::Control, move |_| drop(p));
+        assert!(ib.queue.try_push(e).is_ok());
+        ib.lap(&mut capture);
+        assert!(ib.is_closed());
+        assert_eq!(
+            seen(&log),
+            [
+                "waiter dropped, free true",
+                "entry dropped, free true",
+                "handler dropped, free true",
+                "deadline dropped, free true"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_request_waiting_for_room_has_its_waker_woken_and_dropped_with_no_lock_held() {
+        let ib = ib();
+        for _ in 0..UNSENT {
+            assert!(
+                ib.queue
+                    .try_push(Entry::step(Class::Request, |_| {}))
+                    .is_ok()
+            );
+        }
+        let log = Log::default();
+        // Each waker's only other holder is the queue once it is polled.
+        let poll = |p: &mut Pending<()>, name| {
+            let w = Waker::from(Arc::new(probe(&ib, &log, name)));
+            assert!(Pin::new(p).poll(&mut Context::from_waker(&w)).is_pending());
+        };
+        let mut kept = ib.request(|_, _, _: Reply<()>| {});
+        poll(&mut kept, "replaced");
+        poll(&mut kept, "kept");
+        let mut gone = ib.request(|_, _, _: Reply<()>| {});
+        poll(&mut gone, "forgotten");
+        drop(gone);
+        ib.queue.take_group(CMD_GROUP);
+        assert_eq!(
+            seen(&log),
+            [
+                "replaced dropped, free true",
+                "forgotten dropped, free true",
+                "kept woken, free true",
+                "kept dropped, free true"
+            ]
+        );
     }
 
     // -- On the owner thread, with the engine harness ----------------------
@@ -3046,5 +3508,253 @@ mod tests {
                 "run true"
             ]
         );
+    }
+
+    /// A request that hands the engine one command, as each of the IB's
+    /// requests does, noting its turn; answered once sent.
+    fn send_one(ib: &Arc<Shared>, log: &Log, n: usize) -> Pending<()> {
+        let log = log.clone();
+        ib.request(move |ib, _, reply: Reply<()>| {
+            if let Some((_, client)) = ib.connected() {
+                client.req_positions();
+                ib.queue.sent(1);
+            }
+            note(&log, format!("sent {n}"));
+            reply.send(Ok(()));
+        })
+    }
+
+    #[test]
+    fn a_stalled_engine_holds_user_requests_at_unsent_while_the_owner_goes_on() {
+        let _g = lock(&GLOBAL_ERRORS);
+        let (client, rx) = engine();
+        let ib = IB::attach(client, opts(), Clock::system()).unwrap();
+        let client = session(&ib.shared);
+        let log = Log::default();
+        // The engine's loop never runs: whatever it is handed stays unsent.
+        for n in 0..UNSENT {
+            park_on(send_one(&ib.shared, &log, n)).unwrap();
+        }
+        // A blocking face times out with nothing admitted, so nothing sent.
+        let r = send_one(&ib.shared, &log, UNSENT).wait(Some(Duration::from_millis(100)));
+        assert!(matches!(r, Err(Error::Timeout)), "{r:?}");
+        let (shared, l) = (ib.shared.clone(), log.clone());
+        let waiting = thread::spawn(move || park_on(send_one(&shared, &l, UNSENT + 1)));
+        // The owner still reads, takes controls, fires deadlines, and sends a
+        // request made on it.
+        let (shared, l) = (ib.shared.clone(), log.clone());
+        ib.error_event()
+            .connect(move |_| drop(send_one(&shared, &l, 99)));
+        let l = log.clone();
+        ib.timeout_event().connect(move |_| note(&l, "timeout"));
+        ib.set_timeout(Some(Duration::from_millis(50)));
+        client.refuse(ErrorOrigin::Session, 2104, "farm ok");
+        assert!(within(|| {
+            let seen = seen(&log);
+            seen.contains(&"sent 99".into()) && seen.contains(&"timeout".into())
+        }));
+        assert!(!waiting.is_finished());
+        assert_eq!(rx.try_iter().count(), UNSENT + 1);
+        // Once the engine takes its work, the waiting request goes in turn.
+        client
+            .shared_state()
+            .publish_finished(u64::try_from(UNSENT).unwrap() + 1);
+        waiting.join().unwrap().unwrap();
+        assert_eq!(rx.try_iter().count(), 1);
+        let sent: Vec<String> = seen(&log)
+            .into_iter()
+            .filter(|s| s.starts_with("sent"))
+            .collect();
+        let want: Vec<String> = (0..UNSENT)
+            .chain([99, UNSENT + 1])
+            .map(|n| format!("sent {n}"))
+            .collect();
+        assert_eq!(sent, want);
+    }
+
+    #[test]
+    fn handlers_of_two_ibs_call_each_other_inline() {
+        let (a, _arx) = engine();
+        let a = IB::attach(a, opts(), Clock::system()).unwrap();
+        let (b, _brx) = engine();
+        let b = IB::attach(b, opts(), Clock::system()).unwrap();
+        let log = Log::default();
+        let (l, hb) = (log.clone(), b.handle());
+        a.error_event().connect(move |e| {
+            note(&l, format!("a error {}", e.1));
+            note(&l, format!("b closed {}", hb.disconnect().is_some()));
+        });
+        let (l, ha) = (log.clone(), a.handle());
+        b.disconnected_event().connect(move |()| {
+            let edited = ha.edit_news_ticks(Vec::clear).is_ok();
+            note(&l, format!("a edited {edited}"));
+        });
+        session(&a.shared).refuse(ErrorOrigin::Session, 2104, "farm ok");
+        assert!(within(|| seen(&log).len() == 3));
+        assert_eq!(
+            seen(&log),
+            ["a error 2104", "a edited true", "b closed true"]
+        );
+        // Dropping one leaves the other served.
+        drop(b);
+        session(&a.shared).refuse(ErrorOrigin::Session, 2106, "hmds ok");
+        assert!(within(|| seen(&log).len() == 5));
+        assert_eq!(seen(&log)[3..], ["a error 2106", "b closed false"]);
+    }
+
+    #[test]
+    fn dropping_an_ib_mid_close_returns_once_its_engine_has_ended() {
+        let _g = lock(&GLOBAL_ERRORS);
+        let (gate, held) = mpsc::channel::<()>();
+        let (client, _rx) = engine_on(thread::spawn(move || {
+            let _ = held.recv();
+        }));
+        let ib = IB::attach(client, opts(), Clock::system()).unwrap();
+        let mut updates = ib.update_event().subscribe();
+        // The peer closes; the closer's `disconnect` waits on the engine's
+        // thread.
+        session(&ib.shared).shared_state().push_closed();
+        assert!(within(|| matches!(
+            ib.shared.core().conn,
+            Conn::Closing { client: None, .. }
+        )));
+        let dropper = thread::spawn(move || drop(ib));
+        thread::sleep(Duration::from_millis(100));
+        assert!(!dropper.is_finished());
+        while updates.try_recv().is_ok() {}
+        assert!(matches!(updates.try_recv(), Err(RecvError::Empty)));
+        gate.send(()).unwrap();
+        dropper.join().unwrap();
+        assert!(matches!(updates.try_recv(), Err(RecvError::Done)));
+    }
+
+    #[test]
+    fn dropping_an_ib_takes_its_logon_back_and_waits_for_the_logon_to_end() {
+        let ib = IB::new().unwrap();
+        let log = Log::default();
+        let l = log.clone();
+        ib.shared
+            .events
+            .api_start
+            .connect(move |()| note(&l, "api_start"));
+        // A logon in flight: this test posts in the logon thread's place.
+        let (mut first, logon) = ib
+            .begin_connect(opts(), true, Some(Via::Test(None)))
+            .unwrap();
+        assert!(published(&mut first).is_none());
+        assert!(within(|| matches!(
+            ib.shared.core().conn,
+            Conn::Connecting { g: 1, .. }
+        )));
+        let h = ib.handle();
+        let dropper = thread::spawn(move || drop(ib));
+        assert!(within(|| logon.taken_back()));
+        // A connect admitted after the drop starts no logon.
+        let (mut late, _) = h
+            .begin_connect(opts(), true, Some(Via::Test(None)))
+            .unwrap();
+        let mut r = None;
+        assert!(within(|| {
+            r = published(&mut late);
+            r.is_some()
+        }));
+        assert!(matches!(r, Some(Err(Error::NotConnected))), "{r:?}");
+        assert!(!dropper.is_finished());
+        assert!(matches!(
+            h.shared.core().conn,
+            Conn::Connecting { g: 1, .. }
+        ));
+        // The logon ends with a session: a closer logs it out, and only then
+        // does the drop return.
+        let (client, rx) = engine();
+        let post = Post::LoggedOn {
+            g: 1,
+            client: Arc::new(client),
+        };
+        assert!(h.shared.post(post).is_ok());
+        dropper.join().unwrap();
+        assert!(rx.try_iter().any(|c| matches!(c, ControlCommand::Shutdown)));
+        assert!(matches!(
+            published(&mut first),
+            Some(Err(Error::Connection(_)))
+        ));
+        assert!(seen(&log).is_empty());
+        assert!(!h.is_connected());
+    }
+
+    #[test]
+    fn what_a_teardown_decides_is_seen_only_once_it_ends() {
+        let _g = lock(&GLOBAL_ERRORS);
+        let (client, _rx) = engine();
+        let ib = IB::attach(client, opts(), Clock::system()).unwrap();
+        let log = Log::default();
+        // Two registrations, one polled and one waited on.
+        let register_as = |id| {
+            ib.shared.request(move |ib, token, reply: Reply<()>| {
+                let mut c = ib.core();
+                let mut x = c.requests.exec_as(ReqKey::Id(id), token);
+                x.waiter = Some(Box::new(reply));
+                c.requests.insert(x);
+            })
+        };
+        let (mut polled, waited) = (register_as(7), register_as(8));
+        assert!(within(|| {
+            let c = ib.shared.core();
+            c.requests.is_request(7) && c.requests.is_request(8)
+        }));
+        let (gate, held) = mpsc::channel::<()>();
+        let (held, l) = (Mutex::new(held), log.clone());
+        ib.disconnected_event().connect(move |()| {
+            note(&l, "held");
+            let _ = lock(&held).recv_timeout(Duration::from_secs(5));
+        });
+        let poller = thread::spawn(move || {
+            loop {
+                if let Some(r) = published(&mut polled) {
+                    return r;
+                }
+                thread::sleep(Duration::from_millis(1));
+            }
+        });
+        let waiter = thread::spawn(move || waited.wait(None));
+        session(&ib.shared).shared_state().push_closed();
+        assert!(within(|| seen(&log) == ["held"]));
+        thread::sleep(Duration::from_millis(100));
+        assert!(!poller.is_finished() && !waiter.is_finished());
+        gate.send(()).unwrap();
+        for r in [poller.join().unwrap(), waiter.join().unwrap()] {
+            assert!(
+                matches!(&r, Err(Error::Connection(m)) if m == "Socket disconnect"),
+                "{r:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn run_returns_at_disconnect_and_not_at_a_peer_close() {
+        let _g = lock(&GLOBAL_ERRORS);
+        let (client, _rx) = engine();
+        let ib = IB::attach(client, opts(), Clock::system()).unwrap();
+        let (started, running) = mpsc::channel();
+        let h = ib.handle();
+        let runner = thread::spawn(move || {
+            started.send(()).unwrap();
+            h.run()
+        });
+        running.recv().unwrap();
+        // A peer close, then a reconnect.
+        session(&ib.shared).shared_state().push_closed();
+        assert!(within(|| matches!(
+            ib.shared.core().conn,
+            Conn::Disconnected { .. }
+        )));
+        let (client, _rx) = engine();
+        let via = Via::Test(Some(Arc::new(client)));
+        let (p, _) = ib.begin_connect(opts(), true, Some(via)).unwrap();
+        park_on(p).unwrap();
+        assert!(ib.is_connected());
+        assert!(!runner.is_finished());
+        assert!(ib.disconnect().is_some());
+        runner.join().unwrap().unwrap();
     }
 }
