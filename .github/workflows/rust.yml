@@ -1,0 +1,82 @@
+name: rust
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The crate, built and tested with each feature set, and linted.
+  test:
+    name: cargo (${{ matrix.features || 'no features' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        features: ["", "flex"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.features }}
+      - name: Format
+        if: matrix.features == ''
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets --no-default-features --features "${{ matrix.features }}" -- -D warnings
+      - name: Test
+        run: cargo test --no-default-features --features "${{ matrix.features }}"
+
+  # What is generated from ib_async, regenerated against the pinned version:
+  # the parity names and the oracle's expectations must be as committed.
+  generated:
+    name: parity and oracle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Install ib_async
+        run: python -m pip install "ib_async==2.1.0" "aeventkit==2.1.0"
+      - name: Parity names
+        run: |
+          python scripts/parity.py --rust
+          git diff --exit-code tests/parity_names.rs tests/twins_send.rs
+      - name: Oracle expectations
+        run: |
+          python scripts/oracle.py
+          git diff --exit-code tests/oracle
+
+  # Checks on the crate's source.
+  source:
+    name: source checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Only src/engine.rs names the engine
+        run: |
+          named=$(grep -rl --include='*.rs' 'ibkr_dx' src | grep -v -e '^src/engine\.rs$' -e '^src/tests/' || true)
+          if [ -n "$named" ]; then
+            echo "these files name ibkr_dx outside src/engine.rs:"; echo "$named"; exit 1
+          fi
+      - name: Every engine callback is recorded
+        run: python3 scripts/check_record.py
