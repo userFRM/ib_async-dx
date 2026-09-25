@@ -988,6 +988,10 @@ impl Shared {
     }
 
     fn next_due(&self) -> Option<Duration> {
+        if !lock(&self.queue.q).entries.is_empty() {
+            // More than a group was queued: the rest go next lap.
+            return Some(Duration::ZERO);
+        }
         let at = self.core().heap.next_due()?;
         Some(at.saturating_duration_since(self.clock.now()))
     }
@@ -1134,15 +1138,20 @@ impl Shared {
         for d in due {
             self.unit(|| d(self));
         }
-        if let Some((g, client)) = self.connected()
-            && let Some((passed, closed)) = self.unit(|| self.read(g, &client, capture))
-        {
-            if passed {
-                self.progressed_by(|p| p.passes += 1);
+        match self.connected() {
+            Some((g, client)) => {
+                if let Some((passed, closed)) = self.unit(|| self.read(g, &client, capture)) {
+                    if passed {
+                        self.progressed_by(|p| p.passes += 1);
+                    }
+                    if closed {
+                        self.unit(|| self.close(g, Cause::Peer));
+                    }
+                }
             }
-            if closed {
-                self.unit(|| self.close(g, Cause::Peer));
-            }
+            // Outside a session nothing reached the engine: what the group
+            // took is no one's unsent work.
+            None => self.queue.set_engine_unsent(0),
         }
         if self.core().sync.is_some() {
             self.unit(|| self.sync_step());
@@ -1155,9 +1164,14 @@ impl Shared {
     /// One read of the engine, applied as one pass.
     fn read(self: &Arc<Self>, g: u64, client: &EClient, capture: &mut Capture) -> (bool, bool) {
         capture.timezone_tws = self.config().timezone_tws;
+        // What a read that panicked recorded belongs to the generation that
+        // panic ended.
+        drop(capture.take());
         client.process_msgs(capture);
         let r = self.apply_read(g, capture.take());
-        self.queue.set_engine_unsent(client.backlog());
+        if self.is_generation(g) {
+            self.queue.set_engine_unsent(client.backlog());
+        }
         r
     }
 
@@ -1485,7 +1499,7 @@ impl Shared {
     /// a connect's.
     fn attempt_left(self: &Arc<Self>, t: Token) -> bool {
         enum Left {
-            Report,
+            Report(&'static str),
             Close(u64),
             Quiet,
         }
@@ -1493,8 +1507,9 @@ impl Shared {
             let mut c = self.core();
             let c = &mut *c;
             if let Some(i) = c.parked.iter().position(|a| a.token == t) {
+                let why = left_why(&c.parked[i].logon);
                 c.parked.remove(i);
-                Left::Report
+                Left::Report(why)
             } else if let Some(a) = c.attempt.as_mut().filter(|a| a.token == t) {
                 match &c.conn {
                     Conn::Connecting { g, logon } if *g == a.g => {
@@ -1502,7 +1517,7 @@ impl Shared {
                         if std::mem::replace(&mut a.reported, true) {
                             Left::Quiet
                         } else {
-                            Left::Report
+                            Left::Report(left_why(logon))
                         }
                     }
                     Conn::Connected { g, .. } if *g == a.g => Left::Close(*g),
@@ -1513,7 +1528,7 @@ impl Shared {
             }
         };
         match left {
-            Left::Report => self.report("CancelledError()"),
+            Left::Report(why) => self.report(why),
             Left::Close(g) => self.close(g, Cause::User),
             Left::Quiet => {}
         }
@@ -1536,10 +1551,7 @@ impl Shared {
                 // No generation waits for it: it only logs out.
                 c.closers += 1;
                 drop(c);
-                if session::spawn_closer(self.me.clone(), g, client).is_err() {
-                    self.core().closers -= 1;
-                }
-                return;
+                return self.close_unclaimed(g, client);
             }
         };
         c.logon_live = false;
@@ -1557,6 +1569,20 @@ impl Shared {
             a.fail(Error::Connection("the connect was taken back".into()));
         }
         self.start_closer(g);
+    }
+
+    /// Hands a session no generation claims to a closer, retried each
+    /// second as `start_closer` is, so its logout never runs on the owner.
+    /// It is counted in `closers` until the closer posts.
+    fn close_unclaimed(self: &Arc<Self>, g: u64, client: Arc<EClient>) {
+        if let Err(e) = session::spawn_closer(self.me.clone(), g, client.clone()) {
+            log::error!(target: LOG_IB, "a closer could not start: {e}");
+            if let Some(at) = self.clock.now().checked_add(Duration::from_secs(1)) {
+                self.core()
+                    .heap
+                    .insert(at, Box::new(move |ib| ib.close_unclaimed(g, client)));
+            }
+        }
     }
 
     fn logon_failed(self: &Arc<Self>, g: u64, error: Error, engine: EngineEnd) {
@@ -1613,8 +1639,11 @@ impl Shared {
             };
             if self.queue.latched() {
                 a.fail(Error::NotConnected);
-            } else {
+            } else if a.reply.as_ref().is_some_and(Reply::start) {
                 self.connect_step(a);
+            } else {
+                // Its waiter left while it was parked.
+                self.report(left_why(&a.logon));
             }
         }
     }
@@ -1623,14 +1652,15 @@ impl Shared {
     /// the startup sync while `g` stands.
     fn publish(self: &Arc<Self>, g: u64, client: Arc<EClient>) {
         let now = self.wall_now();
-        let sync = {
+        let (sync, old) = {
             let mut c = self.core();
             let c = &mut *c;
-            if std::mem::take(&mut c.rebuild) {
-                c.state = State::new(self.defaults.clone(), self.holder(), now);
+            let old = if std::mem::take(&mut c.rebuild) {
+                let fresh = State::new(self.defaults.clone(), self.holder(), now);
+                std::mem::replace(&mut c.state, fresh)
             } else {
-                c.state.reset(now);
-            }
+                c.state.reset(now)
+            };
             if let Some(i) = c.idle.take() {
                 c.heap.cancel(i.deadline);
             }
@@ -1648,8 +1678,9 @@ impl Shared {
                 g,
                 client: client.clone(),
             };
-            sync.map(|s| (s, client_id, timeout))
+            (sync.map(|s| (s, client_id, timeout)), old)
         };
+        drop(old);
         self.queue.set_engine_unsent(0);
         client.on_data(Some(Arc::new(wake_owner)));
         self.events.api_start.emit(&());
@@ -1983,7 +2014,8 @@ impl Shared {
 
     fn reset_state(&self) {
         let now = self.wall_now();
-        self.core().state.reset(now);
+        let old = self.core().state.reset(now);
+        drop(old);
     }
 
     /// ib_async's `setEventsDone` (wr:344-359): every ticker's, subscribed
@@ -2161,6 +2193,16 @@ impl Shared {
     }
 }
 
+/// What `api_error` says of a connect whose waiter left: the login
+/// deadline's `TimeoutError()` when that is why, whichever side reached it.
+fn left_why(logon: &Logon) -> &'static str {
+    if logon.expired() {
+        "TimeoutError()"
+    } else {
+        "CancelledError()"
+    }
+}
+
 fn arm_idle(c: &mut Core, timeout: Duration, at: Option<Instant>) {
     if let Some(at) = at {
         let deadline = c
@@ -2221,7 +2263,7 @@ mod tests {
     use jiff::tz::TimeZone;
 
     use super::*;
-    use crate::engine::{ControlCommand, ErrorOrigin, SharedState};
+    use crate::engine::{ControlCommand, ErrorOrigin, SharedState, Wrapper};
     use crate::event::RecvError;
     use crate::ib::{ConnectOptions, IB, IBHandle};
     use crate::state::OrderKey;
@@ -2721,6 +2763,36 @@ mod tests {
         ib.lap(&mut capture);
         assert!(matches!(ib.core().conn, Conn::Disconnected { .. }));
         assert_eq!(seen(&log).len(), 1);
+
+        // Gone at its own login deadline: reported as the owner's deadline
+        // would report it.
+        let (p, logon) = connect(&ib, Via::Test(None), opts());
+        assert!(logon.expire());
+        drop(p);
+        ib.lap(&mut capture);
+        assert_eq!(seen(&log)[1..], ["API connection failed: TimeoutError()"]);
+    }
+
+    #[test]
+    fn a_parked_connect_whose_waiter_left_is_reported_whenever_it_resumes() {
+        let _g = lock(&GLOBAL_ERRORS);
+        let _o = AsOwner::new();
+        let (client, _rx) = engine();
+        let (ib, mut capture) = connected(client);
+        let log = Log::default();
+        let l = log.clone();
+        ib.events.api_error.connect(move |m| note(&l, m.clone()));
+        // Parked behind the close of the session it replaces, then left;
+        // the engine's end resumes it before its leaving is retired.
+        let (p, _) = connect(&ib, Via::Test(None), opts());
+        drop(p);
+        ib.on_post(Post::EngineClosed {
+            g: 1,
+            engine: EngineEnd::Closed,
+        });
+        ib.lap(&mut capture);
+        assert_eq!(seen(&log), ["API connection failed: CancelledError()"]);
+        assert!(matches!(ib.core().conn, Conn::Disconnected { .. }));
     }
 
     #[test]
@@ -2763,22 +2835,31 @@ mod tests {
 
     #[test]
     fn the_exit_runs_what_was_admitted_first_then_ends_every_event() {
+        let _g = lock(&GLOBAL_ERRORS);
         let (client, _rx) = engine();
         let (ib, mut capture) = {
             let _o = AsOwner::new();
             connected(client)
         };
         let log = Log::default();
-        for i in 0..3 {
-            let l = log.clone();
-            ib.control(move |_| note(&l, format!("control {i}")));
-        }
         let l = log.clone();
         ib.events
             .disconnected_event
             .connect(move |()| note(&l, "disconnected"));
-        let mut updates = ib.events.update_event.subscribe();
+        // A connect that closed the session it replaces, parked behind that
+        // close when the IB is dropped.
         let (mut waiter, _) = connect(&ib, Via::Test(None), opts());
+        assert!(published(&mut waiter).is_none());
+        {
+            let _o = AsOwner::new();
+            ib.lap(&mut capture);
+        }
+        assert_eq!(ib.core().parked.len(), 1);
+        for i in 0..3 {
+            let l = log.clone();
+            ib.control(move |_| note(&l, format!("control {i}")));
+        }
+        let mut updates = ib.events.update_event.subscribe();
         ib.queue.latch();
         {
             let _o = AsOwner::new();
@@ -2786,7 +2867,7 @@ mod tests {
         }
         assert_eq!(
             seen(&log),
-            ["control 0", "control 1", "control 2", "disconnected"]
+            ["disconnected", "control 0", "control 1", "control 2"]
         );
         assert!(matches!(
             published(&mut waiter),
@@ -2797,6 +2878,68 @@ mod tests {
             ib.queue.try_push(Entry::step(Class::Control, |_| {})),
             Err(Refused::Closed(_))
         ));
+    }
+
+    #[test]
+    fn requests_run_outside_a_session_leave_no_charge() {
+        // A reconnect loop's failed connects are requests: were they charged,
+        // the 65th would never be admitted.
+        let (ib, mut capture) = (ib(), capture());
+        for _ in 0..UNSENT {
+            assert!(
+                ib.queue
+                    .try_push(Entry::step(Class::Request, |_| {}))
+                    .is_ok()
+            );
+        }
+        ib.lap(&mut capture);
+        assert!(
+            ib.queue
+                .try_push(Entry::step(Class::Request, |_| {}))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn the_state_a_teardown_resets_is_dropped_after_the_lock() {
+        struct Probe(Weak<Shared>, Log);
+        impl Drop for Probe {
+            fn drop(&mut self) {
+                let free = self
+                    .0
+                    .upgrade()
+                    .is_some_and(|ib| ib.core.try_lock().is_ok());
+                note(&self.1, format!("free {free}"));
+            }
+        }
+        let _o = AsOwner::new();
+        let (client, _rx) = engine();
+        let (ib, _) = connected(client);
+        let log = Log::default();
+        let probe = Probe(Arc::downgrade(&ib), log.clone());
+        let trade = Live::new(Trade::default());
+        trade.status_event().connect(move |_| {
+            let _ = &probe;
+        });
+        let g = {
+            let mut c = ib.core();
+            c.state.trades.insert(OrderKey::Perm(1), trade);
+            c.generation
+        };
+        ib.close(g, Cause::User);
+        assert_eq!(seen(&log), ["free true"]);
+    }
+
+    #[test]
+    fn what_a_panicked_read_recorded_is_not_the_next_reads() {
+        let _g = lock(&GLOBAL_ERRORS);
+        let _o = AsOwner::new();
+        let (client, _rx) = engine();
+        let (ib, mut capture) = connected(client);
+        // A read that panicked leaves what it recorded behind.
+        capture.connection_closed();
+        ib.lap(&mut capture);
+        assert!(ib.is_generation(1));
     }
 
     // -- On the owner thread, with the engine harness ----------------------
@@ -2839,18 +2982,36 @@ mod tests {
         let _g = lock(&GLOBAL_ERRORS);
         let (client, _rx) = engine();
         let ib = IB::attach(client, opts(), Clock::system()).unwrap();
+        let (other, _orx) = engine();
+        let other = IB::attach(other, opts(), Clock::system()).unwrap();
         let log = Log::default();
         let l = log.clone();
-        ib.disconnected_event()
-            .connect(move |()| note(&l, "disconnected"));
+        ib.disconnected_event().connect(move |()| {
+            // Slow, so a wait woken inside the teardown is seen first.
+            thread::sleep(Duration::from_millis(50));
+            note(&l, "disconnected");
+        });
         let listening = global_error_event().len();
-        let sleeper = thread::spawn(|| IB::sleep(Duration::from_secs(30)));
-        assert!(within(|| global_error_event().len() > listening));
+        let l = log.clone();
+        let sleeper = thread::spawn(move || {
+            let r = IB::sleep(Duration::from_secs(30)).map(drop);
+            note(&l, "sleep");
+            r
+        });
+        // Any IB's close ends a wait on another, as ib_async's run does.
+        let (l, h) = (log.clone(), other.handle());
+        let updater = thread::spawn(move || {
+            let r = h.wait_on_update(Some(Duration::from_secs(30))).map(drop);
+            note(&l, "wait_on_update");
+            r
+        });
+        assert!(within(|| global_error_event().len() >= listening + 2));
         let (_, client) = ib.shared.connected().unwrap();
         client.disconnect();
-        let r = sleeper.join().unwrap();
-        assert!(matches!(r, Err(Error::Connection(m)) if m == "Socket disconnect"));
-        assert_eq!(seen(&log), ["disconnected"]);
+        for r in [sleeper.join().unwrap(), updater.join().unwrap()] {
+            assert!(matches!(r, Err(Error::Connection(m)) if m == "Socket disconnect"));
+        }
+        assert_eq!(seen(&log)[0], "disconnected");
         assert!(!ib.is_connected());
     }
 

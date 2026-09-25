@@ -70,6 +70,11 @@ impl Logon {
         won
     }
 
+    /// Whether the login deadline took the logon back.
+    pub(crate) fn expired(&self) -> bool {
+        self.stage.load(Ordering::Acquire) == EXPIRED
+    }
+
     /// Whether the login deadline still stands.
     pub(crate) fn logging_in(&self) -> bool {
         self.stage.load(Ordering::Acquire) == LOGIN
@@ -176,7 +181,12 @@ fn log_on(g: u64, config: &EClientConfig, timeout: Option<Duration>, logon: &Log
     })) {
         Ok(Ok(client)) => client,
         Ok(Err(why)) => return failed(Error::Connection(why), EngineEnd::Closed),
-        Err(p) => return failed(Error::Connection(panic_message(&*p)), EngineEnd::Closed),
+        // The engine's thread may have started before the panic, and nothing
+        // establishes that it ended.
+        Err(p) => {
+            let why = panic_message(&*p);
+            return failed(Error::Connection(why.clone()), EngineEnd::Unconfirmed(why));
+        }
     };
     if !logon.logged_in() {
         // The login deadline took the logon back while it finished.

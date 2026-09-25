@@ -162,10 +162,13 @@ impl State {
     }
 
     /// ib_async's `reset` (wr:313-342), whose `setTimeout(0)` leaves
-    /// `lastTime` at `now`.
-    pub(crate) fn reset(&mut self, now: Zoned) {
-        let holder = self.holder.clone();
-        *self = State::new(self.defaults.clone(), holder, now);
+    /// `lastTime` at `now`. Gives the old state, to drop once the owner's
+    /// lock is released: its handlers' captured values may call back into
+    /// the IB.
+    #[must_use]
+    pub(crate) fn reset(&mut self, now: Zoned) -> State {
+        let fresh = State::new(self.defaults.clone(), self.holder.clone(), now);
+        std::mem::replace(self, fresh)
     }
 
     /// `v`, bound to this IB, so a program's edit of it goes through the
@@ -1794,10 +1797,12 @@ fn error<S: Sink>(sink: &mut S, origin: ErrorOrigin, code: i64, message: String,
                 op: OrderOp::Modify,
                 ..
             } => warning = true,
+            // A refused placement or exercise is an error even at 321; a
+            // gateway's warning on an order it places anyway stays one.
             ErrorOrigin::Order {
                 op: OrderOp::Place | OrderOp::Exercise,
                 ..
-            } => warning = false,
+            } if code == 321 => warning = false,
             // A request's error ends it when the engine says so, and a
             // notice its answer follows ends nothing.
             ErrorOrigin::Request { ends, .. } if registered => warning = !ends,
@@ -2350,9 +2355,17 @@ pub(crate) mod tests {
         let order = |id, op| ErrorOrigin::Order { id, op };
         // (the operation, code, status before) → status after, events
         let cases = [
-            // A refused placement is an error even at 321; a refused
-            // modify a warning, the order still live.
+            // A refused placement is an error even at 321, a warning on a
+            // placement a warning; a refused modify a warning, the order
+            // still live.
             (OrderOp::Place, 321, "PendingSubmit", "Cancelled", true),
+            (
+                OrderOp::Place,
+                2181,
+                "PendingSubmit",
+                "ValidationError",
+                false,
+            ),
             (OrderOp::Modify, 321, "Submitted", "ValidationError", false),
             (OrderOp::Modify, 201, "Submitted", "ValidationError", false),
             // The venue's word by ib_async's code: 110 cancels a new order

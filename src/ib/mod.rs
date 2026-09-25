@@ -10,8 +10,8 @@ use std::fmt;
 use std::future::Future;
 use std::ops::{BitAnd, BitOr, BitXor, Deref, Not};
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Waker};
+use std::sync::{Arc, Mutex, Weak};
+use std::task::{Context, Poll, Wake, Waker};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -37,6 +37,22 @@ use crate::timer::{Clock, Sleep, TimerHandle, Timers};
 use crate::util::{TimeT, block_on, global_error_event};
 
 pub use crate::state::Bars;
+
+/// ib_async's timeout of 0, no limit, where its default is no limit too.
+fn unlimited_at_zero(timeout: Option<Duration>) -> Option<Duration> {
+    timeout.filter(|t| !t.is_zero())
+}
+
+/// A waker that wakes the threads waiting on an IB's progress.
+struct Nudge(Weak<Shared>);
+
+impl Wake for Nudge {
+    fn wake(self: Arc<Self>) {
+        if let Some(ib) = self.0.upgrade() {
+            ib.nudge();
+        }
+    }
+}
 
 fn running() -> Error {
     Error::Value("This event loop is already running".to_owned())
@@ -683,28 +699,39 @@ impl IBHandle {
     }
 
     /// Waits for the next network read of this IB: ib_async's
-    /// `waitOnUpdate`. `Ok(false)` at the timeout; a peer or internal close
-    /// of any IB fails it with that close's error.
+    /// `waitOnUpdate`, `None` or zero waiting without limit. `Ok(false)` at
+    /// the timeout; a peer or internal close of any IB fails it with that
+    /// close's error once its teardown has run.
     pub fn wait_on_update(&self, timeout: Option<Duration>) -> Result<bool> {
         if on_owner() {
             return Err(running());
         }
-        let deadline = timeout.and_then(|t| Instant::now().checked_add(t));
-        let failed = Arc::new(Mutex::new(None::<Error>));
-        let (seen, me) = (failed.clone(), Arc::downgrade(&self.shared));
+        let deadline = unlimited_at_zero(timeout).and_then(|t| Instant::now().checked_add(t));
+        // The close's error decides this gate, published when the owner's
+        // unit ends, as `block_on`'s is; its publication nudges this wait.
+        let (mut gate, reply) = Pending::<()>::new(None);
+        let reply = Mutex::new(Some(reply));
         let event = global_error_event();
         let id = event.connect(move |e| {
-            *lock(&seen) = Some(e.clone());
-            if let Some(ib) = me.upgrade() {
-                ib.nudge();
+            let reply = lock(&reply).take();
+            if let Some(reply) = reply {
+                reply.send(Err(e.clone()));
             }
         });
+        let waker = Waker::from(Arc::new(Nudge(Arc::downgrade(&self.shared))));
+        let mut cx = Context::from_waker(&waker);
+        let mut failed = None;
         let start = self.shared.progress(|p| p.passes);
         let passed = self.shared.wait_progress(deadline, |p| {
-            p.passes != start || p.closed || lock(&failed).is_some()
+            if failed.is_none()
+                && let Poll::Ready(Err(e)) = Pin::new(&mut gate).poll(&mut cx)
+            {
+                failed = Some(e);
+            }
+            failed.is_some() || p.passes != start || p.closed
         });
+        drop(gate);
         event.disconnect(id);
-        let failed = lock(&failed).take();
         if let Some(e) = failed {
             return Err(e);
         }
@@ -715,7 +742,8 @@ impl IBHandle {
     }
 
     /// Checks `condition` after every network read until it gives a value
-    /// or `timeout` passes: ib_async's `loopUntil`.
+    /// or `timeout` passes, `None` or zero being no limit: ib_async's
+    /// `loopUntil`.
     pub fn loop_until<'a, T, F: FnMut() -> Option<T> + 'a>(
         &'a self,
         condition: F,
@@ -727,7 +755,7 @@ impl IBHandle {
         Ok(LoopUntil {
             ib: self,
             condition,
-            end: timeout.map(|t| Instant::now().checked_add(t)),
+            end: unlimited_at_zero(timeout).map(|t| Instant::now().checked_add(t)),
             waiting: false,
             done: false,
         })
@@ -753,10 +781,11 @@ impl IBHandle {
         Ok(())
     }
 
-    /// Runs `f` to its end, bounded by `timeout`: ib_async's
-    /// `run(awaitable)`. A peer or internal close of any IB fails it.
+    /// Runs `f` to its end, bounded by `timeout`, `None` or zero being no
+    /// limit: ib_async's `run(awaitable)`. A peer or internal close of any
+    /// IB fails it.
     pub fn run_until<F: IntoFuture>(&self, f: F, timeout: Option<Duration>) -> Result<F::Output> {
-        block_on(f, timeout)
+        block_on(f, unlimited_at_zero(timeout))
     }
 
     // -- State reads ---------------------------------------------------------
@@ -1026,7 +1055,10 @@ impl<T, F: FnMut() -> Option<T>> Iterator for LoopUntil<'_, F> {
                     e.saturating_duration_since(Instant::now())
                 })
             });
-            if let Err(e) = self.ib.wait_on_update(left) {
+            // Past the end, ib_async's wait times out at once: no wait.
+            if left != Some(Duration::ZERO)
+                && let Err(e) = self.ib.wait_on_update(left)
+            {
                 self.done = true;
                 return Some(Err(e));
             }
