@@ -24,21 +24,21 @@ pub(crate) use ibkr_dx::Wrapper;
 pub(crate) use ibkr_dx::{ExerciseStates, PROTOCOL_LEVEL};
 
 // The caller's model types: `api::types` is `types::model` (api/mod.rs:11).
-// Lines of types/model.rs, in order: 1789, 15, 1711, 54, 2059, 1847, 41,
-// 1615, 1679, 116, 1467, 2086, 1384, 1753, 1778, 1766.
+// Lines of types/model.rs, in order: 1797, 15, 1719, 54, 2067, 1855, 41,
+// 1623, 1687, 116, 1475, 2094, 1392, 1761, 1786, 1774.
 pub(crate) use ibkr_dx::api::types::{
     BarData, ComboLeg, CommissionAndFeesReport, Contract, ContractDescription, ContractDetails,
     DeltaNeutralContract, Execution, ExecutionFilter, Order, OrderState, PriceIncrement, TagValue,
     TickAttrib, TickAttribBidAsk, TickAttribLast,
 };
 // What an error is about, as `Wrapper::error_from` states it, and the
-// question `Wrapper::question_retired` confirms: types/model.rs:2121, 2169,
-// 2184.
+// question `Wrapper::question_retired` confirms: types/model.rs:2129, 2177,
+// 2192.
 pub(crate) use ibkr_dx::api::types::{ErrorOrigin, OrderOp, Question};
 
 // `types` (lib.rs:64), with `types::orders` and `types::commands` glob
 // re-exported into it (types/mod.rs:20-25). Lines, in order:
-// commands.rs:78; mod.rs:789, 981, 825, 339; orders.rs:854; mod.rs:62, 305,
+// commands.rs:78; mod.rs:789, 981, 825, 339; orders.rs:857; mod.rs:62, 305,
 // 814, 123.
 pub(crate) use ibkr_dx::types::{
     CalendarQuery, DepthMktDataDescription, HistoricalTickData, NewsProvider, OptionComputation,
@@ -54,7 +54,7 @@ pub use ibkr_dx::types::{HeldElsewhere, ScannedStrategy, SpreadScan};
 // only under `cfg(test)`.
 #[cfg(test)]
 pub(crate) use ibkr_dx::bridge::SharedState;
-// types/mod.rs: the commands a session's engine takes, which a test engine
-// receives.
+// types/commands.rs:281, glob re-exported (types/mod.rs:25): the commands a
+// session's engine takes, which a test engine receives.
 #[cfg(test)]
 pub(crate) use ibkr_dx::types::ControlCommand;
