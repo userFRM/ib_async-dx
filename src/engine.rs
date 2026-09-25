@@ -10,7 +10,6 @@
 // lib.rs:101: the settings a session is opened with, `ConnectOptions.config`.
 pub use ibkr_dx::EClientConfig;
 // lib.rs:122.
-#[expect(unused_imports, reason = "the owner's id space ends at it")]
 pub(crate) use ibkr_dx::FIRST_RESERVED_REQUEST_ID;
 // lib.rs:99; control/adjustments.rs:11,89.
 pub(crate) use ibkr_dx::{Adjustment, AdjustmentKind};
