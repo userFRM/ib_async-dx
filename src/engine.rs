@@ -14,7 +14,6 @@ pub(crate) use ibkr_dx::FIRST_RESERVED_REQUEST_ID;
 // lib.rs:99; control/adjustments.rs:11,89.
 pub(crate) use ibkr_dx::{Adjustment, AdjustmentKind};
 // lib.rs:101; api/mod.rs:14,17.
-#[expect(unused_imports, reason = "the owner drives the engine through it")]
 pub(crate) use ibkr_dx::EClient;
 pub(crate) use ibkr_dx::Wrapper;
 // lib.rs:108,112.
@@ -54,8 +53,8 @@ pub use ibkr_dx::types::{HeldElsewhere, ScannedStrategy, SpreadScan};
 // bridge/mod.rs:191). Both are `#[doc(hidden)]`, which is why they are reached
 // only under `cfg(test)`.
 #[cfg(test)]
-#[expect(
-    unused_imports,
-    reason = "the engine-backed tests build sessions on it"
-)]
 pub(crate) use ibkr_dx::bridge::SharedState;
+// types/mod.rs: the commands a session's engine takes, which a test engine
+// receives.
+#[cfg(test)]
+pub(crate) use ibkr_dx::types::ControlCommand;

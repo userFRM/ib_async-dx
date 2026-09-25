@@ -66,6 +66,12 @@ impl IdSpace {
     }
 }
 
+/// A token no execution of the process has had.
+pub(crate) fn fresh_token() -> Token {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    Token(NEXT.fetch_add(1, Ordering::Relaxed))
+}
+
 /// An IB, as an origin names it: unique for the process's life.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct IbId(u64);
@@ -291,7 +297,6 @@ impl Lane {
 pub(crate) struct Requests {
     ib: IbId,
     generation: u64,
-    next_token: u64,
     execs: HashMap<Token, Exec>,
     /// The numbered executions, by id: ids are never reused in a generation.
     ids: HashMap<i64, Token>,
@@ -304,7 +309,6 @@ impl Requests {
         Requests {
             ib,
             generation: 0,
-            next_token: 0,
             execs: HashMap::new(),
             ids: HashMap::new(),
             lanes: HashMap::new(),
@@ -337,8 +341,11 @@ impl Requests {
     /// A new execution keyed by `key`, started in the current generation,
     /// with nothing yet to complete, assemble, feed or run.
     pub(crate) fn exec(&mut self, key: ReqKey) -> Exec {
-        let token = Token(self.next_token);
-        self.next_token += 1;
+        self.exec_as(key, fresh_token())
+    }
+
+    /// As [`Requests::exec`], under the token its waiter was made with.
+    pub(crate) fn exec_as(&mut self, key: ReqKey, token: Token) -> Exec {
         let req_id = match key {
             ReqKey::Id(id) => id,
             ReqKey::Question(_) => -1,
@@ -357,6 +364,11 @@ impl Requests {
             deadline: None,
             guard: None,
         }
+    }
+
+    /// Where the execution `token` was started.
+    pub(crate) fn origin(&self, token: Token) -> Option<Origin> {
+        self.execs.get(&token).map(|x| x.origin)
     }
 
     /// Registers a numbered execution, in the owner step that sends it.
@@ -902,14 +914,16 @@ mod tests {
             !a.owns(&xb.origin),
             "another IB at the same generation and id"
         );
-        let old = xa.origin;
+        let (old, mut made) = (xa.origin, vec![xa.token.0]);
         a.insert(xa);
         let (_p, x) = waiting::<()>(&mut a, ReqKey::question(Question::Positions));
+        made.push(x.token.0);
         assert_eq!(a.ask(Ask::Positions, Some(x)), Some(Ask::Positions));
         let (_q, x) = waiting::<()>(&mut a, ReqKey::question(Question::Positions));
+        made.push(x.token.0);
         assert_eq!(a.ask(Ask::Positions, Some(x)), None);
         let all = a.take_all();
-        assert_eq!(all.iter().map(|x| x.token.0).collect::<Vec<_>>(), [0, 1, 2]);
+        assert_eq!(all.iter().map(|x| x.token.0).collect::<Vec<_>>(), made);
         assert_eq!(a.unsent(), 0);
         a.begin(2);
         assert!(!a.owns(&old), "an ended generation");
@@ -917,6 +931,6 @@ mod tests {
         assert_eq!(a.ask(Ask::Positions, None), Some(Ask::Positions));
         let x = a.exec(ReqKey::Id(1));
         assert!(a.owns(&x.origin));
-        assert!(x.token.0 > 2, "tokens are unique for the IB's life");
+        assert!(x.token.0 > made[2], "tokens are unique for the IB's life");
     }
 }

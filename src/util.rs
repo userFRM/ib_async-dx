@@ -44,13 +44,6 @@ pub fn global_error_event() -> &'static Event<Error> {
 /// `util.run` cancels its task and raises the value. On the owner thread it
 /// is `Err(Value)` at once, as asyncio refuses to run a loop that is already
 /// running.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "every coroutine's blocking face and run_until use it"
-    )
-)]
 pub(crate) fn block_on<F: IntoFuture>(f: F, timeout: Option<Duration>) -> Result<F::Output> {
     if on_owner() {
         return Err(Error::Value(
@@ -208,7 +201,6 @@ impl From<civil::Time> for TimeT {
 impl TimeT {
     /// The instant this names, as a datetime: `Today` is `now`'s date in
     /// `local` at the time given, and `At` is in UTC.
-    #[cfg_attr(not(test), expect(dead_code, reason = "the owner's waits use it"))]
     pub(crate) fn to_zoned(&self, now: Timestamp, local: &TimeZone) -> Result<Zoned> {
         match self {
             TimeT::At(t) => Ok(t.to_zoned(TimeZone::UTC)),
@@ -548,10 +540,6 @@ pub(crate) fn py_int(s: &str) -> Option<i64> {
 
 /// Text as ib_async's tick 47 and `FlexReport.extract` read it: `float()`,
 /// then `int()`, keeping the text where `float()` fails.
-#[cfg_attr(
-    not(any(test, feature = "flex")),
-    expect(dead_code, reason = "tick 47 reads it")
-)]
 pub(crate) fn py_number(s: &str) -> DynamicValue {
     match py_float(s) {
         None => DynamicValue::Str(s.to_owned()),

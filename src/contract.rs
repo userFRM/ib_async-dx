@@ -119,7 +119,6 @@ type LegKey = (i64, i32, String, String, i32, i32, String, i32);
 /// The key tickers are held under: ib_async's `hash(contract)`, the key of
 /// its `Wrapper.tickers`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(not(test), expect(dead_code, reason = "the ticker state keys by it"))]
 pub(crate) enum TickerKey {
     /// `con_id`, negated for a CONTFUT, which shares its front contract's
     /// `con_id`. Widened so that the negation is exact, as Python's is.
@@ -149,7 +148,6 @@ impl Contract {
     /// A BAG is keyed by its legs, sorted by `con_id`, with its symbol and
     /// exchange. Any other contract needs a `con_id`, and fails with
     /// `Err(Value)` without one, as ib_async raises.
-    #[cfg_attr(not(test), expect(dead_code, reason = "the ticker state keys by it"))]
     pub(crate) fn ticker_key(&self) -> Result<TickerKey> {
         if self.sec_type == "BAG" {
             let mut legs: Vec<&ComboLeg> = self.combo_legs.iter().collect();
