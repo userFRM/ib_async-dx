@@ -29,11 +29,11 @@ fn session(ib: &Shared) -> Result<Arc<EClient>> {
     ib.connected().map(|(_, c)| c).ok_or(Error::NotConnected)
 }
 
-/// `n` consecutive ids from the IB's one space, above the engine's floor:
-/// ib_async's `getReqId`, `n` times in a row.
+/// `n` consecutive order ids from the IB's one space, above the engine's
+/// floor: ib_async's `getReqId`, `n` times in a row.
 fn allocate(ib: &Shared, client: &EClient, n: i64) -> Result<i64> {
     let floor = client.order_id_floor();
-    ib.core().ids.allocate(floor, n)
+    ib.core().ids.allocate_orders(floor, n)
 }
 
 /// What `client.placeOrder` does to the order it sends: only a volatility
@@ -190,15 +190,24 @@ fn cancel(ib: &Arc<Shared>, order: &Live<Order>, time: &str) -> Result<Option<Li
 /// A numbered request: an id from the IB's space, its execution under
 /// that id, and `send` with the id, in one owner step. `acc` is the
 /// collection a list result starts from; `contract` is what the
-/// request's errors name. ib_async's `getReqId`, `startReq` and send.
+/// request's errors name; `order`, that the id is an order's (a what-if).
+/// ib_async's `getReqId`, `startReq` and send.
 fn numbered<T: Send + 'static>(
     shared: &Arc<Shared>,
+    order: bool,
     acc: Option<Box<dyn Any + Send>>,
     contract: Option<Contract>,
     send: impl FnOnce(&EClient, i64) + Send + 'static,
 ) -> Pending<T> {
     shared.request_connected(move |ib, token, reply: Reply<T>| {
-        let started = session(ib).and_then(|c| allocate(ib, &c, 1).map(|id| (id, c)));
+        let started = session(ib).and_then(|c| {
+            let id = if order {
+                allocate(ib, &c, 1)
+            } else {
+                ib.core().ids.allocate(c.order_id_floor(), 1)
+            };
+            id.map(|id| (id, c))
+        });
         let (id, client) = match started {
             Ok(v) => v,
             Err(e) => {
@@ -352,6 +361,7 @@ impl IBHandle {
         let c = contract.clone();
         numbered(
             &self.shared,
+            true,
             None,
             Some(contract.clone()),
             move |client, id| {
@@ -428,6 +438,7 @@ impl IBHandle {
         let filter = e::ExecutionFilter::from(exec_filter.unwrap_or(&ExecutionFilter::default()));
         numbered(
             &self.shared,
+            false,
             Some(Box::new(Vec::<Fill>::new())),
             None,
             move |client, id| {
@@ -948,6 +959,24 @@ mod tests {
         let next = Live::new(Order::limit("BUY", 100.0, 1.5));
         s.ib.place_order(&stock(), &next).unwrap();
         assert_eq!(s.sent(), ["place 41", "place 45"]);
+
+        // The venue names an order past what a request can carry: orders
+        // take the engine's full-width ids, still never twice, and requests
+        // keep theirs.
+        let wide: i64 = 1_787_685_160_171_383;
+        let (_, client) = s.ib.shared.connected().unwrap();
+        client
+            .shared_state()
+            .orders
+            .note_the_venue_named(wide as u64);
+        let b =
+            s.ib.bracket_order("SELL", 10.0, 100.0, 90.0, 110.0)
+                .unwrap();
+        assert_eq!(b.stop_loss.read().order_id, wide + 3);
+        s.ib.place_order(&stock(), &Live::new(Order::limit("BUY", 100.0, 1.5)))
+            .unwrap();
+        assert_eq!(s.sent(), [format!("place {}", wide + 4)]);
+        assert_eq!(s.ib.client().get_req_id().unwrap(), 46);
     }
 
     #[test]

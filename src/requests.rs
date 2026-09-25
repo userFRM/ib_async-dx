@@ -22,9 +22,15 @@ use crate::pending::{Reply, Token};
 use crate::timer::{DeadlineHeap, DeadlineId};
 
 /// The ids of one generation: orders and requests alike, as ib_async's
-/// `getReqId` numbers both. Only the owner allocates.
+/// `getReqId` numbers both, while the account's order ids fit a request.
+/// Once the engine's order floor is past what a request can carry, orders
+/// take the engine's full-width ids and requests keep the counter, which
+/// the engine's shared id (`next_shared_id`) started. Only the owner
+/// allocates.
 pub(crate) struct IdSpace {
     next: i64,
+    /// Past the last full-width order id given.
+    wide: i64,
     /// The first id the engine keeps for itself.
     end: i64,
 }
@@ -34,15 +40,22 @@ impl IdSpace {
     pub(crate) fn new() -> Self {
         IdSpace {
             next: 0,
+            wide: 0,
             end: FIRST_RESERVED_REQUEST_ID,
         }
     }
 
-    /// `n` consecutive ids, the first of them given. `floor` is the engine's
-    /// `order_id_floor()` read for this allocation, so an id the venue has
-    /// named is never given again, even before its `open_order` arrives.
+    /// `n` consecutive request ids, the first of them given. `floor` is the
+    /// engine's `order_id_floor()` read for this allocation, so an id the
+    /// venue has named is never given again, even before its `open_order`
+    /// arrives. A floor no request can carry is ignored, as `raise` ignores
+    /// one.
     pub(crate) fn allocate(&mut self, floor: i64, n: i64) -> Result<i64> {
-        let first = self.next.max(floor);
+        let first = if floor < self.end {
+            self.next.max(floor)
+        } else {
+            self.next
+        };
         match first.checked_add(n) {
             Some(next) if next <= self.end => {
                 self.next = next;
@@ -52,6 +65,21 @@ impl IdSpace {
                 "request ids exhausted: {first} is inside the range the engine reserves"
             ))),
         }
+    }
+
+    /// `n` consecutive order ids from `floor`, the engine's
+    /// `order_id_floor()`: from the counter while the floor is below the
+    /// band, else from the floor itself, since the engine refuses a new
+    /// order numbered at or below its saved counter (103).
+    pub(crate) fn allocate_orders(&mut self, floor: i64, n: i64) -> Result<i64> {
+        if floor < self.end {
+            return self.allocate(floor, n);
+        }
+        let first = self.wide.max(floor);
+        self.wide = first
+            .checked_add(n)
+            .ok_or_else(|| Error::Value(format!("order ids exhausted: {first}")))?;
+        Ok(first)
     }
 
     /// Ids below `min` are not given from now on: an `open_order`'s id plus
@@ -646,12 +674,19 @@ mod tests {
             ),
             other => unreachable!("{other:?}"),
         }
-        // Three that would cross it, and a floor past any id, fail unchanged.
+        // Three that would cross it fail unchanged.
         let mut s = IdSpace::new();
         s.raise(end - 2);
         assert!(s.allocate(0, 3).is_err());
-        assert!(s.allocate(i64::MAX, 1).is_err());
         assert_eq!(s.allocate(0, 2).ok(), Some(end - 2));
+        // An order floor no request can carry, as on an account whose orders
+        // were numbered past the band (paper, 2026-09-25): requests go on
+        // from the counter the engine's shared id started.
+        let wide = 1_787_685_160_171_388;
+        let mut s = IdSpace::new();
+        s.raise(1_790_347_892);
+        assert_eq!(s.allocate(wide, 1).unwrap(), 1_790_347_892);
+        assert_eq!(s.allocate(wide, 1).unwrap(), 1_790_347_893);
     }
 
     #[test]

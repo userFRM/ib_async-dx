@@ -1492,7 +1492,11 @@ impl Shared {
                 }
             }
             #[cfg(test)]
-            Some(Via::Test(Some(client))) => self.on_post(Post::LoggedOn { g, client }),
+            Some(Via::Test(Some(client))) => self.on_post(Post::LoggedOn {
+                g,
+                client,
+                next_id: 0,
+            }),
             #[cfg(test)]
             Some(Via::Test(None)) => {}
             None => {}
@@ -1570,13 +1574,13 @@ impl Shared {
 
     pub(crate) fn on_post(self: &Arc<Self>, post: Post) {
         match post {
-            Post::LoggedOn { g, client } => self.logged_on(g, client),
+            Post::LoggedOn { g, client, next_id } => self.logged_on(g, client, next_id),
             Post::LogonFailed { g, error, engine } => self.logon_failed(g, error, engine),
             Post::EngineClosed { g, engine } => self.engine_closed(g, engine),
         }
     }
 
-    fn logged_on(self: &Arc<Self>, g: u64, client: Arc<EClient>) {
+    fn logged_on(self: &Arc<Self>, g: u64, client: Arc<EClient>, next_id: i64) {
         let mut c = self.core();
         let live = match &c.conn {
             Conn::Connecting { g: cg, logon } if *cg == g => !logon.taken_back(),
@@ -1590,7 +1594,7 @@ impl Shared {
         c.logon_live = false;
         if live && !self.queue.latched() {
             drop(c);
-            return self.publish(g, client);
+            return self.publish(g, client, next_id);
         }
         c.conn = Conn::Closing {
             g,
@@ -1681,9 +1685,9 @@ impl Shared {
         }
     }
 
-    /// Publishes generation `g`: a reset or fresh `State`, `api_start`, then
-    /// the startup sync while `g` stands.
-    fn publish(self: &Arc<Self>, g: u64, client: Arc<EClient>) {
+    /// Publishes generation `g`: a reset or fresh `State`, ids from
+    /// `next_id`, `api_start`, then the startup sync while `g` stands.
+    fn publish(self: &Arc<Self>, g: u64, client: Arc<EClient>, next_id: i64) {
         let now = self.wall_now();
         let (sync, old) = {
             let mut c = self.core();
@@ -1705,6 +1709,7 @@ impl Shared {
             c.state.accounts = client.accounts.clone();
             c.requests.begin(g);
             c.ids = IdSpace::new();
+            c.ids.raise(next_id);
             c.last_activity = self.clock.now();
             c.started = self.clock.now();
             c.conn = Conn::Connected {
@@ -3702,6 +3707,7 @@ mod tests {
         let post = Post::LoggedOn {
             g: 1,
             client: Arc::new(client),
+            next_id: 0,
         };
         assert!(h.shared.post(post).is_ok());
         dropper.join().unwrap();

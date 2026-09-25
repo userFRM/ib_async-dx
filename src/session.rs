@@ -143,6 +143,9 @@ pub(crate) enum Post {
     LoggedOn {
         g: u64,
         client: Arc<EClient>,
+        /// The engine's shared id once the replay is in: where requests are
+        /// numbered from, as ib_async's from `nextValidId`.
+        next_id: i64,
     },
     LogonFailed {
         g: u64,
@@ -199,7 +202,7 @@ fn log_on(g: u64, config: &EClientConfig, timeout: Option<Duration>, logon: &Log
     }));
     let client = Arc::new(client);
     match waited {
-        Ok(Ok(_)) => Post::LoggedOn { g, client },
+        Ok(Ok(next_id)) => Post::LoggedOn { g, client, next_id },
         Ok(Err(why)) => {
             // The replay wait ran out, as ib_async's wait for `apiStart`
             // does, or the connect was taken back meanwhile.
