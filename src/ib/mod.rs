@@ -38,6 +38,12 @@ use crate::util::{TimeT, block_on, global_error_event};
 
 pub use crate::state::Bars;
 
+/// The timeouts a method takes when its `timeout` is `None`.
+pub mod defaults {
+    pub use super::extras::{CORPORATE_ACTIONS_TIMEOUT, SPREAD_SCAN_TIMEOUT};
+    pub use super::reference::HISTORICAL_TIMEOUT;
+}
+
 /// ib_async's timeout of 0, no limit, where its default is no limit too.
 fn unlimited_at_zero(timeout: Option<Duration>) -> Option<Duration> {
     timeout.filter(|t| !t.is_zero())

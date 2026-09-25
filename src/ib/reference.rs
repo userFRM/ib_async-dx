@@ -27,8 +27,8 @@ use crate::requests::{Ask, Exec, ReqKey, Route, Waiter, fresh_token};
 use crate::state::{Bars, State};
 use crate::util::{BarDate, DateTimeArg, block_on, format_ib_datetime};
 
-/// `reqHistoricalData`'s default timeout.
-const HISTORICAL_TIMEOUT: Duration = Duration::from_secs(60);
+/// `req_historical_data`'s timeout when none is given: ib_async's 60 s.
+pub const HISTORICAL_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// How long `reqMatchingSymbolsAsync`, `reqHistoricalNewsAsync` and
 /// `requestFAAsync` wait for their answer.
