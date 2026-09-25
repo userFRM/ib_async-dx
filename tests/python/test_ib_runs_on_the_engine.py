@@ -309,6 +309,27 @@ def test_an_order_id_the_venue_names_after_the_connect_is_not_handed_out(connect
     assert trade.order.orderId == 5001
 
 
+def test_an_order_is_numbered_past_an_order_id_no_request_can_carry(connect):
+    """The engine refuses a new order or a what-if at or below an id the
+    account has used (103), and on an account whose order ids have outgrown a
+    request no request can be numbered past them. Their `IB` numbers both
+    with `getReqId`: an order takes the engine's next order id, and requests
+    go on from their own counter."""
+    ib = connect()
+    heard = _heard(ib)
+    wide = 1_787_685_160_171_388
+    ib.client._client._test_push_venue_order(wide, "SPY", "BUY", 1.0, 1.0, "Filled")
+    reqId = ib.client.getReqId()
+    trade = ib.placeOrder(SPY, ib_async.LimitOrder("BUY", 1, 1.0))
+    bracket = ib.bracketOrder("BUY", 1, 1.0, 2.0, 0.5)
+    ib.whatIfOrderAsync(SPY, ib_async.LimitOrder("BUY", 1, 1.0))
+    ib.client._pass_once()
+    assert trade.order.orderId == wide + 1, "past every order id the account has used"
+    assert [o.orderId for o in bracket] == [wide + 2, wide + 3, wide + 4]
+    assert heard == [], "the order and the what-if are taken"
+    assert ib.client.getReqId() == reqId + 1, "requests go on from their own counter"
+
+
 def test_prices_stated_as_the_session_ends_reach_the_ticker(connect, caplog):
     """What a pass stated before the session ended reaches the ticker before
     the close, as a socket's last data is read before it closes. Held to the

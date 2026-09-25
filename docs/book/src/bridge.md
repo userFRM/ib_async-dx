@@ -137,7 +137,10 @@ which the venue names at every connect, and past the next order id the engine
 saved for the account and client id, and is kept past every one the venue
 names after: a new order never takes an id a fill has already spent, and an
 order placed elsewhere under an id wider than a request can carry leaves every
-request numberable. The engine keeps that saved id in a file of its own, and
+request numberable. On such an account no request can be numbered past the
+account's order ids, so a new order, a bracket and a what-if take the engine's
+next order id, which the engine accepts, and requests go on from the counter.
+The engine keeps that saved id in a file of its own, and
 [its documentation](https://userfrm.github.io/ibkr-dx/reference/venue-behaviour.html#order-ids-across-sessions)
 says where and how to move it.
 

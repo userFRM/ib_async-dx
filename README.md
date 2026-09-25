@@ -228,7 +228,9 @@ the two option computations, and another key or value is refused with 10337 or
 10338.
 Orders and requests are numbered from one counter, as their client numbers
 them, starting past every order id the account has used, where a gateway's next
-valid id starts. `readonly=True` makes a read-only session, which refuses
+valid id starts. On an account whose order ids have outgrown what a request can
+carry, an order takes the engine's next order id instead, and requests go on
+from the counter. `readonly=True` makes a read-only session, which refuses
 orders as a gateway set to read-only does. A login that fails raises
 `ConnectionError` with `apiError` saying why, as a gateway that refuses a
 connection does. `timeout` bounds each request ib_async makes as the session

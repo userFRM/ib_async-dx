@@ -34,12 +34,14 @@ import inspect
 import logging
 import os
 import pathlib
+import sys
 import threading
 import time
 import weakref
 
 from eventkit import Event
 from ib_async.client import Client as _TheirClient
+from ib_async.ib import IB as _TheirIB
 
 import ibkr_dx as _ibkr_dx
 
@@ -76,6 +78,13 @@ IBC_LOGIN: contextvars.ContextVar[IbcLogin | None] = contextvars.ContextVar(
 #: not held to it: the venue numbers orders as wide as it likes, and an account
 #: whose orders have outgrown a request id is ordinary rather than broken.
 WIDEST_REQUEST_ID = 0xC000_0000 - 1
+
+
+#: Where their `IB` numbers an order with `getReqId`: a new order, a
+#: bracket's three, and a what-if, which the engine numbers as an order.
+_NUMBERS_AN_ORDER = frozenset(
+    f.__code__ for f in (_TheirIB.placeOrder, _TheirIB.bracketOrder, _TheirIB.whatIfOrderAsync)
+)
 
 
 #: How long after one pass the next is made: the finest step at which
@@ -512,6 +521,17 @@ class IbkrDxClient:
     def getReqId(self):
         if not self.isConnected():
             raise ConnectionError("Not connected")
+        if sys._getframe(1).f_code in _NUMBERS_AN_ORDER:
+            # The engine refuses a new order at or below an id the account
+            # has used or saved for this client id (103). Where those fit a
+            # request, the counter below is past them and numbers the order,
+            # as their client numbers one. Where they do not, no request can
+            # carry an id past them: the order takes the engine's next order
+            # id, and the counter goes on for requests. An id the engine
+            # reserved and the order did not take only raises its counter.
+            order_id = self._client.next_order_id()
+            if order_id > WIDEST_REQUEST_ID:
+                return order_id
         # Past every order id the venue has named, those it names after the
         # connect among them: the history of an order that filled can come
         # later than the wait at connect, and the venue refuses an id a fill
@@ -538,7 +558,8 @@ class IbkrDxClient:
         # Their wrapper raises this counter past every order id it sees, so
         # that the next order their client numbers is not one the account is
         # already working. Their client numbers orders and requests out of it
-        # alike, and so does this one.
+        # alike, and so does this one while the account's order ids fit a
+        # request (see `getReqId`).
         #
         # An order id placed elsewhere can go wider than a request id, which
         # is four billion wide with the top of that reserved. A raise past what
@@ -546,10 +567,11 @@ class IbkrDxClient:
         # with such an order, every request afterwards was refused as a number
         # this protocol cannot carry, and an unmodified program could not so
         # much as name a contract. The counter starts past every id the
-        # account has used that a request can carry, so an id it hands out is
-        # clear of that order as well. Such a raise is let go of rather than
-        # taken to the top of the range, which saturates and steps over the
-        # edge on the next request.
+        # account has used that a request can carry, so a request it numbers
+        # is clear of that order as well, and an order takes the engine's own
+        # id past it. Such a raise is let go of rather than taken to the top
+        # of the range, which saturates and steps over the edge on the next
+        # request.
         if minReqId > WIDEST_REQUEST_ID:
             return
         self._reqIdSeq = max(self._reqIdSeq, minReqId)
@@ -1274,7 +1296,10 @@ def attach(ib, username="", password="", paper=True, session_file=None,
     Orders and requests are numbered from one counter, as ib_async's own
     client numbers them, kept past every order id the account has used, which
     the venue names at every connect and whenever it names another, and past
-    the next order id the engine saved for this account and client id.
+    the next order id the engine saved for this account and client id. Where
+    those ids have outgrown what a request can carry, a new order, a bracket
+    and a what-if take the engine's next order id instead, and requests go on
+    from the counter.
     """
     ib.disconnect()
     if ib.client.connState != ib.client.DISCONNECTED:

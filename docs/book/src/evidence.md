@@ -14,7 +14,7 @@ test, a script, or a recorded server response — not from reading the code.
 
 | Suite | Count | Needs a session |
 | --- | ---: | --- |
-| `tests/python` | 300 | 2 of them. The other 298 run offline |
+| `tests/python` | 301 | 2 of them. The other 299 run offline |
 | `tests/ib_async_upstream` | ib_async's own suite, 3 tests at 2.1.0 (`ab629f34c1`), written to run on the engine; not run against the venue at this revision | Yes |
 | `scripts/` | 3 checks against a paper account; not run against the venue at this revision | Yes |
 
@@ -100,6 +100,7 @@ All offline, on the engine's test session, in
 | A handler asking again on every refusal is answered a refusal a pass, and does not hold the loop | `test_a_handler_that_asks_again_on_every_refusal_does_not_hold_the_loop` |
 | A wrapper that raises is logged, and the session carries on | `test_a_wrapper_that_raises_is_logged_and_the_session_carries_on` |
 | An order id the venue names after the connect is not handed out | `test_an_order_id_the_venue_names_after_the_connect_is_not_handed_out` |
+| On an account whose order ids have outgrown a request, a new order, a bracket and a what-if take the engine's next order id and are taken, and requests go on from their own counter | `test_an_order_is_numbered_past_an_order_id_no_request_can_carry` |
 | Prices stated as the session ends reach the ticker before the close | `test_prices_stated_as_the_session_ends_reach_the_ticker` |
 | A refusal held as the program disconnects does not reach the next session | `test_a_refusal_held_as_the_program_disconnects_does_not_reach_the_next_session` |
 | Orders and requests are numbered from one counter, so an order's refusal reaches the order and not a request still waiting | `test_orders_and_requests_are_numbered_from_one_counter` |
