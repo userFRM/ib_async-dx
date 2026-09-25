@@ -117,7 +117,7 @@ the [notebooks](./notebooks.md) do it a cell at a time. Neither has been run
 against the venue through `ib_async_dx.IB` yet, so [Evidence](./evidence.md)
 rates both paths ✅ Offline.
 
-**What crosses, offline.** The other 298 tests need no session: that a
+**What crosses, offline.** The other 299 tests need no session: that a
 combination keeps its legs on every request path, that a fill's cost reaches
 ib_async as its own `CommissionReport`, that a refused order reaches its
 `Trade`, that `connect` takes its login from the environment or an `IBC` and

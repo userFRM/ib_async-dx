@@ -447,7 +447,7 @@ Claims here rest on tests, and the tests are counted rather than described:
 
 | Suite | Count | Needs a session |
 | --- | ---: | :---: |
-| Python | 298 | No |
+| Python | 299 | No |
 | Python, live | 2 | Yes |
 | ib_async's own suite, at 2.1.0 | 3 | Yes |
 | Paper-account scripts | 3 | Yes |

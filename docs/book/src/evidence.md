@@ -19,7 +19,7 @@ test, a script, or a recorded server response — not from reading the code.
 | `scripts/` | 3 checks against a paper account; not run against the venue at this revision | Yes |
 
 CI builds the engine from source with its test hooks, at the engine commit this
-package is tested against (`8b4c02cc`), and runs `tests/python` on every push
+package is tested against (`c1852350`), and runs `tests/python` on every push
 to `main` and every pull request, on Python 3.11, 3.13 and free-threaded
 3.14t, against this package installed from the wheel and from the source
 distribution it builds, never from the checkout. It also installs the wheel
