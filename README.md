@@ -113,7 +113,7 @@ The engine first, then this package:
 ```bash
 # The engine, at the commit this package is tested against. It compiles
 # from source, so it needs the Rust toolchain.
-pip install "git+https://github.com/userFRM/ibkr-dx@e3f4307ad4d158cabba85dab07c40758c9559724"
+pip install "git+https://github.com/userFRM/ibkr-dx@8b4c02ccaf82884d5b1ebc330f5f4c7e5bb0d2c3"
 
 # This package, which brings ib_async 2.1 with it.
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
@@ -332,7 +332,7 @@ opens a paper session.
 
 ```bash
 git clone https://github.com/userFRM/ib_async-dx && cd ib_async-dx
-pip install "git+https://github.com/userFRM/ibkr-dx@e3f4307ad4d158cabba85dab07c40758c9559724"
+pip install "git+https://github.com/userFRM/ibkr-dx@8b4c02ccaf82884d5b1ebc330f5f4c7e5bb0d2c3"
 pip install -e . jupyter python-dotenv pandas
 jupyter lab notebooks
 ```
@@ -461,7 +461,7 @@ Locally:
 
 ```bash
 git clone https://github.com/userFRM/ibkr-dx
-git -C ibkr-dx checkout e3f4307ad4d158cabba85dab07c40758c9559724
+git -C ibkr-dx checkout 8b4c02ccaf82884d5b1ebc330f5f4c7e5bb0d2c3
 pip install maturin
 maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
 pip install dist/*.whl

@@ -16,7 +16,7 @@ repositories.
 ## Install
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx@e3f4307ad4d158cabba85dab07c40758c9559724"
+pip install "git+https://github.com/userFRM/ibkr-dx@8b4c02ccaf82884d5b1ebc330f5f4c7e5bb0d2c3"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
 ```
 
