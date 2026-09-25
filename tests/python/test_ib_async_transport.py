@@ -42,7 +42,7 @@ def test_an_outage_leaves_the_session_open_and_an_end_closes_it():
     client._client.poll()
     assert client.isConnected(), "an outage the engine is mending is a 1100, not an end"
 
-    client._client._test_end_session()
+    client._client._test_push_stopped_event()
     client._client.poll()
     assert not client.isConnected() and client._pass is None
     assert heard == ["disconnected"]
@@ -292,14 +292,6 @@ def test_a_condition_joined_by_or_is_carried():
     order.conditions[0].conjunction = "x"
     with pytest.raises(ValueError, match="conjunction"):
         ib_async_dx.bridge._as_ours(order)
-
-
-def test_a_retired_attribute_at_their_default_states_nothing():
-    """`eTradeOnly`, `firmQuoteOnly` and `nbboPriceCap` go out on every order
-    their client places, at False, False and unset, and the engine has no
-    place for them. There they state nothing, and the order is carried."""
-    ours = ib_async_dx.bridge._as_ours(ib_async.LimitOrder("BUY", 1, 1.0))
-    assert not hasattr(ours, "eTradeOnly")
 
 
 def test_readonly_reaches_the_session_through_the_adapter():

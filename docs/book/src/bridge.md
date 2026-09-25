@@ -50,6 +50,11 @@ ib_async's own, so the [bugs fixed](./beyond.md#ib_asyncs-bugs-fixed) on
   once the call has returned. A handler that ends the session ends the pass:
   nothing more of it reaches their wrapper, as their client drops what it had
   read once its socket is closed.
+- **A handler can wait on the session.** What the engine says inside a pass
+  or a close reaches their wrapper once the engine has returned, and the next
+  pass is due before one is made. So under `util.startLoop()` a blocking
+  request made in a handler is answered, and a connect made on hearing the
+  session end logs in, on an attached `ib_async.IB` as on `ib_async_dx.IB`.
 - **The login runs off the loop**, which keeps turning while it waits. What the
   engine announces from inside it — the connect acknowledgement, the accounts
   and the next id — reaches nothing there, on the login's thread; the same
@@ -64,7 +69,9 @@ ib_async's own, so the [bugs fixed](./beyond.md#ib_asyncs-bugs-fixed) on
 - **A connect ends at once when it is cancelled** — by `wait_for`, a task
   cancel or an interrupt — **or overtaken** by `disconnect()` or by another
   connect. The engine is told, and drops the session its login opens instead
-  of keeping it. The login itself runs on inside the engine until the engine
+  of keeping it. `disconnect()` returns at once too: where the login holds
+  the engine while it announces the session, the engine is told on a thread
+  of its own. The login itself runs on inside the engine until the engine
   returns — on a live account, until the second factor is answered or its wait
   runs out — on a thread that does not hold the program open. An overtaken
   connect raises `ConnectionError`. Of two connects on one `ib_async_dx.IB`,
@@ -118,18 +125,21 @@ reaches the engine is what a gateway would be sent: a field their client does
 not write is not carried, and `volatility`, which their client clears on any
 order but a volatility order, is cleared. Their client also writes
 `eTradeOnly`, `firmQuoteOnly` and `nbboPriceCap`, which the venue no longer
-takes, and an order stating one is answered as a gateway answers it: where the
-venue has retired them for the account, refused with 10268, 10269 or 10270
-under the order's number; otherwise placed without it, with the notice 2168,
-2169 or 2170.
+takes. They are carried to the engine, which answers an order stating one as a
+gateway answers it: where the venue has retired them for the account, refused
+with 10268, 10269 or 10270 under the order's number; otherwise placed without
+it, with the notice 2168, 2169 or 2170.
 
 **Orders and requests are numbered from one counter**, as their client numbers
 them, so an order never takes the number of a request still waiting. The
 counter starts past every id the account has used that a request can carry,
-which the venue names at every connect, and is kept past every one it names
-after: a new order never takes an id a fill has already spent, and an order
-placed elsewhere under an id wider than a request can carry leaves every
-request numberable.
+which the venue names at every connect, and past the next order id the engine
+saved for the account and client id, and is kept past every one the venue
+names after: a new order never takes an id a fill has already spent, and an
+order placed elsewhere under an id wider than a request can carry leaves every
+request numberable. The engine keeps that saved id in a file of its own, and
+[its documentation](https://userfrm.github.io/ibkr-dx/reference/venue-behaviour.html#order-ids-across-sessions)
+says where and how to move it.
 
 **Their client's own messages are the requests they name.** `send` is their
 client's own, writing the fields as one message, and `sendMsg` reads a
@@ -231,8 +241,8 @@ at this revision:
 Some of what their `IB` reads off its client answers for a transport that has
 no socket. `connectionStats()` counts the messages each way, as their client
 does: a request is one sent, and what reaches their wrapper one received, over
-the session since it opened. Its byte counts are zero: the engine does not
-count the bytes of its connections. `throttleStart` and `throttleEnd` never
+the session since it opened. Its byte counts are the engine's count of the
+session's protocol bytes with the venue. `throttleStart` and `throttleEnd` never
 fire, and `MaxRequests` and `RequestsInterval` are theirs and set nothing:
 their client paces what it writes to a gateway's socket, and nothing between
 the program and the venue paces requests here. And their client's `conn`, the

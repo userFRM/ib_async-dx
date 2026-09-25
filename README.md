@@ -93,7 +93,8 @@ against and removes the process behind it.
 ### Requirements
 
 * An Interactive Brokers account, paper or live
-* Python 3.11 or newer
+* Python 3.11 or newer; for a notebook, 3.11 to 3.13, as `util.startLoop()`
+  cannot run asyncio's timeouts on 3.14
 * A Rust toolchain, 1.89 or newer, while the engine is installed from source
 * ib_async 2.1, ib_async's current release, which pip installs with this package
 
@@ -112,7 +113,7 @@ The engine first, then this package:
 ```bash
 # The engine, at the commit this package is tested against. It compiles
 # from source, so it needs the Rust toolchain.
-pip install "git+https://github.com/userFRM/ibkr-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
+pip install "git+https://github.com/userFRM/ibkr-dx@e3f4307ad4d158cabba85dab07c40758c9559724"
 
 # This package, which brings ib_async 2.1 with it.
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
@@ -268,8 +269,7 @@ has each of them.
 
 | | Today |
 | --- | --- |
-| `bboExchange`, `modelCode`, `groupName`, the account on `reqAccountUpdates`, `ledgerAndNLV` | Taken and not applied: the venue answers these requests the same way whatever they name. [Limits](https://userfrm.github.io/ib_async-dx/limits.html) says why for each. |
-| The byte counts in `connectionStats()` | Zero: the engine does not count the bytes of its connections. The message counts are carried. |
+| `modelCode`, an advisor group or `AllNonProp` as `groupName`, and `All` or `AllNonProp` as the account of `reqPnL`, `reqPnLSingle`, `reqAccountUpdatesMulti` and `reqPositionsMulti`, which answer for the session's account | Taken and not applied, with a warning in the engine's log once per session. [Limits](https://userfrm.github.io/ib_async-dx/limits.html) has the account requests. |
 | `TickerExtras.statedRows`, [beyond ib_async](#beyond-ib_async) | Coming; it needs an addition to the engine first. |
 | The Rust client | [Coming](#rust). |
 | Published packages | None yet; ib_async-dx and the engine both install from git. |
@@ -332,7 +332,7 @@ opens a paper session.
 
 ```bash
 git clone https://github.com/userFRM/ib_async-dx && cd ib_async-dx
-pip install "git+https://github.com/userFRM/ibkr-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
+pip install "git+https://github.com/userFRM/ibkr-dx@e3f4307ad4d158cabba85dab07c40758c9559724"
 pip install -e . jupyter python-dotenv pandas
 jupyter lab notebooks
 ```
@@ -445,7 +445,7 @@ Claims here rest on tests, and the tests are counted rather than described:
 
 | Suite | Count | Needs a session |
 | --- | ---: | :---: |
-| Python | 300 | No |
+| Python | 298 | No |
 | Python, live | 2 | Yes |
 | ib_async's own suite, at 2.1.0 | 3 | Yes |
 | Paper-account scripts | 3 | Yes |
@@ -461,7 +461,7 @@ Locally:
 
 ```bash
 git clone https://github.com/userFRM/ibkr-dx
-git -C ibkr-dx checkout 6cfe6f134a069228bbd4035b7eae2ac5b31159e9
+git -C ibkr-dx checkout e3f4307ad4d158cabba85dab07c40758c9559724
 pip install maturin
 maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
 pip install dist/*.whl

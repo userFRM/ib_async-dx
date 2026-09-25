@@ -14,12 +14,12 @@ test, a script, or a recorded server response — not from reading the code.
 
 | Suite | Count | Needs a session |
 | --- | ---: | --- |
-| `tests/python` | 302 | 2 of them. The other 300 run offline |
+| `tests/python` | 300 | 2 of them. The other 298 run offline |
 | `tests/ib_async_upstream` | ib_async's own suite, 3 tests at 2.1.0 (`ab629f34c1`), written to run on the engine; not run against the venue at this revision | Yes |
 | `scripts/` | 3 checks against a paper account; not run against the venue at this revision | Yes |
 
 CI builds the engine from source with its test hooks, at the engine commit this
-package is tested against (`6cfe6f13`), and runs `tests/python` on every push
+package is tested against (`e3f4307a`), and runs `tests/python` on every push
 to `main` and every pull request, on Python 3.11, 3.13 and free-threaded
 3.14t, against this package installed from the wheel and from the source
 distribution it builds, never from the checkout. It also installs the wheel
@@ -92,10 +92,11 @@ All offline, on the engine's test session, in
 | An order's status names the client that placed it, so an order another client placed reaches its `Trade` | `test_an_order_status_names_the_client_that_placed_the_order` |
 | A price reaches their ticker with the size that goes with it, and a size that changed alone as a size tick | `test_a_price_carries_its_size_and_a_size_alone_reaches_tickSize` |
 | A refused new order reaches its `Trade`, and one refused with 321 is cancelled | `test_a_refused_new_order_reaches_its_trade` |
+| An order placed once the engine has given the session up is refused after `placeOrder` has made its `Trade`, and the trade is cancelled before the close | `test_an_order_placed_as_the_engine_gives_the_session_up_reaches_its_trade` |
 | A what-if refused with 321 ends with the refusal, as `RequestError` where `RaiseRequestErrors` is set | `test_a_what_if_refused_with_321_ends_with_the_refusal` |
 | 321 on an order already working stays a warning, and the order is kept | `test_321_on_an_order_already_working_stays_a_warning` |
-| The engine checks an option list as a gateway checks one: 10337 for another key, none taken on the two option computations, 10338 for another value, in the gateway's words, under the request's number, nothing sent | `test_an_option_list_is_checked_as_a_gateway_checks_one`, `test_implVolOptions_takes_no_key` |
-| An order stating an attribute the venue no longer takes goes out without it, with the notice a gateway gives, and where the venue has retired them for the account is refused as a gateway refuses it | `test_an_order_stating_a_retired_attribute_goes_out_without_it`, `test_where_the_venue_has_retired_them_the_order_is_refused` |
+| The engine checks an option list as a gateway checks one: 10337 for another key, none taken on the two option computations, 10338 for another value, in the gateway's words, under the request's number, nothing sent | `test_an_option_list_is_checked_as_a_gateway_checks_one` |
+| An order stating an attribute the venue no longer takes is carried to the engine, which gives the notice a gateway gives | `test_an_order_stating_a_retired_attribute_reaches_the_engine_with_it` |
 | A handler asking again on every refusal is answered a refusal a pass, and does not hold the loop | `test_a_handler_that_asks_again_on_every_refusal_does_not_hold_the_loop` |
 | A wrapper that raises is logged, and the session carries on | `test_a_wrapper_that_raises_is_logged_and_the_session_carries_on` |
 | An order id the venue names after the connect is not handed out | `test_an_order_id_the_venue_names_after_the_connect_is_not_handed_out` |
@@ -105,8 +106,7 @@ All offline, on the engine's test session, in
 | `updateEvent` fires on what arrives, and `timeoutEvent` when nothing does | `test_updateEvent_and_timeoutEvent_follow_what_arrives` |
 | `fetchFields` without `POSITIONS` asks for no positions at connect; ib_async 2.1 asks anyway | `test_fetchFields_without_positions_asks_for_no_positions` |
 | `reqUserInfo` answers the White Branding ID; ib_async 2.1 answers `[]` | `test_reqUserInfo_answers_the_white_branding_id` |
-| `reqMktDataEx` asks with the market data type named, and `None` keeps the session's | `test_reqMktDataEx_asks_with_the_market_data_type_named` |
-| `reqMktDataEx` hands its option list to the engine, asked under the type named for that request alone | `test_reqMktDataEx_hands_its_option_list_to_the_engine` |
+| `reqMktDataEx` asks with the market data type named, with its option list for the engine to check, and `None` keeps the session's | `test_reqMktDataEx_asks_with_the_market_data_type_named` |
 | `reqCurrentTimeInMillis` answers an int of milliseconds, within 2 s of the local clock on a session with no venue | `test_reqCurrentTimeInMillis_is_the_venues_clock` |
 | The option model is read by the ticker's request, and an unstated figure is `None` | `test_the_option_model_is_read_by_the_tickers_request` |
 | What the engine states arrives in `TickerExtras`, `OrderPreset` and `CompetingSession` | `test_what_the_engine_states_is_carried_in_this_packages_types` |
@@ -114,7 +114,7 @@ All offline, on the engine's test session, in
 | A ping reaches the engine | `test_a_ping_reaches_the_engine` |
 | An extra called while not connected, before `connect` or after `disconnect`, raises `ConnectionError` | `test_an_extra_while_not_connected_raises` |
 | A record ib_async builds whole, a routing component, is answered from the engine and the session carries on | `test_the_routing_components_arrive_as_their_records` |
-| `connectionStats()` counts the messages each way, and raises while not connected | `test_connectionStats_counts_the_messages_each_way` |
+| `connectionStats()` counts the messages each way, carries the engine's byte counts, and raises while not connected | `test_connectionStats_counts_the_messages_each_way` |
 | The competing-session warning is logged on `ib_async_dx.ib` | `test_the_competing_session_warning_is_this_packages_own` |
 | A connect that completed is not failed by the warning after it: not by a stamp that does not parse, nor by a handler that disconnected | `test_a_completed_connect_is_not_failed_by_what_follows_it` |
 | `priceBasedVol` is a bool, `False` when the venue did not state it | `test_priceBasedVol_is_a_bool_when_unstated` |
@@ -134,7 +134,7 @@ a disconnect counted during a login drops the session it opens.
 | What holds | Test |
 | --- | --- |
 | A connect cancelled during its login tells the engine, and leaves no session | `test_a_connect_cancelled_during_its_login_leaves_no_session` |
-| A `disconnect()` during the login ends the connect with `ConnectionError`, and leaves no session | `test_a_disconnect_during_the_login_ends_it` |
+| A `disconnect()` during the login ends the connect with `ConnectionError`, leaves no session, and returns at once while the login holds the engine | `test_a_disconnect_during_the_login_ends_it` |
 | Of two connects on one `IB`, the later one's session is left open and the earlier ends at once, on `ib_async_dx.IB` and on an attached `ib_async.IB` | `test_a_later_connect_retires_an_earlier_one_still_logging_in` (2) |
 | Only the connect's own startup request for positions is skipped | `test_only_the_connects_own_startup_request_for_positions_is_skipped` |
 | A connect overtaken once logged in, still waiting on the venue, fails and leaves the later session open, on `ib_async_dx.IB` and on an attached `ib_async.IB` | `test_a_connect_overtaken_after_its_login_leaves_the_later_session_open` (2) |
@@ -142,7 +142,8 @@ a disconnect counted during a login drops the session it opens.
 | Of three connects made at once, the last is left open | `test_of_three_connects_at_once_the_last_is_left_open` |
 | A `disconnect()` from a handler the connect runs ends the connect | `test_a_disconnect_from_a_handler_during_the_connect_ends_it` |
 | A login given up on does not hold the program open | `test_a_login_given_up_on_does_not_hold_the_program_open` |
-| A login given up on reaches nothing and keeps nothing, when the engine installs its session after the disconnect | `test_a_login_given_up_on_reaches_nothing_and_keeps_nothing` (2) |
+| Under `util.startLoop()` a handler can wait on the session: a blocking request made in an `errorEvent` handler is answered, and a connect made in a `disconnectedEvent` handler of an attached `ib_async.IB` logs in, whether the engine ended the session or its `IBC` was terminated. Skipped on Python 3.14, where nest_asyncio cannot run asyncio's timeouts | `test_a_handler_can_wait_on_the_session_under_startLoop` |
+| A login given up on reaches nothing and keeps nothing, when the engine installs its session after the disconnect, and its engine's close does not end the later session | `test_a_login_given_up_on_reaches_nothing_and_keeps_nothing` (2) |
 | An interrupted `connect()` opens nothing later | `test_an_interrupted_connect_opens_nothing_later` |
 | A handler that ends the session ends the pass: no held price and no held refusal reaches the cleared wrapper | `test_a_handler_that_ends_the_session_mid_pass_ends_the_pass`, `test_a_handler_that_ends_the_session_leaves_the_refusals_behind_it` |
 | Their wrapper is called on the loop's thread only, what the engine announces from inside the login among it, and hears `connectAck`, `managedAccounts` and `nextValidId` there | `test_their_wrapper_is_called_on_the_loops_thread_only` |
@@ -174,7 +175,6 @@ All offline, in `tests/python`.
 | A field set to something the engine cannot carry is refused, by name | `test_ib_async_transport.py::test_a_field_that_cannot_be_carried_is_refused` |
 | A field at ib_async's default is carried as ib_async sends it; what it sends empty is left to the engine | `test_ib_async_transport.py::test_a_field_at_their_default_is_carried` |
 | An order condition joined by or is carried | `test_ib_async_transport.py::test_a_condition_joined_by_or_is_carried` |
-| An attribute the venue no longer takes states nothing at ib_async's default | `test_ib_async_transport.py::test_a_retired_attribute_at_their_default_states_nothing` |
 | A fill's cost reaches them as their own `CommissionReport` | `test_ib_async_bridge_carries_everything.py::test_a_fills_cost_arrives_as_the_record_their_wrapper_reads`, `test_ib_async_depth.py::test_a_commission_report_reaches_them_as_their_own_type` |
 | A histogram reaches them as their `HistogramData` | `test_a_histogram_crosses_the_bridge_in_their_type.py` (2) |
 | A historical tick reaches them as their own record | `test_ib_async_depth.py::test_a_historical_tick_is_handed_over_as_their_own_record` |

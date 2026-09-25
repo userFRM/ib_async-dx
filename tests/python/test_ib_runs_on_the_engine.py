@@ -32,8 +32,8 @@ class OfflineEngine(ibkr_dx.EClient):
         self.asked.append("positions")
         super().req_positions()
 
-    # Recorded and not sent: a subscription on the test session waits out the
-    # engine's registration. The core's own tests follow it to the venue.
+    # Recorded and not sent: these tests read what reached the engine. The
+    # core's own tests follow a subscription to the venue.
     def req_mkt_data(self, *args):
         self.asked.append(("req_mkt_data", args))
 
@@ -194,6 +194,22 @@ def test_a_refused_new_order_reaches_its_trade(connect, caplog):
     assert heard == [(trade.order.orderId, 321)]
 
 
+def test_an_order_placed_as_the_engine_gives_the_session_up_reaches_its_trade(connect):
+    """The engine states "not connected" inside the call once it has given
+    the session up, before the pass that says so. Held for that pass, as a
+    gateway's refusal comes back on the socket after the call, it reaches the
+    `Trade` their `placeOrder` makes after the call, before the close.
+    Delivered inside the call, the order stayed PendingSubmit for good."""
+    ib = connect()
+    heard = _heard(ib)
+    ib.client._client._test_push_stopped_event()
+    trade = ib.placeOrder(SPY, ib_async.LimitOrder("BUY", 1, 1.0))
+    ib.client._pass_once()
+    assert heard == [(trade.order.orderId, 504)]
+    assert trade.orderStatus.status == "Cancelled"
+    assert not ib.isConnected()
+
+
 def test_a_what_if_refused_with_321_ends_with_the_refusal(connect):
     """ib_async 2.1's `whatIfOrder` waited for good on a 321, a warning to
     it, which never ends a request; its own suite expects a `RequestError`
@@ -222,26 +238,17 @@ def test_321_on_an_order_already_working_stays_a_warning(connect, monkeypatch):
 
 
 class Placing(OfflineEngine):
-    """Records the orders that reach it, and grants what the test names."""
-
-    features = []
+    """Records the orders that reach it."""
 
     def place_order(self, *args):
         self.asked.append(("place_order", args))
 
-    def enabled_features(self):
-        return self.features
 
-
-class Retired(Placing):
-    features = ["DEPRETFQNC"]
-
-
-def test_an_order_stating_a_retired_attribute_goes_out_without_it(connect, monkeypatch):
-    """As a gateway places one where the venue has not retired them for the
-    account: it says so, under the order's number, and places the order
-    without the attribute. ib_async counts the notice as a warning."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Placing)
+def test_an_order_stating_a_retired_attribute_reaches_the_engine_with_it(connect):
+    """Their client writes `eTradeOnly`, `firmQuoteOnly` and `nbboPriceCap`
+    on every order, and the engine answers one stating them as a gateway
+    does: where the venue has not retired them for the account, a notice under
+    the order's number, which ib_async counts as a warning."""
     ib = connect()
     heard = _heard(ib)
     order = ib_async.LimitOrder("BUY", 1, 1.0)
@@ -249,27 +256,7 @@ def test_an_order_stating_a_retired_attribute_goes_out_without_it(connect, monke
     trade = ib.placeOrder(SPY, order)
     ib.client._pass_once()
     assert heard == [(order.orderId, 2168), (order.orderId, 2170)]
-    [(name, (orderId, contract, placed))] = ib.client._client.asked
-    assert (name, orderId) == ("place_order", order.orderId)
     assert trade.orderStatus.status == "ValidationError"
-    assert "EtradeOnly" in trade.log[1].message
-
-
-def test_where_the_venue_has_retired_them_the_order_is_refused(connect, monkeypatch):
-    """As a gateway refuses one: 10269 under the order's number, and nothing
-    placed. ib_async cancels the order's `Trade`."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Retired)
-    ib = connect()
-    heard = _heard(ib)
-    order = ib_async.LimitOrder("BUY", 1, 1.0)
-    order.firmQuoteOnly = True
-    trade = ib.placeOrder(SPY, order)
-    ib.client._pass_once()
-    assert heard == [(order.orderId, 10269)]
-    assert ib.client._client.asked == []
-    assert trade.orderStatus.status == "Cancelled"
-    assert ib.placeOrder(SPY, ib_async.LimitOrder("BUY", 1, 1.0)) and ib.client._client.asked, \
-        "an order stating none of them is placed"
 
 
 def test_a_handler_that_asks_again_on_every_refusal_does_not_hold_the_loop(connect):
@@ -339,7 +326,7 @@ def test_prices_stated_as_the_session_ends_reach_the_ticker(connect, caplog):
     ib.client._pass_once()
     # A price whose size did not change waits for the end of the pass.
     engine._test_push_quote(0, bid=100.25, bid_size=300)
-    engine._test_end_session()
+    engine._test_push_stopped_event()
     with caplog.at_level(logging.ERROR):
         ib.client._pass_once()
     assert not ib.isConnected()
@@ -427,10 +414,17 @@ def test_reqMktDataEx_asks_with_the_market_data_type_named(connect):
     spy = ib_async.Stock("SPY", "SMART", "USD", conId=756733)
     for tws, engine in {1: 0, 2: 2, 3: 1, 4: 3}.items():
         ticker = ib.reqMktDataEx(spy, "233", marketDataType=tws)
-        name, (reqId, contract, ticks, snapshot, regulatory, mode) = ib.client._client.asked[-1]
-        assert (name, ticks, mode) == ("req_mkt_data_ex", "233", engine), tws
+        name, (reqId, contract, ticks, snapshot, regulatory, mode, options) = (
+            ib.client._client.asked[-1]
+        )
+        assert (name, ticks, mode, options) == ("req_mkt_data_ex", "233", engine, []), tws
         assert contract.conId == 756733
         assert ib.wrapper.reqId2Ticker[reqId] is ticker, "their ticker, filled as reqMktData's"
+
+    # An option list goes with it, for the engine to check.
+    ib.reqMktDataEx(spy, mktDataOptions=[ib_async.TagValue("manual", "1")], marketDataType=3)
+    options = ib.client._client.asked[-1][1][-1]
+    assert [(o.tag, o.value) for o in options] == [("manual", "1")]
 
     ib.reqMktDataEx(spy)
     assert ib.client._client.asked[-1][0] == "req_mkt_data", "None keeps the session's type"
@@ -579,6 +573,7 @@ def test_an_option_list_is_checked_as_a_gateway_checks_one(connect):
     order.orderMiscOptions = [TagValue("rth", "1")]
     trade = ib.placeOrder(SPY, order)
     ib.client.calculateOptionPrice(91, SPY, 0.2, 100.0, [TagValue("manual", "0")])
+    ib.client.calculateImpliedVolatility(92, SPY, 5.0, 100.0, [TagValue("manual", "0")])
     ib.client._pass_once()
     assert heard == [
         (bars.reqId, 10338, "Misc options value=2 is invalid for key=manual in "
@@ -586,6 +581,8 @@ def test_an_option_list_is_checked_as_a_gateway_checks_one(connect):
         (order.orderId, 10337, "Misc options key=rth is invalid in PlaceOrder(3) "
                                "request. Valid keys are: manual"),
         (91, 10337, "Misc options key=manual is invalid in ReqCalcOptionPrice(55) "
+                    "request. Valid keys are: "),
+        (92, 10337, "Misc options key=manual is invalid in ReqCalcImpliedVolatility(54) "
                     "request. Valid keys are: "),
     ]
     assert engine._test_take_commands() == [], "nothing went out"
@@ -596,43 +593,6 @@ def test_an_option_list_is_checked_as_a_gateway_checks_one(connect):
     name, args = engine.asked[-1]
     assert name == "req_mkt_data"
     assert [(o.tag, o.value) for o in args[-1]] == [("manual", "1")]
-
-
-def test_implVolOptions_takes_no_key(connect):
-    """ib_async's calculateImpliedVolatility, stating a key: the engine
-    refuses it with 10337 under the request's number, as a gateway does, and
-    nothing is computed."""
-    ib = connect()
-    heard = []
-    ib.errorEvent += lambda reqId, code, text, contract: heard.append((reqId, code, text))
-    engine = ib.client._client
-    engine._test_take_commands()
-    ib.RaiseRequestErrors = True
-    with pytest.raises(ib_async.RequestError) as refused:
-        ib.calculateImpliedVolatility(SPY, 1.5, 100.0, [ib_async.TagValue("manual", "1")])
-    text = (
-        "Misc options key=manual is invalid in ReqCalcImpliedVolatility(54) "
-        "request. Valid keys are: "
-    )
-    assert heard == [(refused.value.reqId, 10337, text)]
-    assert refused.value.code == 10337
-    assert engine._test_take_commands() == [], "nothing went out"
-
-
-def test_reqMktDataEx_hands_its_option_list_to_the_engine(connect):
-    """With a market data type named, the list is checked by the engine's
-    reqMktData, asked under that type for this request alone."""
-    ib = connect()
-    engine = ib.client._client
-    TagValue = ib_async.TagValue
-    ib.reqMarketDataType(2)
-    set_to = []
-    engine.req_market_data_type = set_to.append
-    ib.reqMktDataEx(SPY, mktDataOptions=[TagValue("manual", "1")], marketDataType=3)
-    name, args = engine.asked[-1]
-    assert name == "req_mkt_data"
-    assert [(o.tag, o.value) for o in args[-1]] == [("manual", "1")]
-    assert set_to == [3, 2], "this request's type, then the session's again"
 
 
 def test_a_ping_reaches_the_engine(connect):
@@ -672,15 +632,16 @@ def test_the_routing_components_arrive_as_their_records(connect):
 
 def test_connectionStats_counts_the_messages_each_way(connect):
     """As their client counts them: a request is a message sent, and what
-    reaches their wrapper a message received. The byte counts stay at nought:
-    the engine does not count the bytes of its connections."""
+    reaches their wrapper a message received. The bytes are the engine's
+    count of the session's traffic with the venue."""
     ib = connect()
     before = ib.client.connectionStats()
     ib.reqCurrentTime()
+    ib.client._client.traffic = lambda: {"bytes_sent": 5, "bytes_received": 7}
     after = ib.client.connectionStats()
     assert after.numMsgSent == before.numMsgSent + 1
     assert after.numMsgRecv > before.numMsgRecv
-    assert (after.numBytesSent, after.numBytesRecv) == (0, 0)
+    assert (after.numBytesSent, after.numBytesRecv) == (5, 7)
     assert after.startTime == before.startTime and after.duration > before.duration
     ib.disconnect()
     with pytest.raises(ConnectionError, match="Not connected"):
@@ -748,7 +709,7 @@ def test_an_unmodified_watchdog_keeps_the_session_up(connect):
     try:
         until(lambda: started)
         assert ib.isConnected()
-        started[0]._client._test_end_session()
+        started[0]._client._test_push_stopped_event()
         until(lambda: len(started) == 2)
         assert stopped == [watchdog]
         assert ib.isConnected() and ib.client is not started[0]
@@ -825,7 +786,7 @@ def test_an_unmodified_watchdog_logs_in_with_its_ibcs_login(connect):
         watchdog.start()
     try:
         until(lambda: all(logons.values()))
-        ibs[0].client._client._test_end_session()
+        ibs[0].client._client._test_push_stopped_event()
         until(lambda: len(logons[id(ibs[0])]) == 2)
     finally:
         for watchdog in watchdogs:

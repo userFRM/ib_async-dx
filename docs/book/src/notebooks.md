@@ -28,7 +28,10 @@ ib.connect(
 
 `util.startLoop()` is ib_async's own: it applies nest_asyncio so that
 ib_async's blocking calls can run inside the notebook's loop, as it does over a
-gateway.
+gateway. A handler can make one too, a request on an error or a connect when
+the session ends. nest_asyncio cannot run asyncio's timeouts on Python 3.14,
+so there ib_async's own calls fail under it, over a gateway as here: run the
+notebooks on Python 3.11 to 3.13.
 
 ## The eight
 
@@ -74,7 +77,7 @@ A few things they show along the way:
 ## Running them
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
+pip install "git+https://github.com/userFRM/ibkr-dx@e3f4307ad4d158cabba85dab07c40758c9559724"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx" \
     jupyter python-dotenv pandas
 git clone https://github.com/userFRM/ib_async-dx

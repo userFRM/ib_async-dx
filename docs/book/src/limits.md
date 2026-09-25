@@ -40,8 +40,9 @@ so.
   the pass as they would over a gateway.
 * **`connectionStats()`** counts the messages each way, as ib_async's client
   does: a request is one sent, and what reaches ib_async's wrapper one
-  received. Its byte counts are zero: the engine does not count the bytes of
-  its connections.
+  received. Its byte counts are the session's protocol bytes with the venue,
+  as the engine counts them, where ib_async's are the bytes on its socket to a
+  gateway.
 * **The engine checks each option list as a gateway checks it.** On nine of
   the eleven requests a gateway reads a list on — `reqMktData`, `placeOrder`
   (the order's `orderMiscOptions`), `reqMktDepth`, `reqHistoricalData`,
@@ -62,10 +63,12 @@ so.
   and the account on `reqPnL` and `reqPnLSingle` are refused where a gateway
   refuses them, in its words. On a login holding one account, the account
   named on `reqAccountUpdates` is ignored, as a gateway ignores it. On a login
-  holding several, what `reqAccountSummary` and `reqAccountUpdates` name is
-  answered with the figures of the account the session opened under, and
-  `errorEvent` says so under 321; `reqPnL` and `reqPnLSingle` naming another
-  account are refused. `modelCode` on them is taken and not applied.
+  holding several, each request answers for the account it names, and `All` on
+  `reqAccountSummary` for every account the login holds. `modelCode`, an
+  advisor group and `AllNonProp` are taken and not applied, and so is `All`
+  on `reqPnL`, `reqPnLSingle`, `reqAccountUpdatesMulti` and
+  `reqPositionsMulti`, which answer for the session's account; the engine
+  logs a warning once per session saying so.
 * **`IBC` launches nothing, and holds the login it names.** `ib_async_dx.IBC`
   is ib_async's with no gateway to launch: the engine logs in on `connect`,
   and rebuilds a dropped connection on the session it already holds. Starting

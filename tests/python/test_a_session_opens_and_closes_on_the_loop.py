@@ -89,23 +89,39 @@ def test_a_connect_cancelled_during_its_login_leaves_no_session(gated):
     assert ib.client.connState == IbkrDxClient.DISCONNECTED
 
 
-def test_a_disconnect_during_the_login_ends_it(gated):
+class HoldsItsTurn(Gated):
+    """A login that holds the engine's turn while it waits, as the engine's
+    does while it announces the session and waits for the venue to name the
+    working orders: the engine's disconnect waits for that turn."""
+
+    def disconnect(self):
+        self.release.wait(5)
+        super().disconnect()
+
+
+def test_a_disconnect_during_the_login_ends_it(gated, monkeypatch):
     """ib_async's own disconnect does nothing while its client is connecting,
     so the connect went on and opened the session the program had asked to
-    close. The connect ends with ConnectionError, and nothing stays open."""
+    close. The connect ends with ConnectionError, and nothing stays open. And
+    the disconnect returns at once: made on the loop, the engine's wait for a
+    login holding its turn held the loop."""
+    monkeypatch.setattr(ibkr_dx, "EClient", HoldsItsTurn)
     ib = ib_async_dx.IB()
 
     async def disconnected():
         task, engine = await _logging_in(ib)
         gated.append(engine)
+        started = time.monotonic()
         ib.disconnect()
+        waited = time.monotonic() - started
         with pytest.raises(ConnectionError):
             await asyncio.wait_for(task, 1)
         engine.release.set()
         await asyncio.sleep(0.2)
-        return engine
+        return engine, waited
 
-    engine = asyncio.run(disconnected())
+    engine, waited = asyncio.run(disconnected())
+    assert waited < 1, waited
     assert not engine.is_connected()
     assert not ib.isConnected()
 
@@ -303,6 +319,69 @@ asyncio.run(main())
     assert time.monotonic() - started < 10
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 14),
+    reason="util.startLoop() cannot run asyncio's timeouts on this Python",
+)
+def test_a_handler_can_wait_on_the_session_under_startLoop():
+    """As in a notebook, where ``util.startLoop()`` lets a handler make a
+    blocking call: a request made in an ``errorEvent`` handler is answered,
+    and a connect made in a ``disconnectedEvent`` handler of an attached
+    ``ib_async.IB`` logs in, whether the engine ended the session or the
+    ``IBC`` holding its login was terminated. The engine calls back inside a
+    read or a close, holding the session's turn. Heard there, the request was
+    never answered, as a read inside a read delivers nothing and no pass was
+    due while one ran, and the login, which takes that turn, never started."""
+    child = f"""
+import sys
+sys.path.insert(0, {str(pathlib.Path(__file__).parent)!r})
+import ib_async, ibkr_dx
+from test_ib_runs_on_the_engine import SPY, OfflineEngine
+import ib_async_dx
+
+class TakesItsTurn(OfflineEngine):
+    def connect(self, **logon):
+        self.disconnect()  # the engine's login takes the session's turn first
+        super().connect(**logon)
+
+ibkr_dx.EClient = TakesItsTurn
+ib_async.util.startLoop()
+ibc = ib_async_dx.IBC(1012, gateway=True, tradingMode="paper", userid="u", password="p")
+ibc.start()
+ib = ib_async_dx.attach(ib_async.IB())
+ib.connect(fetchFields=ib_async_dx.StartupFetchNONE)
+
+answered = []
+
+def ask(*args):
+    if not answered:
+        answered.append(ib.reqCurrentTime())
+
+ib.errorEvent += ask
+ib.reqRealTimeBars(SPY, 5, "TRADES", False, [ib_async.TagValue("manual", "2")])
+ib.sleep(0.3)
+assert answered, "the request made in the handler was answered"
+
+def again():
+    ib.disconnectedEvent -= again
+    ib.connect(fetchFields=ib_async_dx.StartupFetchNONE)
+
+ib.disconnectedEvent += again
+ib.client._client._test_push_stopped_event()
+try:
+    ib.sleep(0.3)
+except ConnectionError:
+    pass  # a session that ends fails what was waiting, as a dropped socket does
+assert ib.isConnected() and ib.client._client.is_connected(), "logged in again"
+
+ib.disconnectedEvent += again
+ibc.terminate()
+assert ib.isConnected() and ib.client._client.is_connected(), "and again"
+ib.disconnect()
+"""
+    subprocess.run([sys.executable, "-c", child], check=True, timeout=30)
+
+
 class InstallsLate(OfflineEngine):
     """The first login installs its session and announces it after a
     disconnect has reached the engine, as the engine can when the disconnect
@@ -476,7 +555,7 @@ class EndsAtOnce(OfflineEngine):
 
     def connect(self, **logon):
         super().connect(**logon)
-        self._test_end_session()
+        self._test_push_stopped_event()
 
 
 def test_a_session_that_ends_as_it_opens_fails_the_connect_and_stops(monkeypatch):

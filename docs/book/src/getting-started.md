@@ -4,7 +4,7 @@
 
 * An Interactive Brokers account, paper or live. No IB software: no IB
   Gateway, no Trader Workstation, and not the `ibapi` package either.
-* Python 3.11 or newer.
+* Python 3.11 or newer; for a notebook, 3.11 to 3.13 ([Notebooks](./notebooks.md)).
 * A Rust toolchain, 1.89 or newer. The engine installs from its repository,
   and installing it compiles it.
 
@@ -16,7 +16,7 @@ repositories.
 ## Install
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
+pip install "git+https://github.com/userFRM/ibkr-dx@e3f4307ad4d158cabba85dab07c40758c9559724"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
 ```
 

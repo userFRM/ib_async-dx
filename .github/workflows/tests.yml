@@ -17,7 +17,7 @@ env:
   # The engine commit this package is tested against. The engine has no
   # release to depend on yet, so the commit is named: a newer engine is taken
   # up by moving this, and the suite says whether it holds.
-  ENGINE_REF: 6cfe6f134a069228bbd4035b7eae2ac5b31159e9
+  ENGINE_REF: e3f4307ad4d158cabba85dab07c40758c9559724
 
 jobs:
   # The suite against this package as a user installs it — from the wheel and

@@ -27,6 +27,7 @@ started in the same context, or to `IB_USERNAME` and `IB_PASSWORD`.
 
 import asyncio
 import collections
+import contextlib
 import contextvars
 import dataclasses
 import inspect
@@ -39,7 +40,6 @@ import weakref
 
 from eventkit import Event
 from ib_async.client import Client as _TheirClient
-from ib_async.order import Order as _TheirOrder
 
 import ibkr_dx as _ibkr_dx
 
@@ -138,15 +138,12 @@ class IbkrDxClient:
         #: When the session started, and the requests sent on it.
         self._since = time.time()
         self._sent = 0
-        #: The market data type the session's subscriptions ask for, as the
-        #: engine holds it: live until the program names another.
-        self._marketDataType = 1
 
         # The engine, with ib_async's own wrapper as the callback target: this
         # client already resolves a callback under the reference client's
         # spelling, which is the spelling ib_async's wrapper uses.
         self._callbacks = _LoopBound(wrapper)
-        self._callbacks.connectionClosed = self._session_ended
+        self._callbacks.connectionClosed = self._engine_closed
         self._client = _ibkr_dx.EClient(self._callbacks)
 
         # Where this session is kept between runs. The venue answers a request
@@ -200,7 +197,6 @@ class IbkrDxClient:
         self.host, self.port, self.clientId = host, int(port), int(clientId)
         self.connState = IbkrDxClient.CONNECTING
         self._since, self._sent = time.time(), 0
-        self._marketDataType = 1
         self._callbacks.reset()
         self._loop = asyncio.get_running_loop()
         self._callbacks.thread = threading.get_ident()
@@ -357,9 +353,22 @@ class IbkrDxClient:
         session that went away underneath them: it fails every request still
         waiting and raises on their global error event, which is right for a
         socket that dropped and wrong for a caller who asked to stop.
+
+        A login still running holds the engine's turn while it announces the
+        session and waits for the venue to name the working orders, three
+        seconds at most, and the engine's disconnect waits for that turn. So
+        the engine is told on a thread of its own, and the loop goes on.
         """
+        logging_in = self.connState == IbkrDxClient.CONNECTING and (
+            self._login_thread is not None and self._login_thread.is_alive()
+        )
         self._retire()
-        self._client.disconnect()
+        if logging_in:
+            threading.Thread(
+                target=self._client.disconnect, name="ib_async_dx disconnect", daemon=True
+            ).start()
+        else:
+            self._client.disconnect()
 
     #: Their client's `reset` forgets the session. A session here is the
     #: engine's, logged in until it is ended, so forgetting it is ending it.
@@ -374,6 +383,7 @@ class IbkrDxClient:
         # their wrapper has been cleared, as their client's buffer is.
         self._callbacks._priced.clear()
         self._callbacks.refused.clear()
+        self._callbacks.held.clear()
         if self._pass is not None:
             self._pass.cancel()
             self._pass = None
@@ -406,15 +416,30 @@ class IbkrDxClient:
         self.wrapper.connectionClosed()
         self.apiEnd.emit()
 
+    def _engine_closed(self):
+        """The engine's `connectionClosed`: the session ended, heard on the
+        loop. A login given up on closes the session it opened on an engine
+        of its own, which says so on the login's thread: that is not the
+        session this client holds."""
+        self._callbacks.hear(self._session_ended)
+
     def _ended_underneath(self):
         """The session ends as one does when the gateway a program is
         connected to is stopped: as `_session_ended` says it. A login still
-        running is let go of."""
-        if self.isConnected():
-            self._client.disconnect()
-            self._session_ended()
-        else:
+        running is let go of.
+
+        The engine says the close inside its disconnect, heard once the call
+        has returned; ended from another thread, it is said here. A handler
+        that connected again on hearing it has a session of its own, which
+        this leaves alone."""
+        if not self.isConnected():
             self.disconnect()
+            return
+        attempt = self._generation
+        with self._callbacks.after_the_call():
+            self._client.disconnect()
+        if attempt == self._generation:
+            self._session_ended()
 
     def _next_pass(self, attempt):
         """A pass, on the loop, and the next one after it, for as long as the
@@ -423,18 +448,19 @@ class IbkrDxClient:
         A pass that raises ends the session, as their transport closes a
         socket whose data it could not handle: once, with every waiting
         request failed.
+
+        The next is due before this one is made. A handler that waits on the
+        session, as a blocking call does under ``util.startLoop()``, turns
+        the loop inside this pass, and what it waits for comes on the next.
         """
         if attempt != self._generation:
             return
+        self._pass = self._loop.call_later(PASS_INTERVAL, self._next_pass, attempt)
         try:
             self._pass_once()
         except Exception:
             _logger.exception("The session's delivery failed, and the session is ended")
-            self._client.disconnect()
-            self._session_ended()
-        finally:
-            if attempt == self._generation:
-                self._pass = self._loop.call_later(PASS_INTERVAL, self._next_pass, attempt)
+            self._ended_underneath()
 
     def _pass_once(self):
         """One dispatch, then the boundary ib_async flushes on.
@@ -452,8 +478,9 @@ class IbkrDxClient:
         """
         if self.connState == IbkrDxClient.DISCONNECTED:
             return
-        self._callbacks.begin_pass()
-        self._client.poll()
+        with self._callbacks.after_the_call():
+            self._callbacks.begin_pass()
+            self._client.poll()
         self._callbacks.end_pass()
         if self._callbacks.arrived:
             self._callbacks.arrived = False
@@ -528,16 +555,19 @@ class IbkrDxClient:
         self._reqIdSeq = max(self._reqIdSeq, minReqId)
 
     def connectionStats(self):
-        """When the session started, how long it has run, and the messages
-        each way, as their client counts them: a request is one sent, and what
-        reaches their wrapper one received. The byte counts are nought: the
-        engine does not count the bytes of its connections."""
+        """When the session started, how long it has run, the bytes each way
+        and the messages each way. The bytes are the engine's count of the
+        session's protocol bytes with the venue. The messages are counted as
+        their client counts them: a request is one sent, and what reaches
+        their wrapper one received."""
         from ib_async.objects import ConnectionStats
 
         if not self.isReady():
             raise ConnectionError("Not connected")
+        traffic = self._client.traffic()
         return ConnectionStats(
-            self._since, time.time() - self._since, 0, 0,
+            self._since, time.time() - self._since,
+            traffic["bytes_received"], traffic["bytes_sent"],
             self._callbacks.received, self._sent,
         )
 
@@ -554,9 +584,10 @@ class IbkrDxClient:
     def _send(self, request, *args):
         """One request to the engine, as their client writes one message.
 
-        The engine answers a request it refuses inside the call itself. Their
+        The engine states "not connected" inside the call where it has given
+        the session up and this client has not yet heard the close. Their
         client's answers come back on the socket once the call has returned,
-        so a refusal is held for the next pass (see `_LoopBound.error`).
+        so that is held for the next pass (see `_LoopBound.error`).
         """
         engine = self._connected()
         self._sent += 1
@@ -623,7 +654,9 @@ class IbkrDxClient:
             return
         request, args = read
         if request == "placeOrder":
-            self._place_order(*args)
+            # Their `placeOrder` writes a message, so the order read back from
+            # one goes to the engine rather than round again.
+            self._send_theirs("place_order", *args)
         else:
             getattr(self, request)(*args)
 
@@ -636,27 +669,6 @@ class IbkrDxClient:
         cleared, `volatility` on any order but a volatility order among them.
         """
         _TheirClient.placeOrder(self, orderId, contract, order)
-
-    def _place_order(self, orderId, contract, order):
-        """An order as a gateway takes it off their client's message.
-
-        Three attributes their client writes on every order are ones the venue
-        no longer takes. A gateway refuses an order stating one where the
-        venue has retired them for the account, and otherwise says so and
-        places the order without it.
-        """
-        for name, spelled, refusal, warning in _RETIRED:
-            unset = getattr(_TheirOrder, name)
-            if getattr(order, name) == unset:
-                continue
-            text = f"The '{spelled}' order attribute is not supported."
-            if "DEPRETFQNC" in self._client.enabled_features():
-                self._sent += 1
-                self._callbacks.refused.append((orderId, refusal, text, ""))
-                return
-            self._callbacks.refused.append((orderId, warning, f"Warning: {text}", ""))
-            setattr(order, name, unset)
-        self._send_theirs("place_order", orderId, contract, order)
 
     def reqMktData(self, reqId, contract, genericTickList, snapshot,
                    regulatorySnapshot, mktDataOptions):
@@ -678,14 +690,6 @@ class IbkrDxClient:
             barSizeSetting, whatToShow, 1 if useRTH else 0, formatDate,
             keepUpToDate, chartOptions,
         )
-
-    def reqMarketDataType(self, marketDataType):
-        """The type the subscriptions after this one ask for. Held as the
-        engine holds it, which keeps the type it had for a number naming
-        none, so `IB.reqMktDataEx` can put it back."""
-        self._send_theirs("req_market_data_type", marketDataType)
-        if marketDataType in (1, 2, 3, 4):
-            self._marketDataType = marketDataType
 
     # These two stay written out. `__getattr__` forwards every argument
     # through `_as_ours`, which turns None into an empty list — right for an
@@ -908,6 +912,10 @@ class _LoopBound:
         self.asking = 0
         #: Refusals stated inside a request call, for the next pass.
         self.refused = collections.deque()
+        #: Whether the engine is inside a call that says things, and what it
+        #: said there, to be heard once it has returned.
+        self.holding = False
+        self.held = collections.deque()
         #: The thread running the loop, set as a session opens. Nothing is
         #: delivered from any other.
         self.thread = threading.get_ident()
@@ -918,6 +926,7 @@ class _LoopBound:
         self._sizes.clear()
         self._priced.clear()
         self.refused.clear()
+        self.held.clear()
         self.arrived = False
         self.received = 0
 
@@ -938,8 +947,42 @@ class _LoopBound:
         are made again on the loop. A login given up on can still announce its
         session there, after another session has opened.
         """
+        self.hear(lambda: self._hand(method, args))
+
+    def hear(self, call):
+        """What the engine said, on the loop's thread, once the engine call
+        it was said in has returned (see `after_the_call`)."""
         if threading.get_ident() != self.thread:
             return
+        if self.holding:
+            self.held.append(call)
+        else:
+            call()
+
+    @contextlib.contextmanager
+    def after_the_call(self):
+        """What the engine says inside a pass or a close, heard in its order
+        once the call has returned.
+
+        The engine holds the session's turn while it reads and while it
+        closes, and calls back inside that. A handler run there that waited on
+        the session waited on a turn its own caller held: a connect made on
+        hearing the session end never logged in, and a blocking request under
+        ``util.startLoop()`` was never answered, since a read inside a read
+        delivers nothing.
+        """
+        if self.holding or threading.get_ident() != self.thread:
+            yield
+            return
+        self.holding = True
+        try:
+            yield
+        finally:
+            self.holding = False
+            while self.held:
+                self.held.popleft()()
+
+    def _hand(self, method, args):
         if not self.arrived:
             self.arrived = True
             arrived = getattr(self._wrapper, "tcpDataArrived", None)
@@ -1050,10 +1093,12 @@ class _LoopBound:
         their wrapper is handed four: passed five it raises, and every error
         and notice of the session would be lost.
 
-        A refusal stated inside a request call waits for the next pass. A
-        gateway's comes back on the socket after the call has returned, and
-        their `placeOrder` makes its `Trade` after the call: delivered inside
-        it, a refused new order had no trade to mark and stayed PendingSubmit.
+        The engine delivers a refusal on a pass, except "not connected" on a
+        session it has given up, which it states inside the request call.
+        That waits for the next pass too. A gateway's comes back on the socket
+        after the call has returned, and their `placeOrder` makes its `Trade`
+        after the call: delivered inside it, a refused new order had no trade
+        to mark and stayed PendingSubmit.
         """
         refusal = (req_id, code, text, advanced)
         if self.asking:
@@ -1119,16 +1164,6 @@ def _unreadable(why):
     refuses one: code, text and no advanced reject."""
     return 320, f"Error reading request:{why}", ""
 
-
-#: The order attributes their client writes and the venue no longer takes:
-#: each by name, as a gateway spells it, and the code it refuses an order
-#: stating one under where the venue has retired them for the account, then
-#: the code it warns under otherwise, placing the order without it.
-_RETIRED = (
-    ("eTradeOnly", "EtradeOnly", 10268, 2168),
-    ("firmQuoteOnly", "FirmQuoteOnly", 10269, 2169),
-    ("nbboPriceCap", "NbboPriceCap", 10270, 2170),
-)
 
 #: How their order conditions say one joins the next, as the engine says it:
 #: whether the join is an "and".
@@ -1197,8 +1232,7 @@ def _as_ours(value):
             name, held = "isConjunctionConnection", _CONJUNCTION.get(held, held)
         # Already what the engine holds — a condition's type is its class's
         # own on both sides, and fixed on this one — or a field the engine has
-        # no place for, at the value their client sends on every order:
-        # `eTradeOnly` and `firmQuoteOnly`, always False, state nothing.
+        # no place for, at the value their client sends on every order.
         if getattr(made, name, field.default) == held:
             continue
         try:
@@ -1239,8 +1273,8 @@ def attach(ib, username="", password="", paper=True, session_file=None,
 
     Orders and requests are numbered from one counter, as ib_async's own
     client numbers them, kept past every order id the account has used, which
-    the venue names at every connect and whenever it names another: nothing
-    about them is kept between runs.
+    the venue names at every connect and whenever it names another, and past
+    the next order id the engine saved for this account and client id.
     """
     ib.disconnect()
     if ib.client.connState != ib.client.DISCONNECTED:

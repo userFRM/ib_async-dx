@@ -27,7 +27,7 @@ the login.
 ## Running them
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
+pip install "git+https://github.com/userFRM/ibkr-dx@e3f4307ad4d158cabba85dab07c40758c9559724"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx" \
     jupyter python-dotenv pandas
 git clone https://github.com/userFRM/ib_async-dx
@@ -35,6 +35,8 @@ jupyter lab ib_async-dx/notebooks
 ```
 
 The engine compiles from source, so it needs a Rust toolchain, 1.89 or newer.
+The notebooks need Python 3.11 to 3.13: `util.startLoop()` applies
+nest_asyncio, which cannot run asyncio's timeouts on 3.14.
 `util.df` needs pandas, which ib_async does not install on its own.
 Credentials come from a `.env` file at the repository root, as `IB_USERNAME`
 and `IB_PASSWORD`; keep it out of version control. Every notebook opens a paper
