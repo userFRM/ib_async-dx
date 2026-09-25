@@ -387,8 +387,8 @@ dependencies = [
 
 [[package]]
 name = "ibkr-dx"
-version = "0.2.0"
-source = "git+https://github.com/userFRM/ibkr-dx?rev=8b4c02ccaf82884d5b1ebc330f5f4c7e5bb0d2c3#8b4c02ccaf82884d5b1ebc330f5f4c7e5bb0d2c3"
+version = "0.1.0"
+source = "git+https://github.com/userFRM/ibkr-dx?rev=8b8dc3fd1a03e431bbc76bc042a734dbada50c88#8b8dc3fd1a03e431bbc76bc042a734dbada50c88"
 dependencies = [
  "aes",
  "base64",

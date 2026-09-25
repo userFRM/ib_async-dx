@@ -450,7 +450,8 @@ impl IBHandle {
     /// Asks for orders entered by hand to be bound to this client, or no
     /// longer: ib_async's `reqAutoOpenOrders`, which `connect` calls for
     /// client 0. The engine already reports every order of the account to
-    /// every session.
+    /// every session; any other client is refused, as a gateway refuses it,
+    /// on `error_event`.
     pub fn req_auto_open_orders(&self, auto_bind: bool) -> Result<()> {
         self.shared.step(Class::Control, move |ib| {
             session(ib)?.req_auto_open_orders(auto_bind);

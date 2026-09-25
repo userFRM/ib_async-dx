@@ -265,8 +265,6 @@ pub(crate) fn logon_config(mut config: EClientConfig, logon: &Logon) -> EClientC
 }
 
 /// `client_id` as the TWS API's `int`.
-pub(crate) fn client_id(id: i64) -> Result<i64> {
-    i32::try_from(id)
-        .map(i64::from)
-        .map_err(|_| Error::Value(format!("clientId {id} is not a 32-bit integer")))
+pub(crate) fn client_id(id: i64) -> Result<i32> {
+    i32::try_from(id).map_err(|_| Error::Value(format!("clientId {id} is not a 32-bit integer")))
 }

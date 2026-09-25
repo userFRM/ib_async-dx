@@ -45,7 +45,7 @@ pub(crate) use ibkr_dx::types::{
 pub use ibkr_dx::types::{HeldElsewhere, ScannedStrategy, SpreadScan};
 
 // Test-only: the harness builds a session with `EClient::from_parts`
-// (api/client/mod.rs:875-880) on a bare `SharedState` (lib.rs:77;
+// (api/client/mod.rs:893-898) on a bare `SharedState` (lib.rs:77;
 // bridge/mod.rs:191). Both are `#[doc(hidden)]`, which is why they are reached
 // only under `cfg(test)`.
 #[cfg(test)]

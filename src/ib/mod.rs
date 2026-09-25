@@ -165,7 +165,7 @@ pub struct ConnectOptions {
     /// The engine's settings: the login, and `readonly`. `Default` sets
     /// `paper`.
     pub config: EClientConfig,
-    /// `clientId`: a 32-bit integer.
+    /// `clientId`: a 32-bit integer, which becomes `config.client_id`.
     pub client_id: i64,
     /// Bounds the wait for the account's working orders, ib_async's
     /// handshake, and each startup request: `timeout`. `Some(ZERO)` is none.
@@ -632,7 +632,7 @@ impl IBHandle {
         via: Option<Via>,
     ) -> Result<(Pending<()>, Logon)> {
         let ConnectOptions {
-            config,
+            mut config,
             client_id,
             timeout,
             logon_timeout,
@@ -640,7 +640,9 @@ impl IBHandle {
             raise_sync_errors,
             fetch_fields,
         } = opts;
-        let client_id = session::client_id(client_id)?;
+        // The engine places and reports this session's orders under it.
+        config.client_id = session::client_id(client_id)?;
+        let client_id = i64::from(config.client_id);
         let logon = Logon::new(config.cancel.clone());
         let sync = sync.then(|| SyncOpts {
             account: account.clone(),
