@@ -14,7 +14,8 @@ use crate::contract::{Contract, TagValue};
 use crate::engine::{self as e, EClient, EClientConfig, ErrorOrigin, OrderOp, Question};
 use crate::error::{Error, Result};
 use crate::event::Event;
-use crate::ib::{ConnectOptions, IBHandle, StartupFetch};
+use crate::ib::defaults::CLIENT_CONNECT_TIMEOUT;
+use crate::ib::{ConnectOptions, IBHandle, StartupFetch, clear_volatility};
 use crate::objects::{ConnectionStats, ExecutionFilter, ScannerSubscription, WshEventData};
 use crate::order::Order;
 use crate::owner::{Class, Shared};
@@ -69,7 +70,7 @@ fn options(config: EClientConfig, client_id: i64, timeout: Option<Duration>) -> 
     ConnectOptions {
         config,
         client_id,
-        timeout: Some(timeout.unwrap_or(Duration::from_secs(2))),
+        timeout: Some(timeout.unwrap_or(CLIENT_CONNECT_TIMEOUT)),
         logon_timeout: None,
         account: String::new(),
         raise_sync_errors: false,
@@ -210,11 +211,14 @@ impl Client {
         self.ib.client_id()
     }
 
-    /// `Client.connState`. A session closing, and a logon taken back, read
-    /// `Disconnected`.
+    /// `Client.connState`. A session closing or given up by the engine, and
+    /// a logon taken back, read `Disconnected`: `is_connected()` is whether
+    /// this reads `Connected`, as in ib_async.
     pub fn conn_state(&self) -> ConnState {
+        if self.ready().is_some() {
+            return ConnState::Connected;
+        }
         match &self.shared().core().conn {
-            Conn::Connected { .. } => ConnState::Connected,
             Conn::Connecting { logon, .. } if !logon.taken_back() => ConnState::Connecting,
             _ => ConnState::Disconnected,
         }
@@ -459,13 +463,16 @@ impl Client {
     // -- Orders --------------------------------------------------------------
 
     /// ib_async's `Client.placeOrder`. No trade is made here: the order's
-    /// reports make one, as another client's order's do. An order the engine
+    /// reports make one, as another client's order's do. An order that is not
+    /// a volatility order is sent without `volatility`. An order the engine
     /// cannot carry is refused under its number, as a gateway refuses it: as
     /// a refused change when the IB holds it working, else as a refused new
     /// order.
     pub fn place_order(&self, order_id: i64, contract: &Contract, order: &Order) -> Result<()> {
         let c = e::Contract::from(contract);
-        let order = e::Order::try_from(order);
+        let mut order = order.clone();
+        clear_volatility(&mut order);
+        let order = e::Order::try_from(&order);
         self.step(Class::Request, move |ib, client| match order {
             Ok(o) => {
                 client.place_order(order_id, &c, &o);
@@ -1202,6 +1209,29 @@ mod tests {
         };
         ib.apply_read(1, vec![open, Callback::OpenOrderEnd]);
         assert_eq!(seen(&log), ["open 1"]);
+    }
+
+    #[test]
+    fn an_order_that_is_not_a_volatility_order_is_sent_without_volatility() {
+        let _o = AsOwner::new();
+        let (ib, client) = ib();
+        let rx = connect(&ib, &client);
+        let order = Order {
+            volatility: Some(0.2),
+            ..Order::limit("BUY", 1.0, 1.0)
+        };
+        client
+            .place_order(7, &Contract::stock("AAPL", "SMART", "USD"), &order)
+            .unwrap();
+        // The engine's unset volatility is `f64::MAX`.
+        let placed: Vec<f64> = rx
+            .try_iter()
+            .filter_map(|c| match c {
+                ControlCommand::Place(p) => Some(p.order.volatility),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(placed, [f64::MAX]);
     }
 
     #[test]

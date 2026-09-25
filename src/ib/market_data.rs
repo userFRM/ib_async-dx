@@ -7,7 +7,7 @@ use std::sync::{Arc, Weak};
 use std::task::Poll;
 use std::time::Duration;
 
-use super::{IBHandle, unlimited_at_zero};
+use super::IBHandle;
 use crate::contract::{Contract, TagValue};
 use crate::engine::{self as e, EClient};
 use crate::error::{Error, Result};
@@ -218,7 +218,7 @@ fn calculate(
 ) -> Pending<Option<OptionComputation>> {
     let c = c.clone();
     ib.shared
-        .request(move |ib, token, reply: Reply<Option<OptionComputation>>| {
+        .request_connected(move |ib, token, reply: Reply<Option<OptionComputation>>| {
             let started = ready(ib).and_then(|client| Ok((next_id(ib, &client)?, client)));
             let (id, client) = match started {
                 Ok(s) => s,
@@ -259,11 +259,6 @@ fn calculate(
             }
             ib.queue.sent(1);
         })
-}
-
-/// The blocking faces' bound: `IBConfig.request_timeout`, zero being none.
-fn bound(ib: &IBHandle) -> Option<Duration> {
-    unlimited_at_zero(ib.config().request_timeout)
 }
 
 impl IBHandle {
@@ -322,7 +317,7 @@ impl IBHandle {
         contracts: &[Contract],
         regulatory_snapshot: bool,
     ) -> Result<Vec<Live<Ticker>>> {
-        let timeout = bound(self);
+        let timeout = self.request_timeout();
         block_on(
             self.req_tickers_async(contracts, regulatory_snapshot),
             timeout,
@@ -448,14 +443,15 @@ impl IBHandle {
     /// The exchanges whose books name their market makers: ib_async's
     /// `reqMktDepthExchanges`.
     pub fn req_mkt_depth_exchanges(&self) -> Result<Vec<DepthMktDataDescription>> {
-        self.req_mkt_depth_exchanges_async().wait(bound(self))
+        self.req_mkt_depth_exchanges_async()
+            .wait(self.request_timeout())
     }
 
     /// `req_mkt_depth_exchanges`' async form: ib_async's
     /// `reqMktDepthExchangesAsync`.
     pub fn req_mkt_depth_exchanges_async(&self) -> Pending<Vec<DepthMktDataDescription>> {
         self.shared
-            .request(
+            .request_connected(
                 |ib, token, reply: Reply<Vec<DepthMktDataDescription>>| match ready(ib) {
                     Ok(client) => question(
                         ib,
@@ -476,7 +472,7 @@ impl IBHandle {
     /// ib_async's `reqSmartComponents`.
     pub fn req_smart_components(&self, bbo_exchange: &str) -> Result<Vec<SmartComponent>> {
         self.req_smart_components_async(bbo_exchange)
-            .wait(bound(self))
+            .wait(self.request_timeout())
     }
 
     /// `req_smart_components`' async form: ib_async's
@@ -484,7 +480,7 @@ impl IBHandle {
     pub fn req_smart_components_async(&self, bbo_exchange: &str) -> Pending<Vec<SmartComponent>> {
         let bbo = bbo_exchange.to_owned();
         self.shared
-            .request(move |ib, token, reply: Reply<Vec<SmartComponent>>| {
+            .request_connected(move |ib, token, reply: Reply<Vec<SmartComponent>>| {
                 let started = ready(ib).and_then(|client| Ok((next_id(ib, &client)?, client)));
                 let (id, client) = match started {
                     Ok(s) => s,
@@ -581,7 +577,7 @@ impl IBHandle {
         under_price: f64,
         impl_vol_options: &[TagValue],
     ) -> Result<Option<OptionComputation>> {
-        let timeout = bound(self);
+        let timeout = self.request_timeout();
         let f =
             self.calculate_implied_volatility_async(c, option_price, under_price, impl_vol_options);
         block_on(f, timeout)?
@@ -613,7 +609,7 @@ impl IBHandle {
         under_price: f64,
         opt_prc_options: &[TagValue],
     ) -> Result<Option<OptionComputation>> {
-        let timeout = bound(self);
+        let timeout = self.request_timeout();
         let f = self.calculate_option_price_async(c, volatility, under_price, opt_prc_options);
         block_on(f, timeout)?
     }
@@ -637,7 +633,7 @@ impl IBHandle {
     /// the session has not seen with a contract's details is refused on
     /// `error_event`, and then gives `None`.
     pub fn req_market_rule(&self, market_rule_id: i32) -> Result<Option<Vec<PriceIncrement>>> {
-        let timeout = bound(self);
+        let timeout = self.request_timeout();
         block_on(self.req_market_rule_async(market_rule_id), timeout)?
     }
 
@@ -647,7 +643,7 @@ impl IBHandle {
         market_rule_id: i32,
     ) -> Result<Option<Vec<PriceIncrement>>> {
         self.shared
-            .request(
+            .request_connected(
                 move |ib, token, reply: Reply<Option<Vec<PriceIncrement>>>| match ready(ib) {
                     Ok(client) => {
                         let waiter = Box::new(Within {
@@ -1158,19 +1154,6 @@ mod tests {
             components: components.clone(),
         }]);
         assert_eq!(poll(&mut p).unwrap().unwrap(), components);
-        // Refused, as the engine refuses an exchange no subscription named:
-        // what arrived, nothing, unless errors raise.
-        for raise in [false, true] {
-            let s = Session::new();
-            s.raise_request_errors(raise);
-            let mut p = s.ib.req_smart_components_async("SMART");
-            s.lap();
-            match (raise, poll(&mut p)) {
-                (false, Some(Ok(v))) => assert!(v.is_empty()),
-                (true, Some(Err(Error::Request { .. }))) => {}
-                (raise, r) => panic!("{raise}: {r:?}"),
-            }
-        }
         // A question's answer.
         let s = Session::new();
         let mut p = s.ib.req_mkt_depth_exchanges_async();

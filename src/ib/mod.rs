@@ -37,11 +37,20 @@ use crate::timer::{Clock, Sleep, TimerHandle, Timers};
 use crate::util::{TimeT, block_on, global_error_event};
 
 pub use crate::state::Bars;
+pub(crate) use orders::clear_volatility;
 
 /// The timeouts a method takes when its `timeout` is `None`.
 pub mod defaults {
+    use std::time::Duration;
+
     pub use super::extras::{CORPORATE_ACTIONS_TIMEOUT, SPREAD_SCAN_TIMEOUT};
     pub use super::reference::HISTORICAL_TIMEOUT;
+
+    /// `set_timeout`'s timeout when none is given.
+    pub const SET_TIMEOUT: Duration = Duration::from_secs(60);
+
+    /// `Client::connect`'s timeout when none is given.
+    pub const CLIENT_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 }
 
 /// ib_async's timeout of 0, no limit, where its default is no limit too.
@@ -69,8 +78,8 @@ fn running() -> Error {
 /// each use, so a change applies from the next call.
 #[derive(Clone, Debug)]
 pub struct IBConfig {
-    /// How long a blocking call waits, `None` without limit:
-    /// `RequestTimeout`, whose 0 is `None`.
+    /// How long a blocking call waits, `None` or zero without limit:
+    /// `RequestTimeout`, whose 0 is no limit.
     pub request_timeout: Option<Duration>,
     /// Whether a request ended by an error fails with it, where a list
     /// result otherwise ends with what arrived: `RaiseRequestErrors`.
@@ -599,6 +608,12 @@ impl IBHandle {
         self.shared.set_config(config);
     }
 
+    /// What bounds a blocking call: `IBConfig.request_timeout`, zero being
+    /// no limit, as ib_async's `RequestTimeout` of 0 is.
+    fn request_timeout(&self) -> Option<Duration> {
+        unlimited_at_zero(self.config().request_timeout)
+    }
+
     /// `Client.clientId`: -1 before any connect, then the last connect's.
     pub(crate) fn client_id(&self) -> i64 {
         self.shared
@@ -670,11 +685,7 @@ impl IBHandle {
         }
         let now = Instant::now();
         let login = opts.logon_timeout.and_then(|t| now.checked_add(t));
-        let request = self
-            .shared
-            .config()
-            .request_timeout
-            .and_then(|t| now.checked_add(t));
+        let request = self.request_timeout().and_then(|t| now.checked_add(t));
         let (p, logon) = self.begin_connect(opts, true, None)?;
         wait_connect(p, &logon, request, login)?;
         self.warn_competing();
@@ -793,7 +804,7 @@ impl IBHandle {
     /// Emits `timeout_event` once no data has arrived for `timeout`, `None`
     /// being 60 seconds and zero disarming it: ib_async's `setTimeout`.
     pub fn set_timeout(&self, timeout: Option<Duration>) {
-        let t = timeout.unwrap_or(Duration::from_secs(60));
+        let t = timeout.unwrap_or(defaults::SET_TIMEOUT);
         self.shared.control(move |ib| ib.set_timeout(t));
     }
 
@@ -843,7 +854,7 @@ impl IBHandle {
     /// The account summary of `account`, `""` for every account, asked for
     /// first when none has arrived: `accountSummary`.
     pub fn account_summary(&self, account: &str) -> Result<Vec<AccountValue>> {
-        let timeout = self.config().request_timeout;
+        let timeout = self.request_timeout();
         block_on(self.account_summary_async(account), timeout)?
     }
 

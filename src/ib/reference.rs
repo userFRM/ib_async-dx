@@ -141,7 +141,7 @@ fn numbered<T: Send + 'static>(
     ib: &Arc<Shared>,
     make: impl FnOnce(&Arc<Shared>, i64) -> Result<Numbered> + Send + 'static,
 ) -> Pending<T> {
-    ib.request(move |ib, token, reply| start(ib, token, reply, make))
+    ib.request_connected(move |ib, token, reply| start(ib, token, reply, make))
 }
 
 /// A question's waiter: its exchange is asked, or waits in its lane. With
@@ -151,7 +151,7 @@ fn question<T: Send + 'static>(
     ask: Ask,
     wait: Option<&'static str>,
 ) -> Pending<T> {
-    ib.request(move |ib, token, reply: Reply<T>| {
+    ib.request_connected(move |ib, token, reply: Reply<T>| {
         let client = match session(ib) {
             Ok(c) => c,
             Err(e) => {
@@ -540,7 +540,7 @@ impl IBHandle {
     /// included: ib_async's `qualifyContracts`. Each result is the contract
     /// filled in, or `Unknown` for one that matched none or several.
     pub fn qualify_contracts(&self, contracts: &mut [Contract]) -> Result<Vec<Qualified>> {
-        let timeout = self.config().request_timeout;
+        let timeout = self.request_timeout();
         block_on(self.qualify_contracts_async(contracts, false), timeout)?
     }
 
@@ -566,7 +566,7 @@ impl IBHandle {
     /// `reqContractDetails`. Empty when none does.
     pub fn req_contract_details(&self, contract: &Contract) -> Result<Vec<ContractDetails>> {
         self.req_contract_details_async(contract)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_contract_details`' async form: `reqContractDetailsAsync`.
@@ -577,7 +577,7 @@ impl IBHandle {
     /// The contracts whose symbol or name matches `pattern`: ib_async's
     /// `reqMatchingSymbols`. `None` when no answer comes within 4 seconds.
     pub fn req_matching_symbols(&self, pattern: &str) -> Result<Option<Vec<ContractDescription>>> {
-        let timeout = self.config().request_timeout;
+        let timeout = self.request_timeout();
         block_on(self.req_matching_symbols_async(pattern), timeout)?
     }
 
@@ -612,7 +612,7 @@ impl IBHandle {
             underlying_sec_type,
             underlying_con_id,
         )
-        .wait(self.config().request_timeout)
+        .wait(self.request_timeout())
     }
 
     /// `req_sec_def_opt_params`' async form: `reqSecDefOptParamsAsync`.
@@ -681,7 +681,7 @@ impl IBHandle {
             chart_options,
             timeout,
         );
-        block_on(f, self.config().request_timeout)?
+        block_on(f, self.request_timeout())?
     }
 
     /// `req_historical_data`'s async form: `reqHistoricalDataAsync`.
@@ -789,7 +789,7 @@ impl IBHandle {
         use_rth: bool,
     ) -> Result<HistoricalSchedule> {
         self.req_historical_schedule_async(contract, num_days, end_date_time, use_rth)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_historical_schedule`'s async form: `reqHistoricalScheduleAsync`.
@@ -839,7 +839,7 @@ impl IBHandle {
             ignore_size,
             misc_options,
         )
-        .wait(self.config().request_timeout)
+        .wait(self.request_timeout())
     }
 
     /// `req_historical_ticks`' async form: `reqHistoricalTicksAsync`.
@@ -896,7 +896,7 @@ impl IBHandle {
         format_date: i32,
     ) -> Result<BarDate> {
         let f = self.req_head_time_stamp_async(contract, what_to_show, use_rth, format_date);
-        block_on(f, self.config().request_timeout)?
+        block_on(f, self.request_timeout())?
     }
 
     /// `req_head_time_stamp`'s async form: `reqHeadTimeStampAsync`.
@@ -930,7 +930,7 @@ impl IBHandle {
         period: &str,
     ) -> Result<Vec<HistogramData>> {
         self.req_histogram_data_async(contract, use_rth, period)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_histogram_data`'s async form: `reqHistogramDataAsync`.
@@ -963,7 +963,7 @@ impl IBHandle {
         fundamental_data_options: &[TagValue],
     ) -> Result<String> {
         self.req_fundamental_data_async(contract, report_type, fundamental_data_options)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_fundamental_data`'s async form: `reqFundamentalDataAsync`.
@@ -1004,7 +1004,7 @@ impl IBHandle {
             scanner_subscription_options,
             scanner_subscription_filter_options,
         );
-        block_on(f, self.config().request_timeout)?
+        block_on(f, self.request_timeout())?
     }
 
     /// `req_scanner_data`'s async form: `reqScannerDataAsync`.
@@ -1072,7 +1072,7 @@ impl IBHandle {
     /// The scanner's parameters, as XML: ib_async's `reqScannerParameters`.
     pub fn req_scanner_parameters(&self) -> Result<String> {
         self.req_scanner_parameters_async()
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_scanner_parameters`' async form: `reqScannerParametersAsync`.
@@ -1084,8 +1084,7 @@ impl IBHandle {
 
     /// The news providers: ib_async's `reqNewsProviders`.
     pub fn req_news_providers(&self) -> Result<Vec<NewsProvider>> {
-        self.req_news_providers_async()
-            .wait(self.config().request_timeout)
+        self.req_news_providers_async().wait(self.request_timeout())
     }
 
     /// `req_news_providers`' async form: `reqNewsProvidersAsync`.
@@ -1102,7 +1101,7 @@ impl IBHandle {
         news_article_options: &[TagValue],
     ) -> Result<NewsArticle> {
         self.req_news_article_async(provider_code, article_id, news_article_options)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_news_article`'s async form: `reqNewsArticleAsync`.
@@ -1143,7 +1142,7 @@ impl IBHandle {
             total_results,
             historical_news_options,
         );
-        block_on(f, self.config().request_timeout)?
+        block_on(f, self.request_timeout())?
     }
 
     /// `req_historical_news`' async form: `reqHistoricalNewsAsync`.
@@ -1230,10 +1229,7 @@ impl IBHandle {
     /// Wall Street Horizon's metadata, as JSON: ib_async's
     /// `getWshMetaData`. An active metadata request is cancelled first.
     pub fn get_wsh_meta_data(&self) -> Result<String> {
-        block_on(
-            self.get_wsh_meta_data_async(),
-            self.config().request_timeout,
-        )?
+        block_on(self.get_wsh_meta_data_async(), self.request_timeout())?
     }
 
     /// `get_wsh_meta_data`'s async form: `getWshMetaDataAsync`.
@@ -1245,10 +1241,7 @@ impl IBHandle {
     /// `getWshEventData`. An active event request is cancelled first, and
     /// this one once answered.
     pub fn get_wsh_event_data(&self, data: &WshEventData) -> Result<String> {
-        block_on(
-            self.get_wsh_event_data_async(data),
-            self.config().request_timeout,
-        )?
+        block_on(self.get_wsh_event_data_async(data), self.request_timeout())?
     }
 
     /// `get_wsh_event_data`'s async form: `getWshEventDataAsync`.
@@ -1261,10 +1254,7 @@ impl IBHandle {
     /// The advisor configuration of type `fa_data_type`, as XML: ib_async's
     /// `requestFA`. `None` when no answer comes within 4 seconds.
     pub fn request_fa(&self, fa_data_type: i32) -> Result<Option<String>> {
-        block_on(
-            self.request_fa_async(fa_data_type),
-            self.config().request_timeout,
-        )?
+        block_on(self.request_fa_async(fa_data_type), self.request_timeout())?
     }
 
     /// `request_fa`'s async form: `requestFAAsync`.
@@ -1288,8 +1278,7 @@ impl IBHandle {
     /// The server's time, in `IBDefaults.timezone`: ib_async's
     /// `reqCurrentTime`.
     pub fn req_current_time(&self) -> Result<Zoned> {
-        self.req_current_time_async()
-            .wait(self.config().request_timeout)
+        self.req_current_time_async().wait(self.request_timeout())
     }
 
     /// `req_current_time`'s async form: `reqCurrentTimeAsync`.
@@ -1299,8 +1288,7 @@ impl IBHandle {
 
     /// The user's white-branding id: ib_async's `reqUserInfo`.
     pub fn req_user_info(&self) -> Result<String> {
-        self.req_user_info_async()
-            .wait(self.config().request_timeout)
+        self.req_user_info_async().wait(self.request_timeout())
     }
 
     /// `req_user_info`'s async form: `reqUserInfoAsync`.
@@ -1490,11 +1478,7 @@ mod tests {
                 req_id: id,
                 bar: bar(),
             },
-            Callback::HistoricalDataEnd {
-                req_id: id,
-                start: String::new(),
-                end: String::new(),
-            },
+            Callback::HistoricalDataEnd { req_id: id },
             Callback::HistoricalDataUpdate {
                 req_id: id,
                 bar: bar(),
@@ -1774,7 +1758,7 @@ mod tests {
     fn an_error_ends_a_collection_with_what_arrived_and_a_single_value_with_itself() {
         let _o = AsOwner::new();
         let s = connected();
-        let rows: [(&str, bool, Start); 15] = [
+        let rows: [(&str, bool, Start); 17] = [
             ("reqContractDetails", true, |ib| {
                 Box::pin(async move { ib.req_contract_details_async(&stock("A")).await.map(drop) })
             }),
@@ -1880,6 +1864,13 @@ mod tests {
             }),
             ("reqUserInfo", false, |ib| {
                 Box::pin(async move { ib.req_user_info_async().await.map(drop) })
+            }),
+            // ib_async's future holds the list `startReq` made.
+            ("reqAccountUpdatesMulti", true, |ib| {
+                Box::pin(async move { ib.req_account_updates_multi_async("DU999", "").await })
+            }),
+            ("reqSmartComponents", true, |ib| {
+                Box::pin(async move { ib.req_smart_components_async("SMART").await.map(drop) })
             }),
         ];
         for (name, collection, start) in rows {

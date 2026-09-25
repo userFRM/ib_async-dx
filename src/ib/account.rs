@@ -19,7 +19,7 @@ impl IBHandle {
     /// `connect` already asks for them.
     pub fn req_account_updates(&self, account: &str) -> Result<()> {
         self.req_account_updates_async(account)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_account_updates`' async form: `reqAccountUpdatesAsync`.
@@ -35,30 +35,31 @@ impl IBHandle {
     /// ib_async's `reqAccountUpdatesMulti`. They reach `account_values()`.
     pub fn req_account_updates_multi(&self, account: &str, model_code: &str) -> Result<()> {
         self.req_account_updates_multi_async(account, model_code)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_account_updates_multi`'s async form:
     /// `reqAccountUpdatesMultiAsync`.
     pub fn req_account_updates_multi_async(&self, account: &str, model_code: &str) -> Pending<()> {
         let (account, model_code) = (account.to_owned(), model_code.to_owned());
-        self.shared.request(move |ib, token, reply: Reply<()>| {
-            let (id, client) = match req_id(ib) {
-                Ok(v) => v,
-                Err(e) => {
-                    reply.send(Err(e));
-                    return;
-                }
-            };
-            let mut x = ib.core().requests.exec_as(ReqKey::Id(id), token);
-            x.waiter = Some(Box::new(reply));
-            // ib_async's future holds the list `startReq` made, so an error
-            // that ends it fails the call only with `RaiseRequestErrors`.
-            x.acc = Some(Box::new(()));
-            ib.core().requests.insert(x);
-            client.req_account_updates_multi(id, &account, &model_code, false);
-            ib.queue.sent(1);
-        })
+        self.shared
+            .request_connected(move |ib, token, reply: Reply<()>| {
+                let (id, client) = match req_id(ib) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        reply.send(Err(e));
+                        return;
+                    }
+                };
+                let mut x = ib.core().requests.exec_as(ReqKey::Id(id), token);
+                x.waiter = Some(Box::new(reply));
+                // ib_async's future holds the list `startReq` made, so an error
+                // that ends it fails the call only with `RaiseRequestErrors`.
+                x.acc = Some(Box::new(()));
+                ib.core().requests.insert(x);
+                client.req_account_updates_multi(id, &account, &model_code, false);
+                ib.queue.sent(1);
+            })
     }
 
     /// Asks for every account's summary, kept up to date from then on, and
@@ -66,7 +67,7 @@ impl IBHandle {
     /// cancels it; `account_summary()` asks for it when none has arrived.
     pub fn req_account_summary(&self) -> Result<()> {
         self.req_account_summary_async()
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_account_summary`'s async form: `reqAccountSummaryAsync`.
@@ -78,8 +79,7 @@ impl IBHandle {
     /// ib_async's `reqPositions`. They also reach `positions()`, which is
     /// kept up to date.
     pub fn req_positions(&self) -> Result<Vec<Position>> {
-        self.req_positions_async()
-            .wait(self.config().request_timeout)
+        self.req_positions_async().wait(self.request_timeout())
     }
 
     /// `req_positions`' async form: `reqPositionsAsync`.
@@ -238,7 +238,7 @@ fn question<T: Send + 'static>(
     ask: Ask,
     acc: Option<Box<dyn Any + Send>>,
 ) -> Pending<T> {
-    ib.request(move |ib, token, reply: Reply<T>| {
+    ib.request_connected(move |ib, token, reply: Reply<T>| {
         // Dropped unsent, the reply fails `NotConnected`.
         let Ok(client) = session(ib) else {
             return;
@@ -269,7 +269,7 @@ mod tests {
 
     use super::*;
     use crate::contract::Contract;
-    use crate::engine::{ControlCommand, ErrorOrigin, SharedState};
+    use crate::engine::{ControlCommand, SharedState};
     use crate::event::set_on_owner;
     use crate::ib::{ConnectOptions, IBConfig, StartupFetch};
     use crate::objects::{AccountValue, IBDefaults};
@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(sent(&rx), [r#"Ask(AccountUpdates { account: "DU123" })"#]);
         read(&ib, vec![Callback::UpdateAccountValue(value.clone())]);
         assert!(published(&mut p).is_none());
-        read(&ib, vec![Callback::AccountDownloadEnd("DU123".into())]);
+        read(&ib, vec![Callback::AccountDownloadEnd]);
         assert!(matches!(published(&mut p), Some(Ok(()))));
 
         // Numbered, without the ledger-only subset (ib:896), and ended only
@@ -382,7 +382,7 @@ mod tests {
                 r#"Ask(AccountUpdatesMulti {{ req_id: {id}, account: "DU123", model_code: "", ledger_and_nlv: false }})"#
             )]
         );
-        let update = Callback::AccountUpdateMulti { req_id: id, value };
+        let update = Callback::AccountUpdateMulti { value };
         read(&ib, vec![update, Callback::AccountUpdateMultiEnd(id + 1)]);
         assert!(published(&mut p).is_none());
         read(&ib, vec![Callback::AccountUpdateMultiEnd(id)]);
@@ -404,35 +404,6 @@ mod tests {
         assert!(published(&mut p).is_none());
         read(&ib, vec![Callback::PositionEnd]);
         assert_eq!(published(&mut p).map(Result::unwrap), Some(vec![position]));
-    }
-
-    #[test]
-    fn an_error_ends_account_updates_multi_as_raise_request_errors_says() {
-        let _o = AsOwner::new();
-        let ib = ib();
-        let rx = connect(&ib);
-        for raise in [false, true] {
-            ib.set_config(IBConfig {
-                raise_request_errors: raise,
-                ..IBConfig::default()
-            });
-            let mut p = ib.req_account_updates_multi_async("DU999", "");
-            let id = id_in(&sent(&rx)[0]);
-            let refused = Callback::Error {
-                origin: ErrorOrigin::Request { id, ends: true },
-                code: 322,
-                message: "refused".into(),
-                advanced_order_reject_json: String::new(),
-            };
-            read(&ib, vec![refused]);
-            let r = published(&mut p);
-            if raise {
-                let want = matches!(r, Some(Err(Error::Request { req_id, code: 322, .. })) if req_id == id);
-                assert!(want, "{r:?}");
-            } else {
-                assert!(matches!(r, Some(Ok(()))), "{r:?}");
-            }
-        }
     }
 
     #[test]

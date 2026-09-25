@@ -2,8 +2,6 @@
 //! table of `schedule` callbacks and async sleeps, the handle `schedule`
 //! returns, and the clock they read.
 
-#![cfg_attr(not(test), expect(dead_code, reason = "the owner's loop uses these"))]
-
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
 use std::fmt;
@@ -158,6 +156,7 @@ impl<K> DeadlineHeap<K> {
     }
 
     /// How many entries are pending.
+    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.live.len()
     }

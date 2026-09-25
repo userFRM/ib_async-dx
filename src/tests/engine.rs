@@ -129,7 +129,7 @@ fn a_refusal_the_crate_makes_follows_what_the_engine_said_before_the_call() {
 }
 
 #[test]
-fn nothing_a_session_kept_outlives_its_last_handle() {
+fn nothing_a_session_kept_outlives_the_ib() {
     let _g = lock(&GLOBAL_ERRORS);
     let (client, _rx) = engine();
     let ib = IB::attach(client, opts(), Clock::system()).unwrap();

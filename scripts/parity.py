@@ -294,6 +294,7 @@ SIGNATURES = [
     "fn(Duration) -> Result<bool> = IB::sleep",
     "fn(Timestamp) -> Result<bool> = IB::wait_until",
     "fn(Timestamp, fn()) -> Result<TimerHandle> = IB::schedule",
+    "fn(Timestamp, Timestamp, Duration) -> Result<impl Stream<Item = Zoned> + Send> = IB::time_range_async",
     "fn(&IBHandle, ConnectOptions) -> impl Future<Output = Result<()>> + Send = IBHandle::connect_async",
     # State reads.
     "fn(&IBHandle, &str) -> Vec<AccountValue> = IBHandle::account_values",
@@ -690,7 +691,10 @@ def generate(model, rust):
     o("use std::path::Path;")
     o("use std::time::Duration;")
     o("")
-    o("use ib_async_dx::defaults::{CORPORATE_ACTIONS_TIMEOUT, HISTORICAL_TIMEOUT, SPREAD_SCAN_TIMEOUT};")
+    o("use ib_async_dx::defaults::{")
+    o("    CLIENT_CONNECT_TIMEOUT, CORPORATE_ACTIONS_TIMEOUT, HISTORICAL_TIMEOUT, SET_TIMEOUT,")
+    o("    SPREAD_SCAN_TIMEOUT,")
+    o("};")
     o("use ib_async_dx::util::{self, BarDate, DateTimeArg, TimeT};")
     o("use ib_async_dx::*;")
     o("use jiff::tz::TimeZone;")
@@ -1050,17 +1054,22 @@ def generate(model, rust):
     o("fn signatures() {")
     for s in SIGNATURES:
         ty, path = [x.strip() for x in s.rsplit("=", 1)]
-        if "impl Future" in ty:
-            # An async fn's future has no name: pinned by the call's argument and output types.
-            args, out = ty[3:].split(") -> impl Future<Output = ", 1)
-            out = out.rsplit(">", 1)[0]
+        if "impl Future" in ty or "impl Stream" in ty:
+            # An async fn's future and an async generator's stream have no name: pinned by the
+            # call's argument and output types.
+            if "impl Future" in ty:
+                args, out = ty[3:].split(") -> impl Future<Output = ", 1)
+                bound, given = f"Future<Output = {out.rsplit('>', 1)[0]}>", "F"
+            else:
+                args, item = ty[3:].split(") -> Result<impl Stream<Item = ", 1)
+                bound, given = f"futures_core::Stream<Item = {item.rsplit('> + Send>', 1)[0]}>", "Result<F>"
             params = split_top(args)
             names_ = [f"p{i}" for i in range(len(params))]
             owner, fname = path.split("::")
             o("    {")
             for n, p in zip(names_, params):
                 o(f"        let {n}: {p} = any();")
-            o(f"        fn out<F: Future<Output = {out}> + Send>(_: F) {{}}")
+            o(f"        fn out<F: {bound} + Send>(_: {given}) {{}}")
             o(f"        out({owner}::{fname}({', '.join(names_)}));")
             o("    }")
         else:
@@ -1109,6 +1118,10 @@ def generate(model, rust):
     hist = next(b for b in ib.body if isinstance(b, ast.FunctionDef) and b.name == "reqHistoricalData")
     t = dict(zip([a.arg for a in hist.args.args[-len(hist.args.defaults) :]], hist.args.defaults))["timeout"]
     o(f"    assert_eq!(HISTORICAL_TIMEOUT, Duration::from_secs({ast.literal_eval(t)}));")
+    for owner, method, name in ((ib, "setTimeout", "SET_TIMEOUT"), (model.classes["Client"], "connect", "CLIENT_CONNECT_TIMEOUT")):
+        fn = next(b for b in owner.body if isinstance(b, ast.FunctionDef) and b.name == method)
+        t = dict(zip([a.arg for a in fn.args.args[-len(fn.args.defaults) :]], fn.args.defaults))["timeout"]
+        o(f"    assert_eq!({name}, Duration::from_secs_f64({float(ast.literal_eval(t))!r}));")
     o("    // No ib_async counterpart: the engine's own 15 s, and the spread scan's 10 s.")
     o("    assert_eq!(CORPORATE_ACTIONS_TIMEOUT, Duration::from_secs(15));")
     o("    assert_eq!(SPREAD_SCAN_TIMEOUT, Duration::from_secs(10));")

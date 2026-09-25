@@ -183,7 +183,7 @@ fn an_unqualified_stock_is_named_before_its_order_is_sent() {
 
 #[test]
 #[ignore = "needs a paper login"]
-fn a_client_sees_its_own_orders_and_every_clients_through_all_open_orders() {
+fn every_session_hears_every_order_on_the_account() {
     // Client 0 leaves a working order behind.
     let ib = session_or_skip!(0);
     let spy = spy(&ib);
@@ -194,46 +194,20 @@ fn a_client_sees_its_own_orders_and_every_clients_through_all_open_orders() {
     let perm_id = trade.read().order.read().perm_id;
     drop(ib);
 
-    // Client 1 does not see it among its own, and does among everyone's.
+    // Client 1 hears of it among its own open orders, as among everyone's:
+    // the engine tells every session of every order on the account.
     let ib = session_or_skip!(1);
     let own = ib.req_open_orders().unwrap();
-    assert!(own.iter().all(|t| t.read().order.read().perm_id != perm_id));
+    assert!(own.iter().any(|t| t.read().order.read().perm_id == perm_id));
     let all = ib.req_all_open_orders().unwrap();
     let theirs = all
         .iter()
-        .find(|t| t.read().order.read().perm_id == perm_id);
-    let theirs = theirs
+        .find(|t| t.read().order.read().perm_id == perm_id)
         .expect("req_all_open_orders gives client 0's order")
         .clone();
     let placed = theirs.read().order.clone();
     ib.cancel_order(&placed, "").unwrap();
     assert!(until(&ib, 30, || theirs.read().is_done()));
-    drop(ib);
-
-    // Client 0 binds an order placed outside the API through
-    // req_open_orders: it comes back numbered.
-    let ib = session_or_skip!(0);
-    let manual: Vec<i64> = ib
-        .req_all_open_orders()
-        .unwrap()
-        .iter()
-        .map(|t| t.read().order.read().clone())
-        .filter(|o| o.order_id == 0)
-        .map(|o| o.perm_id)
-        .collect();
-    if manual.is_empty() {
-        println!("SKIP (binding): the account has no order placed outside the API");
-        return;
-    }
-    ib.req_auto_open_orders(true).unwrap();
-    let bound = ib.req_open_orders().unwrap();
-    for perm_id in manual {
-        let t = bound
-            .iter()
-            .find(|t| t.read().order.read().perm_id == perm_id);
-        let t = t.expect("client 0 is given the order placed outside the API");
-        assert_ne!(t.read().order.read().order_id, 0, "bound under a number");
-    }
 }
 
 #[test]

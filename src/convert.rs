@@ -8,11 +8,6 @@
 //! own default. A callback value that does not parse or narrow fails with
 //! `Error::Value` naming the field, and the callback is dropped.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "Capture and the IB's methods call these")
-)]
-
 use jiff::Zoned;
 use jiff::tz::TimeZone;
 

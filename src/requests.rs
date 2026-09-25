@@ -12,8 +12,6 @@
 //! replaces it at the next call, so the earlier caller is never answered and
 //! a late answer completes the later one; the lane answers each in turn.
 
-#![expect(dead_code, reason = "the owner and Apply use these")]
-
 use std::any::{Any, type_name};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -186,7 +184,8 @@ pub(crate) enum Route {
 }
 
 /// The cancel an execution's method runs whenever it ends, abandoned
-/// included: the only cancel that follows an abandon.
+/// included: the only cancel that follows an abandon. A refusal runs only
+/// what [`Cleanup::refused`] leaves of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Cleanup {
     /// `calculate_implied_volatility`'s `finally` (ib:2499-2518).
@@ -196,6 +195,26 @@ pub(crate) enum Cleanup {
     /// `req_tickers` ends its snapshot ticker on every path, an error's
     /// included, where ib:2196-2200 skips it.
     EndSnapshot,
+    /// A corporate actions query given up unanswered is withdrawn: the
+    /// venue serves it until then.
+    WithdrawAdjustments,
+    /// A spread scan's ticker is ended and its subscription cancelled.
+    WithdrawScan,
+    /// A refused spread scan's ticker is ended.
+    EndScan,
+}
+
+impl Cleanup {
+    /// What is left of it once the venue has refused its request: a refused
+    /// request has nothing to withdraw, and the engine refuses a cancel of
+    /// one.
+    fn refused(self) -> Option<Cleanup> {
+        match self {
+            Cleanup::WithdrawAdjustments => None,
+            Cleanup::WithdrawScan => Some(Cleanup::EndScan),
+            c => Some(c),
+        }
+    }
 }
 
 /// One execution of a request.
@@ -514,9 +533,13 @@ impl Requests {
     /// What an error does to the requests, by its origin alone.
     pub(crate) fn error(&mut self, origin: ErrorOrigin) -> Refused {
         match origin {
-            ErrorOrigin::Request { id, ends: true } => {
-                self.end(id).map_or(Refused::Nothing, Refused::Request)
-            }
+            ErrorOrigin::Request { id, ends: true } => match self.end(id) {
+                Some(mut x) => {
+                    x.guard = x.guard.and_then(Cleanup::refused);
+                    Refused::Request(x)
+                }
+                None => Refused::Nothing,
+            },
             ErrorOrigin::Question { q, ends: true } => Refused::Question(self.ended(q)),
             _ => Refused::Nothing,
         }

@@ -16,12 +16,8 @@ pub(crate) use ibkr_dx::{Adjustment, AdjustmentKind};
 // lib.rs:101; api/mod.rs:14,17.
 pub(crate) use ibkr_dx::EClient;
 pub(crate) use ibkr_dx::Wrapper;
-// lib.rs:108,112.
-#[expect(
-    unused_imports,
-    reason = "exercise_options and Client::server_version read them"
-)]
-pub(crate) use ibkr_dx::{ExerciseStates, PROTOCOL_LEVEL};
+// lib.rs:108: what `exercise_options` states beyond the instruction.
+pub(crate) use ibkr_dx::ExerciseStates;
 
 // The caller's model types: `api::types` is `types::model` (api/mod.rs:11).
 // Lines of types/model.rs, in order: 1797, 15, 1719, 54, 2067, 1855, 41,

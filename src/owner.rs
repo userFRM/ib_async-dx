@@ -412,7 +412,8 @@ impl CommandQueue {
     }
 
     /// Up to `n` entries, in admission order. A request's count moves to the
-    /// engine's unsent work, which the next read sets from the engine.
+    /// engine's unsent work until it has run ([`CommandQueue::ran`]), so it is
+    /// counted while it is being sent.
     pub(crate) fn take_group(&self, n: usize) -> Vec<Entry> {
         let mut taken = Vec::new();
         self.update(|st| {
@@ -439,7 +440,16 @@ impl CommandQueue {
         self.update(|st| std::mem::replace(&mut st.engine_unsent, n) > n);
     }
 
-    /// Work the owner has just handed the engine.
+    /// A taken request has run: its take's charge is released, since its
+    /// step counted what it handed the engine ([`CommandQueue::sent`]).
+    fn ran(&self) {
+        self.update(|st| {
+            st.engine_unsent = st.engine_unsent.saturating_sub(1);
+            true
+        });
+    }
+
+    /// Requests the owner has just handed the engine.
     pub(crate) fn sent(&self, n: usize) {
         self.update(|st| {
             st.engine_unsent += n;
@@ -1049,6 +1059,18 @@ impl Shared {
         p
     }
 
+    /// [`Shared::request`] for an IB method: failed at the call when no
+    /// session is published, where ib_async's `getReqId` and `send` raise.
+    pub(crate) fn request_connected<T: Send + 'static>(
+        self: &Arc<Self>,
+        f: impl FnOnce(&Arc<Shared>, Token, Reply<T>) + Send + 'static,
+    ) -> Pending<T> {
+        if self.connected().is_none() {
+            return Pending::failed(Error::NotConnected);
+        }
+        self.request(f)
+    }
+
     /// A control that returns once admitted: `f` runs as an owner step,
     /// inline on the owner.
     pub(crate) fn control(self: &Arc<Self>, f: impl FnOnce(&Arc<Shared>) + Send + 'static) {
@@ -1132,7 +1154,11 @@ impl Shared {
             self.unit(|| self.retire(gone));
         }
         for e in self.queue.take_group(CMD_GROUP) {
+            let request = matches!(e.class, Class::Request);
             self.unit(|| e.run(self));
+            if request {
+                self.queue.ran();
+            }
         }
         let due = self.core().heap.take_due(self.clock.now());
         for d in due {
@@ -1327,25 +1353,32 @@ impl Shared {
         let Some(client) = self.client_of(origin.generation) else {
             return;
         };
+        let end_ticker = |tick_type| {
+            let mut c = self.core();
+            let ticker = c.state.req_id_to_ticker.get(&origin.req_id).cloned();
+            if let Some(t) = ticker {
+                c.state.end_ticker(&t, tick_type);
+            }
+        };
         match c {
             Cleanup::CancelImpliedVolatility => {
                 client.cancel_calculate_implied_volatility(origin.req_id);
             }
             Cleanup::CancelOptionPrice => client.cancel_calculate_option_price(origin.req_id),
-            Cleanup::EndSnapshot => {
-                let mut c = self.core();
-                let ticker = c.state.req_id_to_ticker.get(&origin.req_id).cloned();
-                if let Some(t) = ticker {
-                    c.state.end_ticker(&t, "snapshot");
-                }
+            Cleanup::EndSnapshot => end_ticker("snapshot"),
+            Cleanup::WithdrawAdjustments => client.cancel_adjustments(origin.req_id),
+            Cleanup::WithdrawScan => {
+                end_ticker("spreadScan");
+                client.cancel_mkt_data(origin.req_id);
             }
+            Cleanup::EndScan => end_ticker("spreadScan"),
         }
     }
 
     /// The account summary, asked again: ib_async's `reqAccountSummaryAsync`
     /// (ib:2244-2261), whose subscription nothing cancels.
     pub(crate) fn account_summary_request(self: &Arc<Self>) -> Pending<()> {
-        self.request(|ib, token, reply: Reply<()>| {
+        self.request_connected(|ib, token, reply: Reply<()>| {
             let Some((_, client)) = ib.connected() else {
                 return;
             };

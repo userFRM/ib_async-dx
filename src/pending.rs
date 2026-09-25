@@ -6,11 +6,6 @@
 //! becomes visible when the outermost unit ends, whether it returned or
 //! panicked. A slot decided outside any unit is published at once.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the owner and the request methods use these")
-)]
-
 use std::any::Any;
 use std::cell::RefCell;
 use std::fmt;

@@ -12,8 +12,6 @@
 //! answers nothing this crate asked, and is dropped here. Every other error is
 //! kept with its origin, whatever its number.
 
-#![expect(dead_code, reason = "the owner reads and applies the callbacks")]
-
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, Zoned};
 
@@ -92,13 +90,11 @@ pub(crate) enum Callback {
         efp: EfpData,
     },
     TickNews {
-        req_id: i64,
         news: NewsTick,
     },
     TickByTickAllLast {
         req_id: i64,
         tick_type: i32,
-        time: i64,
         price: f64,
         size: f64,
         attrib: TickAttribLast,
@@ -107,7 +103,6 @@ pub(crate) enum Callback {
     },
     TickByTickBidAsk {
         req_id: i64,
-        time: i64,
         bid_price: f64,
         ask_price: f64,
         bid_size: f64,
@@ -116,7 +111,6 @@ pub(crate) enum Callback {
     },
     TickByTickMidPoint {
         req_id: i64,
-        time: i64,
         mid_point: f64,
     },
     UpdateMktDepth {
@@ -135,7 +129,6 @@ pub(crate) enum Callback {
         side: i32,
         price: f64,
         size: f64,
-        is_smart_depth: bool,
     },
     MktDepthExchanges(Vec<DepthMktDataDescription>),
     SmartComponents {
@@ -185,14 +178,12 @@ pub(crate) enum Callback {
     // The account.
     UpdateAccountValue(AccountValue),
     UpdatePortfolio(PortfolioItem),
-    AccountDownloadEnd(String),
+    AccountDownloadEnd,
     AccountSummary {
-        req_id: i64,
         value: AccountValue,
     },
     AccountSummaryEnd(i64),
     AccountUpdateMulti {
-        req_id: i64,
         value: AccountValue,
     },
     AccountUpdateMultiEnd(i64),
@@ -220,8 +211,6 @@ pub(crate) enum Callback {
     },
     HistoricalDataEnd {
         req_id: i64,
-        start: String,
-        end: String,
     },
     HistoricalDataUpdate {
         req_id: i64,
@@ -285,13 +274,11 @@ pub(crate) enum Callback {
     },
     HistoricalNewsEnd {
         req_id: i64,
-        has_more: bool,
     },
     UpdateNewsBulletin(NewsBulletin),
 
     // The rest.
     ReceiveFa {
-        fa_data_type: i32,
         xml: String,
     },
     WshMetaData {
@@ -539,7 +526,7 @@ impl e::Wrapper for Capture {
 
     fn tick_news(
         &mut self,
-        ticker_id: i64,
+        _ticker_id: i64,
         timestamp: i64,
         provider_code: &str,
         article_id: &str,
@@ -547,7 +534,6 @@ impl e::Wrapper for Capture {
         extra_data: &str,
     ) {
         self.push(Callback::TickNews {
-            req_id: ticker_id,
             news: NewsTick {
                 time_stamp: timestamp,
                 provider_code: provider_code.to_owned(),
@@ -562,7 +548,7 @@ impl e::Wrapper for Capture {
         &mut self,
         req_id: i64,
         tick_type: i32,
-        time: i64,
+        _time: i64,
         price: f64,
         size: f64,
         attrib: &e::TickAttribLast,
@@ -572,7 +558,6 @@ impl e::Wrapper for Capture {
         self.push(Callback::TickByTickAllLast {
             req_id,
             tick_type,
-            time,
             price,
             size,
             attrib: attrib.into(),
@@ -584,7 +569,7 @@ impl e::Wrapper for Capture {
     fn tick_by_tick_bid_ask(
         &mut self,
         req_id: i64,
-        time: i64,
+        _time: i64,
         bid_price: f64,
         ask_price: f64,
         bid_size: f64,
@@ -593,7 +578,6 @@ impl e::Wrapper for Capture {
     ) {
         self.push(Callback::TickByTickBidAsk {
             req_id,
-            time,
             bid_price,
             ask_price,
             bid_size,
@@ -602,12 +586,8 @@ impl e::Wrapper for Capture {
         });
     }
 
-    fn tick_by_tick_mid_point(&mut self, req_id: i64, time: i64, mid_point: f64) {
-        self.push(Callback::TickByTickMidPoint {
-            req_id,
-            time,
-            mid_point,
-        });
+    fn tick_by_tick_mid_point(&mut self, req_id: i64, _time: i64, mid_point: f64) {
+        self.push(Callback::TickByTickMidPoint { req_id, mid_point });
     }
 
     fn update_mkt_depth(
@@ -638,7 +618,7 @@ impl e::Wrapper for Capture {
         side: i32,
         price: f64,
         size: f64,
-        is_smart_depth: bool,
+        _is_smart_depth: bool,
     ) {
         self.push(Callback::UpdateMktDepthL2 {
             req_id,
@@ -648,7 +628,6 @@ impl e::Wrapper for Capture {
             side,
             price,
             size,
-            is_smart_depth,
         });
     }
 
@@ -809,20 +788,19 @@ impl e::Wrapper for Capture {
         }));
     }
 
-    fn account_download_end(&mut self, account: &str) {
-        self.push(Callback::AccountDownloadEnd(account.to_owned()));
+    fn account_download_end(&mut self, _account: &str) {
+        self.push(Callback::AccountDownloadEnd);
     }
 
     fn account_summary(
         &mut self,
-        req_id: i64,
+        _req_id: i64,
         account: &str,
         tag: &str,
         value: &str,
         currency: &str,
     ) {
         self.push(Callback::AccountSummary {
-            req_id,
             value: AccountValue {
                 account: account.to_owned(),
                 tag: tag.to_owned(),
@@ -839,7 +817,7 @@ impl e::Wrapper for Capture {
 
     fn account_update_multi(
         &mut self,
-        req_id: i64,
+        _req_id: i64,
         account: &str,
         model_code: &str,
         key: &str,
@@ -847,7 +825,6 @@ impl e::Wrapper for Capture {
         currency: &str,
     ) {
         self.push(Callback::AccountUpdateMulti {
-            req_id,
             value: AccountValue {
                 account: account.to_owned(),
                 tag: key.to_owned(),
@@ -908,12 +885,8 @@ impl e::Wrapper for Capture {
         self.push_converted("historicalData", callback);
     }
 
-    fn historical_data_end(&mut self, req_id: i64, start: &str, end: &str) {
-        self.push(Callback::HistoricalDataEnd {
-            req_id,
-            start: start.to_owned(),
-            end: end.to_owned(),
-        });
+    fn historical_data_end(&mut self, req_id: i64, _start: &str, _end: &str) {
+        self.push(Callback::HistoricalDataEnd { req_id });
     }
 
     fn historical_data_update(&mut self, req_id: i64, bar: &e::BarData) {
@@ -1099,8 +1072,8 @@ impl e::Wrapper for Capture {
         self.push_converted("historicalNews", callback);
     }
 
-    fn historical_news_end(&mut self, req_id: i64, has_more: bool) {
-        self.push(Callback::HistoricalNewsEnd { req_id, has_more });
+    fn historical_news_end(&mut self, req_id: i64, _has_more: bool) {
+        self.push(Callback::HistoricalNewsEnd { req_id });
     }
 
     fn update_news_bulletin(
@@ -1118,9 +1091,8 @@ impl e::Wrapper for Capture {
         }));
     }
 
-    fn receive_fa(&mut self, fa_data_type: i32, cxml: &str) {
+    fn receive_fa(&mut self, _fa_data_type: i32, cxml: &str) {
         self.push(Callback::ReceiveFa {
-            fa_data_type,
             xml: cxml.to_owned(),
         });
     }
@@ -1267,7 +1239,7 @@ mod tests {
             (
                 Box::new(|c| c.tick_news(1, 2, "p", "a", "h", "x")),
                 Some(
-                    r#"TickNews { req_id: 1, news: NewsTick { time_stamp: 2, provider_code: "p", article_id: "a", headline: "h", extra_data: "x" } }"#,
+                    r#"TickNews { news: NewsTick { time_stamp: 2, provider_code: "p", article_id: "a", headline: "h", extra_data: "x" } }"#,
                 ),
             ),
             (
@@ -1279,7 +1251,7 @@ mod tests {
                     c.tick_by_tick_all_last(1, 2, 3, 4.5, 5.5, &attrib, "e", "s")
                 }),
                 Some(
-                    r#"TickByTickAllLast { req_id: 1, tick_type: 2, time: 3, price: 4.5, size: 5.5, attrib: TickAttribLast { past_limit: true, unreported: false }, exchange: "e", special_conditions: "s" }"#,
+                    r#"TickByTickAllLast { req_id: 1, tick_type: 2, price: 4.5, size: 5.5, attrib: TickAttribLast { past_limit: true, unreported: false }, exchange: "e", special_conditions: "s" }"#,
                 ),
             ),
             (
@@ -1291,12 +1263,12 @@ mod tests {
                     c.tick_by_tick_bid_ask(1, 2, 3.5, 4.5, 5.5, 6.5, &attrib)
                 }),
                 Some(
-                    "TickByTickBidAsk { req_id: 1, time: 2, bid_price: 3.5, ask_price: 4.5, bid_size: 5.5, ask_size: 6.5, attrib: TickAttribBidAsk { bid_past_low: true, ask_past_high: false } }",
+                    "TickByTickBidAsk { req_id: 1, bid_price: 3.5, ask_price: 4.5, bid_size: 5.5, ask_size: 6.5, attrib: TickAttribBidAsk { bid_past_low: true, ask_past_high: false } }",
                 ),
             ),
             (
                 Box::new(|c| c.tick_by_tick_mid_point(1, 2, 3.5)),
-                Some("TickByTickMidPoint { req_id: 1, time: 2, mid_point: 3.5 }"),
+                Some("TickByTickMidPoint { req_id: 1, mid_point: 3.5 }"),
             ),
             (
                 Box::new(|c| c.update_mkt_depth(1, 2, 0, 1, 3.5, 4.5)),
@@ -1307,7 +1279,7 @@ mod tests {
             (
                 Box::new(|c| c.update_mkt_depth_l2(1, 2, "m", 1, 0, 3.5, 4.5, true)),
                 Some(
-                    r#"UpdateMktDepthL2 { req_id: 1, position: 2, market_maker: "m", operation: 1, side: 0, price: 3.5, size: 4.5, is_smart_depth: true }"#,
+                    r#"UpdateMktDepthL2 { req_id: 1, position: 2, market_maker: "m", operation: 1, side: 0, price: 3.5, size: 4.5 }"#,
                 ),
             ),
             (
@@ -1421,12 +1393,12 @@ mod tests {
             ),
             (
                 Box::new(|c| c.account_download_end("DU1")),
-                Some(r#"AccountDownloadEnd("DU1")"#),
+                Some("AccountDownloadEnd"),
             ),
             (
                 Box::new(|c| c.account_summary(1, "DU1", "t", "v", "USD")),
                 Some(
-                    r#"AccountSummary { req_id: 1, value: AccountValue { account: "DU1", tag: "t", value: "v", currency: "USD", model_code: "" } }"#,
+                    r#"AccountSummary { value: AccountValue { account: "DU1", tag: "t", value: "v", currency: "USD", model_code: "" } }"#,
                 ),
             ),
             (
@@ -1436,7 +1408,7 @@ mod tests {
             (
                 Box::new(|c| c.account_update_multi(1, "DU1", "m", "t", "v", "USD")),
                 Some(
-                    r#"AccountUpdateMulti { req_id: 1, value: AccountValue { account: "DU1", tag: "t", value: "v", currency: "USD", model_code: "m" } }"#,
+                    r#"AccountUpdateMulti { value: AccountValue { account: "DU1", tag: "t", value: "v", currency: "USD", model_code: "m" } }"#,
                 ),
             ),
             (
@@ -1466,7 +1438,7 @@ mod tests {
             ),
             (
                 Box::new(|c| c.historical_data_end(1, "a", "b")),
-                Some(r#"HistoricalDataEnd { req_id: 1, start: "a", end: "b" }"#),
+                Some("HistoricalDataEnd { req_id: 1 }"),
             ),
             (
                 Box::new(|c| c.historical_data_update(1, &bar)),
@@ -1607,7 +1579,7 @@ mod tests {
             ),
             (
                 Box::new(|c| c.historical_news_end(1, true)),
-                Some("HistoricalNewsEnd { req_id: 1, has_more: true }"),
+                Some("HistoricalNewsEnd { req_id: 1 }"),
             ),
             (
                 Box::new(|c| c.update_news_bulletin(1, 2, "m", "X")),
@@ -1617,7 +1589,7 @@ mod tests {
             ),
             (
                 Box::new(|c| c.receive_fa(1, "<fa/>")),
-                Some(r#"ReceiveFa { fa_data_type: 1, xml: "<fa/>" }"#),
+                Some(r#"ReceiveFa { xml: "<fa/>" }"#),
             ),
             (
                 Box::new(|c| c.wsh_meta_data(1, "{}")),

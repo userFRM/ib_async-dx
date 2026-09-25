@@ -5,17 +5,25 @@ mod interleave;
 mod observe;
 mod oracle;
 
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, Once, mpsc};
+use std::task::{Context, Poll, Waker};
 use std::thread::{self, ThreadId};
 use std::time::{Duration, Instant};
+
+use jiff::Timestamp;
 
 use crate::contract::Contract;
 use crate::engine::{ControlCommand, EClient, SharedState};
 use crate::error::{Error, Result};
 use crate::event::lock;
-use crate::ib::{ConnectOptions, IB, StartupFetch};
-use crate::owner::Class;
+use crate::ib::{ConnectOptions, IB, IBConfig, IBHandle, StartupFetch};
+use crate::objects::IBDefaults;
+use crate::order::Order;
+use crate::owner::{Class, Shared};
+use crate::pending::Pending;
 use crate::record::Callback;
+use crate::timer::Clock;
 
 /// Serializes the tests that emit or wait on the process's
 /// `global_error_event`.
@@ -140,5 +148,104 @@ pub(crate) fn status(order_id: i64, status: &str) -> Callback {
         client_id: 1,
         why_held: String::new(),
         mkt_cap_price: 0.0,
+    }
+}
+
+#[test]
+fn every_fut_twin_has_failed_at_the_call_without_a_session() {
+    // Nothing runs this IB's steps, so only a failure at the call is seen.
+    let shared = Shared::new(
+        IBDefaults::default(),
+        IBConfig::default(),
+        Clock::manual(Timestamp::UNIX_EPOCH),
+    );
+    shared.connect_internal_slots();
+    let ib = IBHandle { shared };
+    fn failed<T>(mut p: Pending<T>) -> bool {
+        let r = Pin::new(&mut p).poll(&mut Context::from_waker(Waker::noop()));
+        matches!(r, Poll::Ready(Err(Error::NotConnected)))
+    }
+    let (c, order) = (stock(), Order::limit("BUY", 1.0, 1.0));
+    let twins = [
+        (
+            "reqAccountUpdatesAsync",
+            failed(ib.req_account_updates_async("")),
+        ),
+        (
+            "reqAccountUpdatesMultiAsync",
+            failed(ib.req_account_updates_multi_async("", "")),
+        ),
+        (
+            "reqAccountSummaryAsync",
+            failed(ib.req_account_summary_async()),
+        ),
+        ("reqPositionsAsync", failed(ib.req_positions_async())),
+        (
+            "reqMktDepthExchangesAsync",
+            failed(ib.req_mkt_depth_exchanges_async()),
+        ),
+        (
+            "reqSmartComponentsAsync",
+            failed(ib.req_smart_components_async("SMART")),
+        ),
+        (
+            "reqContractDetailsAsync",
+            failed(ib.req_contract_details_async(&c)),
+        ),
+        (
+            "reqSecDefOptParamsAsync",
+            failed(ib.req_sec_def_opt_params_async("AAPL", "", "STK", 265598)),
+        ),
+        (
+            "reqHistoricalScheduleAsync",
+            failed(ib.req_historical_schedule_async(&c, 1, "", true)),
+        ),
+        (
+            "reqHistoricalTicksAsync",
+            failed(ib.req_historical_ticks_async(&c, "", "", 10, "TRADES", true, false, &[])),
+        ),
+        (
+            "reqHistogramDataAsync",
+            failed(ib.req_histogram_data_async(&c, true, "3 days")),
+        ),
+        (
+            "reqFundamentalDataAsync",
+            failed(ib.req_fundamental_data_async(&c, "RESC", &[])),
+        ),
+        (
+            "reqScannerParametersAsync",
+            failed(ib.req_scanner_parameters_async()),
+        ),
+        (
+            "reqNewsProvidersAsync",
+            failed(ib.req_news_providers_async()),
+        ),
+        (
+            "reqNewsArticleAsync",
+            failed(ib.req_news_article_async("BZ", "1", &[])),
+        ),
+        ("reqCurrentTimeAsync", failed(ib.req_current_time_async())),
+        ("reqUserInfoAsync", failed(ib.req_user_info_async())),
+        (
+            "reqCurrentTimeInMillisAsync",
+            failed(ib.req_current_time_in_millis_async()),
+        ),
+        (
+            "whatIfOrderAsync",
+            failed(ib.what_if_order_async(&c, &order)),
+        ),
+        ("reqOpenOrdersAsync", failed(ib.req_open_orders_async())),
+        (
+            "reqAllOpenOrdersAsync",
+            failed(ib.req_all_open_orders_async()),
+        ),
+        (
+            "reqCompletedOrdersAsync",
+            failed(ib.req_completed_orders_async(false)),
+        ),
+        ("reqExecutionsAsync", failed(ib.req_executions_async(None))),
+    ];
+    for (name, failed) in twins {
+        assert!(failed, "{name}");
     }
 }

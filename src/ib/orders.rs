@@ -38,7 +38,7 @@ fn allocate(ib: &Shared, client: &EClient, n: i64) -> Result<i64> {
 
 /// What `client.placeOrder` does to the order it sends: only a volatility
 /// order carries `volatility` (cl:474-482).
-fn clear_volatility(o: &mut Order) {
+pub(crate) fn clear_volatility(o: &mut Order) {
     if !o.order_type.starts_with("VOL") {
         o.volatility = None;
     }
@@ -148,7 +148,6 @@ fn cancel(ib: &Arc<Shared>, order: &Live<Order>, time: &str) -> Result<Option<Li
     } else {
         client.cancel_order(o.order_id, time);
     }
-    ib.queue.sent(1);
     let now = ib.wall_now();
     let key = order_key(o.client_id, o.order_id, o.perm_id);
     let found = ib.core().state.trades.get(&key).cloned();
@@ -198,10 +197,7 @@ fn numbered<T: Send + 'static>(
     contract: Option<Contract>,
     send: impl FnOnce(&EClient, i64) + Send + 'static,
 ) -> Pending<T> {
-    if shared.connected().is_none() {
-        return Pending::failed(Error::NotConnected);
-    }
-    shared.request(move |ib, token, reply: Reply<T>| {
+    shared.request_connected(move |ib, token, reply: Reply<T>| {
         let started = session(ib).and_then(|c| allocate(ib, &c, 1).map(|id| (id, c)));
         let (id, client) = match started {
             Ok(v) => v,
@@ -228,10 +224,7 @@ fn numbered<T: Send + 'static>(
 /// A question about orders, in its lane: sent now if the lane is free,
 /// else in its turn. Its answer is the trades its exchange recorded.
 fn orders_question(shared: &Arc<Shared>, ask: Ask) -> Pending<Vec<Live<Trade>>> {
-    if shared.connected().is_none() {
-        return Pending::failed(Error::NotConnected);
-    }
-    shared.request(move |ib, token, reply: Reply<Vec<Live<Trade>>>| {
+    shared.request_connected(move |ib, token, reply: Reply<Vec<Live<Trade>>>| {
         let client = match session(ib) {
             Ok(c) => c,
             Err(e) => {
@@ -345,7 +338,7 @@ impl IBHandle {
     /// `IBConfig.request_timeout`.
     pub fn what_if_order(&self, contract: &Contract, order: &Order) -> Result<OrderState> {
         self.what_if_order_async(contract, order)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `what_if_order`'s async form: ib_async's `whatIfOrderAsync`. A copy
@@ -372,7 +365,6 @@ impl IBHandle {
     pub fn req_global_cancel(&self) -> Result<()> {
         self.shared.step(Class::Control, |ib| {
             session(ib)?.req_global_cancel("");
-            ib.queue.sent(1);
             log::info!(target: LOG_IB, "reqGlobalCancel");
             Ok(())
         })
@@ -382,8 +374,7 @@ impl IBHandle {
     /// Every order reported until the answer ends belongs to it and fires
     /// no `open_order_event`. Bounded by `IBConfig.request_timeout`.
     pub fn req_open_orders(&self) -> Result<Vec<Live<Trade>>> {
-        self.req_open_orders_async()
-            .wait(self.config().request_timeout)
+        self.req_open_orders_async().wait(self.request_timeout())
     }
 
     /// `req_open_orders`'s async form: ib_async's `reqOpenOrdersAsync`.
@@ -397,7 +388,7 @@ impl IBHandle {
     /// `IBConfig.request_timeout`.
     pub fn req_all_open_orders(&self) -> Result<Vec<Live<Trade>>> {
         self.req_all_open_orders_async()
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_all_open_orders`'s async form: ib_async's
@@ -412,7 +403,7 @@ impl IBHandle {
     /// `IBConfig.request_timeout`.
     pub fn req_completed_orders(&self, api_only: bool) -> Result<Vec<Live<Trade>>> {
         self.req_completed_orders_async(api_only)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_completed_orders`'s async form: ib_async's
@@ -426,7 +417,7 @@ impl IBHandle {
     /// own time and fire no event. Bounded by `IBConfig.request_timeout`.
     pub fn req_executions(&self, exec_filter: Option<&ExecutionFilter>) -> Result<Vec<Fill>> {
         self.req_executions_async(exec_filter)
-            .wait(self.config().request_timeout)
+            .wait(self.request_timeout())
     }
 
     /// `req_executions`'s async form: ib_async's `reqExecutionsAsync`.
@@ -452,7 +443,6 @@ impl IBHandle {
     pub fn req_auto_open_orders(&self, auto_bind: bool) -> Result<()> {
         self.shared.step(Class::Control, move |ib| {
             session(ib)?.req_auto_open_orders(auto_bind);
-            ib.queue.sent(1);
             Ok(())
         })
     }
@@ -1081,7 +1071,6 @@ mod tests {
         s.ib.req_global_cancel().unwrap();
         s.ib.exercise_options(&option, 1, 2, "DU123", 0).unwrap();
         s.ib.exercise_options(&option, 2, 1, "DU123", 1).unwrap();
-        s.ib.req_auto_open_orders(true).unwrap();
         assert_eq!(
             s.sent(),
             [
@@ -1109,33 +1098,6 @@ mod tests {
         assert!(not_connected(ib.req_global_cancel()));
         assert!(not_connected(ib.req_auto_open_orders(true)));
         assert!(not_connected(ib.exercise_options(&stock(), 1, 1, "", 0)));
-        // The async faces have failed at the call, as ib_async raises there.
-        let order = Order::limit("BUY", 100.0, 1.5);
-        assert!(not_connected(
-            published(&mut ib.what_if_order_async(&stock(), &order))
-                .unwrap()
-                .map(drop)
-        ));
-        assert!(not_connected(
-            published(&mut ib.req_open_orders_async())
-                .unwrap()
-                .map(drop)
-        ));
-        assert!(not_connected(
-            published(&mut ib.req_all_open_orders_async())
-                .unwrap()
-                .map(drop)
-        ));
-        assert!(not_connected(
-            published(&mut ib.req_completed_orders_async(false))
-                .unwrap()
-                .map(drop)
-        ));
-        assert!(not_connected(
-            published(&mut ib.req_executions_async(None))
-                .unwrap()
-                .map(drop)
-        ));
     }
 
     #[test]

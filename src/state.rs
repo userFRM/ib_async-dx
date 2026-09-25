@@ -12,8 +12,6 @@
 //! bookkeeping (`Requests`); what a request's answer is, and how an error
 //! ends it, is decided here.
 
-#![expect(dead_code, reason = "the owner applies each read through it")]
-
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Weak;
@@ -1033,7 +1031,7 @@ pub(crate) fn apply<S: Sink>(sink: &mut S, cb: Callback) {
             log::info!(target: LOG, "updatePortfolio: {item:?}");
             sink.emit(Emit::UpdatePortfolio(item));
         }
-        Callback::AccountDownloadEnd(_) => answer::<S, ()>(sink, Question::AccountUpdates, None),
+        Callback::AccountDownloadEnd => answer::<S, ()>(sink, Question::AccountUpdates, None),
         Callback::AccountSummary { value, .. } => {
             sink.books(|b| {
                 let key = (value.account.clone(), value.tag.clone(), value.currency.clone());
@@ -2331,7 +2329,6 @@ pub(crate) mod tests {
         // With a gateway's callback beside it, one pass.
         r.requests.cancel(Question::Positions);
         let news = Callback::TickNews {
-            req_id: 1,
             news: NewsTick {
                 time_stamp: 1,
                 provider_code: "p".into(),

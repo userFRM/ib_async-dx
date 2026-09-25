@@ -5,11 +5,6 @@
 //! listener. `emit` calls a snapshot of that list, so a slot connected or
 //! disconnected during an emission takes effect from the next one.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the owner and the IB's events use these")
-)]
-
 use std::any::Any;
 use std::borrow::Cow;
 use std::cell::Cell;
@@ -794,6 +789,7 @@ impl Tasks {
     }
 
     /// How many tasks have not finished.
+    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.0.iter().filter(|t| lock(&t.future).is_some()).count()
     }

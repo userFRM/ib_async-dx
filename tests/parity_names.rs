@@ -16,7 +16,10 @@ use std::future::Future;
 use std::path::Path;
 use std::time::Duration;
 
-use ib_async_dx::defaults::{CORPORATE_ACTIONS_TIMEOUT, HISTORICAL_TIMEOUT, SPREAD_SCAN_TIMEOUT};
+use ib_async_dx::defaults::{
+    CLIENT_CONNECT_TIMEOUT, CORPORATE_ACTIONS_TIMEOUT, HISTORICAL_TIMEOUT, SET_TIMEOUT,
+    SPREAD_SCAN_TIMEOUT,
+};
 use ib_async_dx::util::{self, BarDate, DateTimeArg, TimeT};
 use ib_async_dx::*;
 use jiff::tz::TimeZone;
@@ -1778,6 +1781,13 @@ fn signatures() {
     let _: fn(Timestamp) -> Result<bool> = IB::wait_until;
     let _: fn(Timestamp, fn()) -> Result<TimerHandle> = IB::schedule;
     {
+        let p0: Timestamp = any();
+        let p1: Timestamp = any();
+        let p2: Duration = any();
+        fn out<F: futures_core::Stream<Item = Zoned> + Send>(_: Result<F>) {}
+        out(IB::time_range_async(p0, p1, p2));
+    }
+    {
         let p0: &IBHandle = any();
         let p1: ConnectOptions = any();
         fn out<F: Future<Output = Result<()>> + Send>(_: F) {}
@@ -1879,6 +1889,8 @@ fn defaults() {
     assert!(!o.raise_sync_errors, "o.raise_sync_errors");
     assert!(o.fetch_fields == StartupFetch::ALL, "fetchFields");
     assert_eq!(HISTORICAL_TIMEOUT, Duration::from_secs(60));
+    assert_eq!(SET_TIMEOUT, Duration::from_secs_f64(60.0));
+    assert_eq!(CLIENT_CONNECT_TIMEOUT, Duration::from_secs_f64(2.0));
     // No ib_async counterpart: the engine's own 15 s, and the spread scan's 10 s.
     assert_eq!(CORPORATE_ACTIONS_TIMEOUT, Duration::from_secs(15));
     assert_eq!(SPREAD_SCAN_TIMEOUT, Duration::from_secs(10));

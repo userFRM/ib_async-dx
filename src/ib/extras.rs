@@ -29,9 +29,9 @@ use crate::objects::{
     AccountValue, CompetingSession, CorporateAction, OptionModel, OrderPreset, PositionElsewhere,
     TickerExtras,
 };
-use crate::owner::{self, Class, LOG_IB, Shared};
+use crate::owner::{Class, LOG_IB, Shared};
 use crate::pending::{Pending, Reply, Token};
-use crate::requests::{Ask, Exec, ReqKey};
+use crate::requests::{Ask, Cleanup, Exec, ReqKey};
 use crate::session::Conn;
 use crate::ticker::Ticker;
 use crate::util::block_on;
@@ -129,12 +129,15 @@ fn gmt(since: &str) -> Result<Zoned> {
 /// A numbered request whose answer the owner reads from the session.
 trait Polled: Copy + Send + 'static {
     type Item: Send + 'static;
+    /// What is run once it is over, unless the venue refused it or its
+    /// answer ends it there.
+    const WITHDRAW: Cleanup;
+    /// Whether its answer ends it at the venue, leaving nothing to withdraw.
+    const ANSWER_ENDS: bool;
     /// The answer, once it has arrived.
     fn answer(self, client: &EClient, id: i64) -> Option<Vec<Self::Item>>;
-    /// What is sent once it has.
-    fn answered(self, client: &EClient, id: i64);
-    /// What is sent, and given, when `limit` passes first.
-    fn expired(self, client: &EClient, id: i64, limit: Duration) -> Result<Vec<Self::Item>>;
+    /// What it gives when `limit` passes first.
+    fn expired(self, id: i64, limit: Duration) -> Result<Vec<Self::Item>>;
 }
 
 #[derive(Clone, Copy)]
@@ -142,6 +145,9 @@ struct Adjustments;
 
 impl Polled for Adjustments {
     type Item = CorporateAction;
+    // The venue serves the query until it is withdrawn.
+    const WITHDRAW: Cleanup = Cleanup::WithdrawAdjustments;
+    const ANSWER_ENDS: bool = true;
 
     fn answer(self, client: &EClient, id: i64) -> Option<Vec<CorporateAction>> {
         client
@@ -149,11 +155,7 @@ impl Polled for Adjustments {
             .map(|a| a.iter().map(CorporateAction::from).collect())
     }
 
-    fn answered(self, _: &EClient, _: i64) {}
-
-    fn expired(self, client: &EClient, id: i64, limit: Duration) -> Result<Vec<CorporateAction>> {
-        // The venue serves the query until it is withdrawn.
-        client.cancel_adjustments(id);
+    fn expired(self, id: i64, limit: Duration) -> Result<Vec<CorporateAction>> {
         Err(Error::Request {
             req_id: id,
             code: -1,
@@ -167,33 +169,31 @@ struct Scan;
 
 impl Polled for Scan {
     type Item = ScannedStrategy;
+    const WITHDRAW: Cleanup = Cleanup::WithdrawScan;
+    const ANSWER_ENDS: bool = false;
 
     fn answer(self, client: &EClient, id: i64) -> Option<Vec<ScannedStrategy>> {
         Some(client.scanned_strategies(id)).filter(|s| !s.is_empty())
     }
 
-    fn answered(self, client: &EClient, id: i64) {
-        client.cancel_mkt_data(id);
-    }
-
-    fn expired(self, client: &EClient, id: i64, _: Duration) -> Result<Vec<ScannedStrategy>> {
-        client.cancel_mkt_data(id);
+    fn expired(self, _: i64, _: Duration) -> Result<Vec<ScannedStrategy>> {
         Ok(Vec::new())
     }
 }
 
 /// Sends a polled request with `send` under a fresh id, its waiter `reply`,
-/// ending at `limit` after now.
+/// ending at `limit` after now. Given up however it is, it is withdrawn.
 fn polled<P: Polled>(
     ib: &Arc<Shared>,
     token: Token,
     reply: Reply<Vec<P::Item>>,
     p: P,
     limit: Option<Duration>,
-    send: impl FnOnce(&EClient, i64),
+    send: impl FnOnce(&Arc<Shared>, &EClient, i64) -> Result<()>,
 ) {
-    let (id, client) = match next_id(ib) {
-        Ok(v) => v,
+    let sent = next_id(ib).and_then(|(id, client)| send(ib, &client, id).map(|()| id));
+    let id = match sent {
+        Ok(id) => id,
         Err(e) => {
             reply.send(Err(e));
             return;
@@ -205,12 +205,13 @@ fn polled<P: Polled>(
     // An error under its id ends it with what arrived, nothing, unless
     // request errors are raised.
     x.acc = Some(Box::new(Vec::<P::Item>::new()));
+    x.guard = Some(P::WITHDRAW);
     watch(ib, x, p, deadline);
-    send(&client, id);
     ib.queue.sent(1);
 }
 
-/// Registers `x`, to be read at the next poll or at its deadline.
+/// Registers `x`, to be read at the next poll or at its deadline. Not
+/// `owner::arm`, which would run its withdrawal at each poll.
 fn watch<P: Polled>(ib: &Arc<Shared>, mut x: Exec, p: P, deadline: Option<(Instant, Duration)>) {
     let now = ib.clock.now();
     let at = [now.checked_add(POLL), deadline.map(|d| d.0)]
@@ -218,17 +219,25 @@ fn watch<P: Polled>(ib: &Arc<Shared>, mut x: Exec, p: P, deadline: Option<(Insta
         .flatten()
         .min()
         .unwrap_or(now);
+    let token = x.token;
     let mut c = ib.core();
     let c = &mut *c;
-    owner::arm(&mut c.heap, &mut x, at, move |ib, x| {
-        poll(ib, x, p, deadline)
-    });
+    x.deadline = Some(c.heap.insert(
+        at,
+        Box::new(move |ib: &Arc<Shared>| {
+            let x = ib.core().requests.take(token);
+            if let Some(mut x) = x {
+                x.deadline = None;
+                poll(ib, x, p, deadline);
+            }
+        }),
+    ));
     c.requests.insert(x);
 }
 
 /// One read of `x`'s answer: it ends with the answer, or with its expiry
 /// once its deadline has come, or it is read again.
-fn poll<P: Polled>(ib: &Arc<Shared>, x: Exec, p: P, deadline: Option<(Instant, Duration)>) {
+fn poll<P: Polled>(ib: &Arc<Shared>, mut x: Exec, p: P, deadline: Option<(Instant, Duration)>) {
     let id = x.origin.req_id;
     let client = ib
         .connected()
@@ -240,12 +249,15 @@ fn poll<P: Polled>(ib: &Arc<Shared>, x: Exec, p: P, deadline: Option<(Instant, D
     };
     let r = match (p.answer(&client, id), deadline) {
         (Some(v), _) => {
-            p.answered(&client, id);
+            if P::ANSWER_ENDS {
+                x.guard = None;
+            }
             Ok(v)
         }
-        (None, Some((at, limit))) if ib.clock.now() >= at => p.expired(&client, id, limit),
+        (None, Some((at, limit))) if ib.clock.now() >= at => p.expired(id, limit),
         (None, _) => return watch(ib, x, p, deadline),
     };
+    ib.settle(&mut x);
     x.finish(r.map(|v| Box::new(v) as Box<dyn Any + Send>));
 }
 
@@ -307,28 +319,29 @@ impl IBHandle {
     /// `reqCurrentTimeInMillis`. The local clock corrected by the venue's, so
     /// given to the millisecond and accurate to about a second.
     pub fn req_current_time_in_millis(&self) -> Result<i64> {
-        let timeout = self.config().request_timeout;
+        let timeout = self.request_timeout();
         self.req_current_time_in_millis_async().wait(timeout)
     }
 
     /// `req_current_time_in_millis`' async form:
     /// `reqCurrentTimeInMillisAsync`.
     pub fn req_current_time_in_millis_async(&self) -> Pending<i64> {
-        self.shared.request(|ib, token, reply: Reply<i64>| {
-            let Some((_, client)) = ib.connected() else {
-                reply.send(Err(Error::NotConnected));
-                return;
-            };
-            let ask = Ask::CurrentTimeInMillis;
-            let mut c = ib.core();
-            let mut x = c.requests.exec_as(ask.key(), token);
-            x.waiter = Some(Box::new(reply));
-            let send = c.requests.ask(ask, Some(x));
-            drop(c);
-            if let Some(ask) = send {
-                ib.send_ask(&client, &ask);
-            }
-        })
+        self.shared
+            .request_connected(|ib, token, reply: Reply<i64>| {
+                let Some((_, client)) = ib.connected() else {
+                    reply.send(Err(Error::NotConnected));
+                    return;
+                };
+                let ask = Ask::CurrentTimeInMillis;
+                let mut c = ib.core();
+                let mut x = c.requests.exec_as(ask.key(), token);
+                x.waiter = Some(Box::new(reply));
+                let send = c.requests.ask(ask, Some(x));
+                drop(c);
+                if let Some(ask) = send {
+                    ib.send_ask(&client, &ask);
+                }
+            })
     }
 
     /// A contract's corporate actions from `start_date` to `end_date`, days
@@ -342,7 +355,7 @@ impl IBHandle {
         end_date: &str,
         timeout: Option<Duration>,
     ) -> Result<Vec<CorporateAction>> {
-        let wait = self.config().request_timeout;
+        let wait = self.request_timeout();
         block_on(
             self.req_corporate_actions_async(c, start_date, end_date, timeout),
             wait,
@@ -361,9 +374,10 @@ impl IBHandle {
         let (con_id, sec_type, exchange) = (c.con_id, c.sec_type.clone(), c.exchange.clone());
         let (start, end) = (start_date.to_owned(), end_date.to_owned());
         self.shared
-            .request(move |ib, token, reply| {
-                polled(ib, token, reply, Adjustments, limit, |client, id| {
+            .request_connected(move |ib, token, reply| {
+                polled(ib, token, reply, Adjustments, limit, |_, client, id| {
                     client.req_adjustments(id, con_id, &sec_type, &exchange, &start, &end);
+                    Ok(())
                 });
             })
             .await
@@ -379,7 +393,7 @@ impl IBHandle {
         scan: &SpreadScan,
         timeout: Option<Duration>,
     ) -> Result<Vec<ScannedStrategy>> {
-        let wait = self.config().request_timeout;
+        let wait = self.request_timeout();
         block_on(self.req_spread_scan_async(c, scan, timeout), wait)?
     }
 
@@ -391,12 +405,15 @@ impl IBHandle {
         timeout: Option<Duration>,
     ) -> Result<Vec<ScannedStrategy>> {
         let limit = limit(timeout, SPREAD_SCAN_TIMEOUT);
-        let contract = e::Contract::from(c);
+        let (under, contract) = (c.clone(), e::Contract::from(c));
         let scan = scan.clone();
         self.shared
-            .request(move |ib, token, reply| {
-                polled(ib, token, reply, Scan, limit, |client, id| {
+            .request_connected(move |ib, token, reply| {
+                polled(ib, token, reply, Scan, limit, |ib, client, id| {
+                    // Its quotes reach the underlying's ticker meanwhile.
+                    ib.core().state.start_ticker(id, &under, "spreadScan")?;
                     client.req_spread_scan(id, &contract, &scan);
+                    Ok(())
                 });
             })
             .await
@@ -578,12 +595,12 @@ mod tests {
     use jiff::Timestamp;
 
     use super::*;
-    use crate::engine::{Adjustment, AdjustmentKind, ControlCommand, SharedState};
+    use crate::engine::{Adjustment, AdjustmentKind, ControlCommand, ErrorOrigin, SharedState};
     use crate::event::set_on_owner;
     use crate::ib::{ConnectOptions, IBConfig, StartupFetch};
     use crate::objects::IBDefaults;
     use crate::owner::Via;
-    use crate::record::Capture;
+    use crate::record::{Callback, Capture};
     use crate::timer::Clock;
 
     /// A session on an engine whose loop never runs, driven by this thread
@@ -789,15 +806,27 @@ mod tests {
         assert!(matches!(ready(&mut refused), Some(Ok(v)) if v.is_empty()));
         h.after(CORPORATE_ACTIONS_TIMEOUT);
         assert!(h.sent().is_empty());
+
+        // Given up before its answer, as a blocking face's timeout gives it
+        // up too: the query is withdrawn.
+        let mut dropped =
+            Box::pin(ib.req_corporate_actions_async(&aapl, "20220101", "20221231", None));
+        assert!(ready(&mut dropped).is_none());
+        let id = fetched(h.sent());
+        drop(dropped);
+        h.lap();
+        assert!(matches!(
+            h.sent().as_slice(),
+            [ControlCommand::CancelCorporateActions { req_id }] if *req_id == id
+        ));
     }
 
     #[test]
-    fn a_spread_scan_unanswered_at_its_timeout_is_cancelled_and_finds_nothing() {
+    fn a_spread_scan_feeds_its_ticker_and_is_cancelled_however_it_ends_unless_refused() {
         let mut h = Harness::new();
         let (ib, spy, all) = (h.handle(), stock("SPY", 756733), SpreadScan::default());
-        let mut scan = Box::pin(ib.req_spread_scan_async(&spy, &all, None));
-        assert!(ready(&mut scan).is_none());
-        let id = match h.sent().as_slice() {
+        let g = h.ib.connected().unwrap().0;
+        let subscribed = |sent: Vec<ControlCommand>| match sent.as_slice() {
             [
                 ControlCommand::Subscribe {
                     req_id,
@@ -807,14 +836,54 @@ mod tests {
             ] => *req_id,
             other => panic!("{other:?}"),
         };
+        let cancelled = |sent: Vec<ControlCommand>, id| {
+            let [ControlCommand::CancelMktData { req_id }] = sent.as_slice() else {
+                return false;
+            };
+            *req_id == id
+        };
+        let mut scan = Box::pin(ib.req_spread_scan_async(&spy, &all, None));
+        assert!(ready(&mut scan).is_none());
+        let id = subscribed(h.sent());
+
+        // The subscription's quotes reach the underlying's ticker.
+        let last = Callback::TickPrice {
+            req_id: id,
+            tick_type: 4,
+            price: 1.5,
+        };
+        h.ib.apply_read(g, vec![last]);
+        assert_eq!(ib.ticker(&spy).unwrap().unwrap().read().last, 1.5);
+
+        // Unanswered at its timeout: cancelled, and it found nothing.
         h.after(SPREAD_SCAN_TIMEOUT - POLL);
         assert!(ready(&mut scan).is_none());
         h.after(POLL);
-        assert!(matches!(
-            h.sent().as_slice(),
-            [ControlCommand::CancelMktData { req_id }] if *req_id == id
-        ));
+        assert!(cancelled(h.sent(), id));
         assert!(matches!(ready(&mut scan), Some(Ok(v)) if v.is_empty()));
+
+        // Given up before its answer: cancelled.
+        let mut scan = Box::pin(ib.req_spread_scan_async(&spy, &all, None));
+        assert!(ready(&mut scan).is_none());
+        let id = subscribed(h.sent());
+        drop(scan);
+        h.lap();
+        assert!(cancelled(h.sent(), id));
+
+        // Refused: there is nothing to cancel.
+        let mut scan = Box::pin(ib.req_spread_scan_async(&spy, &all, None));
+        assert!(ready(&mut scan).is_none());
+        let id = subscribed(h.sent());
+        let refused = Callback::Error {
+            origin: ErrorOrigin::Request { id, ends: true },
+            code: 321,
+            message: "refused".into(),
+            advanced_order_reject_json: String::new(),
+        };
+        h.ib.apply_read(g, vec![refused]);
+        assert!(matches!(ready(&mut scan), Some(Ok(v)) if v.is_empty()));
+        h.after(SPREAD_SCAN_TIMEOUT);
+        assert!(h.sent().is_empty());
     }
 
     #[test]
