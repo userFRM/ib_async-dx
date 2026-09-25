@@ -1926,7 +1926,6 @@ impl Shared {
     }
 
     /// `Client::disconnect()`: a ClientUser close, which keeps `State`.
-    #[expect(dead_code, reason = "Client::disconnect calls it")]
     pub(crate) fn client_disconnect(self: &Arc<Self>) {
         if let Some((g, _)) = self.connected() {
             self.close(g, Cause::ClientUser);

@@ -42,6 +42,7 @@ mod ticker;
 mod timer;
 pub mod util;
 
+pub use client::{Client, ConnState};
 pub use contract::*;
 pub use engine::{EClientConfig, HeldElsewhere, ScannedStrategy, SpreadScan};
 pub use error::{Error, Result};
