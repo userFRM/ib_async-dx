@@ -693,8 +693,8 @@ mod tests {
         let h = Harness::new();
         let ib = h.handle();
         let spy = stock("SPY", 756733);
-        // The session's own type, frozen, is what a request naming none
-        // asks under.
+        // The session's own frozen feed rides beside a request naming none,
+        // which takes the session's type; a named type is its own mode.
         h.session().req_market_data_type(2);
         // ib_async's 1 live, 2 frozen, 3 delayed and 4 delayed frozen are
         // the engine's 0, 2, 1 and 3.
@@ -703,7 +703,7 @@ mod tests {
             (Some(2), 2),
             (Some(3), 1),
             (Some(4), 3),
-            (None, 2),
+            (None, 0),
         ] {
             let t = ib
                 .req_mkt_data_ex(&spy, "", false, false, &[], named)
@@ -711,13 +711,17 @@ mod tests {
             let sent = h.sent();
             let [
                 ControlCommand::Subscribe {
-                    req_id, mode_9887, ..
+                    req_id,
+                    mode_9887,
+                    frozen,
+                    ..
                 },
             ] = sent.as_slice()
             else {
                 panic!("{named:?}: {sent:?}");
             };
             assert_eq!(*mode_9887, mode, "{named:?}");
+            assert_eq!(*frozen, named.is_none(), "{named:?}");
             // Fed as the contract's `mktData`, where `cancel_mkt_data` and
             // the ticker's extras find it.
             let fed = h.ib.core().state.ticker_to_req_id["mktData"]

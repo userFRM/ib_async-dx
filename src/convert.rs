@@ -1318,8 +1318,8 @@ mod tests {
     #[test]
     fn unset_goes_as_the_engines_default_and_comes_back_none() {
         let o = e::Order::try_from(&Order::default()).unwrap();
-        // The engine's own defaults: 0.0 for a limit, MAX for an offset.
-        assert_eq!(o.lmt_price, 0.0);
+        // The engine's own defaults: MAX for a limit and for an offset.
+        assert_eq!(o.lmt_price, f64::MAX);
         assert_eq!(o.percent_offset, f64::MAX);
         assert_eq!(o.min_trade_qty, i32::MAX);
         assert_eq!(o.open_close, "O");
