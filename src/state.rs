@@ -1308,12 +1308,8 @@ fn price_of(size_type: i32) -> Option<i32> {
 /// A price as the engine states it. A gateway sends a price and its size
 /// as one message, which ib_async's decoder hands over as one
 /// `priceSizeTick`; the engine states them apart, so a price that has a
-/// size waits for the size this read states beside it. A price of 0 is not
-/// delivered, as ib_async's decoder drops it.
+/// size waits for the size this read states beside it.
 fn tick_price<S: Sink>(sink: &mut S, req_id: i64, tick_type: i32, price: f64) {
-    if price == 0.0 {
-        return;
-    }
     if size_of(tick_type).is_some() {
         // a second price of the side before its size goes with the first's
         if let Some(first) = sink.books(|b| b.state.priced.insert((req_id, tick_type), price)) {
@@ -2215,7 +2211,8 @@ pub(crate) mod tests {
             at(1),
         );
         // A price whose size this read does not state goes at its end, with
-        // the size standing; one of 0 is not delivered.
+        // the size standing. A price of 0 is one: its side's size is not yet
+        // stated, and the tick carries the unset beside the stated 0.
         pass(&mut r, vec![price(2, 187.0), size(8, 5.0)], at(2));
         assert_eq!(
             r.log.iter().filter(|l| !l.is_empty()).collect::<Vec<_>>(),
@@ -2224,6 +2221,7 @@ pub(crate) mod tests {
                 "1 185 300",
                 "0 185 400",
                 "2 186 200",
+                "4 0 NaN",
                 "update_event",
                 "8 -1 5",
                 "2 187 200",
@@ -2232,8 +2230,8 @@ pub(crate) mod tests {
         );
         let t = r.state.req_id_to_ticker[&1].read();
         assert_eq!(
-            (t.prev_bid_size, t.bid_size, t.prev_ask, t.ask),
-            (300.0, 400.0, 186.0, 187.0)
+            (t.prev_bid_size, t.bid_size, t.prev_ask, t.ask, t.last),
+            (300.0, 400.0, 186.0, 187.0, 0.0)
         );
     }
 
