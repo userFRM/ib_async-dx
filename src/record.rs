@@ -375,6 +375,9 @@ impl e::Wrapper for Capture {
     fn error_from(
         &mut self,
         origin: ErrorOrigin,
+        // The time the engine states beside the error; this crate's callbacks
+        // carry none of their own.
+        _error_time: i64,
         error_code: i64,
         error_string: &str,
         advanced_order_reject_json: &str,
