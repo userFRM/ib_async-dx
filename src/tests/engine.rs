@@ -63,7 +63,7 @@ fn a_lost_connection_the_engine_recovers_leaves_the_session_up() {
     engine.set_connection_lost();
     assert!(within(|| seen(&log) == ["session 1100"]));
     assert!(ib.is_connected());
-    engine.set_connection_restored();
+    engine.set_connection_restored(String::new());
     assert!(within(|| seen(&log) == ["session 1100", "session 1102"]));
     assert!(ib.is_connected());
 }

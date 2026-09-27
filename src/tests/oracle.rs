@@ -255,7 +255,7 @@ fn deliver(c: &mut Capture, cb: &Value, refs: &HashMap<String, Value>) {
     let text = |i: usize| args[i].as_str().unwrap().to_owned();
     let engine = |v: &Value| e::Contract::from(&contract(v));
     match name {
-        "error" => c.error_from(error_origin(origin.unwrap()), int(1), &text(2), &text(3)),
+        "error" => c.error_from(error_origin(origin.unwrap()), 0, int(1), &text(2), &text(3)),
         "openOrder" => c.open_order(
             int(0),
             &engine(&args[1]),

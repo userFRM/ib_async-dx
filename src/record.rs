@@ -1174,7 +1174,13 @@ mod tests {
             ),
             (
                 Box::new(|c| {
-                    c.error_from(ErrorOrigin::Request { id: 1, ends: true }, 200, "m", "{}")
+                    c.error_from(
+                        ErrorOrigin::Request { id: 1, ends: true },
+                        0,
+                        200,
+                        "m",
+                        "{}",
+                    )
                 }),
                 Some(
                     r#"Error { origin: Request { id: 1, ends: true }, code: 200, message: "m", advanced_order_reject_json: "{}" }"#,
@@ -1636,14 +1642,14 @@ mod tests {
                     op: OrderOp::Venue,
                 },
             ] {
-                c.error_from(origin, 201, "m", "");
+                c.error_from(origin, 0, 201, "m", "");
                 assert!(
                     matches!(&c.take()[..], [Callback::Error { origin: o, .. }] if *o == origin),
                     "{origin:?}"
                 );
             }
             if let Ok(id) = u32::try_from(n) {
-                c.error_from(ErrorOrigin::Internal(id), 200, "m", "");
+                c.error_from(ErrorOrigin::Internal(id), 0, 200, "m", "");
                 assert!(c.take().is_empty(), "Internal({id})");
             }
         }
@@ -1654,7 +1660,7 @@ mod tests {
             },
             ErrorOrigin::Session,
         ] {
-            c.error_from(origin, 2104, "m", "");
+            c.error_from(origin, 0, 2104, "m", "");
             assert!(matches!(&c.take()[..], [Callback::Error { origin: o, .. }] if *o == origin));
         }
     }
