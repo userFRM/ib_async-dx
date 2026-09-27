@@ -427,8 +427,11 @@ def test_reqMktDataEx_asks_with_the_market_data_type_named(connect):
     spy = ib_async.Stock("SPY", "SMART", "USD", conId=756733)
     for tws, engine in {1: 0, 2: 2, 3: 1, 4: 3}.items():
         ticker = ib.reqMktDataEx(spy, "233", marketDataType=tws)
-        name, (reqId, contract, ticks, snapshot, regulatory, mode) = ib.client._client.asked[-1]
+        name, (reqId, contract, ticks, snapshot, regulatory, mode, options) = (
+            ib.client._client.asked[-1]
+        )
         assert (name, ticks, mode) == ("req_mkt_data_ex", "233", engine), tws
+        assert options == [], "no list named, none sent"
         assert contract.conId == 756733
         assert ib.wrapper.reqId2Ticker[reqId] is ticker, "their ticker, filled as reqMktData's"
 
@@ -620,8 +623,8 @@ def test_implVolOptions_takes_no_key(connect):
 
 
 def test_reqMktDataEx_hands_its_option_list_to_the_engine(connect):
-    """With a market data type named, the list is checked by the engine's
-    reqMktData, asked under that type for this request alone."""
+    """With a market data type named, the list rides on the one per-request
+    call, for the engine to check, and the session's type stays as it was."""
     ib = connect()
     engine = ib.client._client
     TagValue = ib_async.TagValue
@@ -630,9 +633,10 @@ def test_reqMktDataEx_hands_its_option_list_to_the_engine(connect):
     engine.req_market_data_type = set_to.append
     ib.reqMktDataEx(SPY, mktDataOptions=[TagValue("manual", "1")], marketDataType=3)
     name, args = engine.asked[-1]
-    assert name == "req_mkt_data"
+    assert name == "req_mkt_data_ex"
+    assert args[-2] == 1, "marketDataType 3 is the engine's delayed"
     assert [(o.tag, o.value) for o in args[-1]] == [("manual", "1")]
-    assert set_to == [3, 2], "this request's type, then the session's again"
+    assert set_to == [], "the session's type stays as it was"
 
 
 def test_a_ping_reaches_the_engine(connect):

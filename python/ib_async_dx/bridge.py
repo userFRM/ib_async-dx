@@ -138,9 +138,6 @@ class IbkrDxClient:
         #: When the session started, and the requests sent on it.
         self._since = time.time()
         self._sent = 0
-        #: The market data type the session's subscriptions ask for, as the
-        #: engine holds it: live until the program names another.
-        self._marketDataType = 1
 
         # The engine, with ib_async's own wrapper as the callback target: this
         # client already resolves a callback under the reference client's
@@ -200,7 +197,6 @@ class IbkrDxClient:
         self.host, self.port, self.clientId = host, int(port), int(clientId)
         self.connState = IbkrDxClient.CONNECTING
         self._since, self._sent = time.time(), 0
-        self._marketDataType = 1
         self._callbacks.reset()
         self._loop = asyncio.get_running_loop()
         self._callbacks.thread = threading.get_ident()
@@ -680,12 +676,8 @@ class IbkrDxClient:
         )
 
     def reqMarketDataType(self, marketDataType):
-        """The type the subscriptions after this one ask for. Held as the
-        engine holds it, which keeps the type it had for a number naming
-        none, so `IB.reqMktDataEx` can put it back."""
+        """The type the subscriptions after this one ask for."""
         self._send_theirs("req_market_data_type", marketDataType)
-        if marketDataType in (1, 2, 3, 4):
-            self._marketDataType = marketDataType
 
     # These two stay written out. `__getattr__` forwards every argument
     # through `_as_ours`, which turns None into an empty list — right for an
