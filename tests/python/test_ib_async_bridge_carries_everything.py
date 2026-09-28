@@ -8,6 +8,7 @@ cost arrived as a type their wrapper cannot read.
 """
 
 import ib_async
+import pytest
 
 import ibkr_dx
 from ib_async_dx.bridge import IbkrDxClient, _LoopBound
@@ -113,6 +114,12 @@ def test_every_account_the_login_holds_crosses_over():
     whole list, an advisor with several saw one standing for all of them."""
     ib = ib_async.IB()
     c = IbkrDxClient(ib.wrapper)
+
+    # A session that is not ready has no accounts to name, and theirs raises
+    # rather than answering empty (client.py:175-179): the empty list read as
+    # "an advisor with no accounts".
+    with pytest.raises(ConnectionError, match="Not connected"):
+        c.getAccounts()
 
     class Several:
         def connect(self, **kwargs):

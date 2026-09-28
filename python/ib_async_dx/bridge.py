@@ -552,6 +552,10 @@ class IbkrDxClient:
         return self._serverVersion
 
     def getAccounts(self):
+        # As their client answers it: a session that is not ready raises
+        # rather than naming no accounts (client.py:175-179).
+        if not self.isReady():
+            raise ConnectionError("Not connected")
         return list(self._accounts)
 
     def getReqId(self):
