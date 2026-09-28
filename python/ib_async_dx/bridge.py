@@ -1076,6 +1076,28 @@ class _LoopBound:
             ],
         )
 
+    #: An unstated figure in the sentinel the reference client states and
+    #: their wrapper reads back, in their wrapper's own argument order
+    #: (wrapper.py:1383-1392). This engine says "unstated" as None; their
+    #: wrapper maps the sentinels itself — and keeps vega and theta raw, the
+    #: one pair it never none-ifies, so its quirk survives only where the
+    #: sentinels reach it.
+    _UNSTATED_FIGURE = (-1.0, -2.0, -1.0, -1.0, -2.0, -2.0, -2.0, -1.0)
+
+    def tick_option_computation(self, req_id, tick_type, tick_attrib, *figures):
+        """An option's figures, with the sentinels restored for what the
+        venue did not state."""
+        self._deliver(
+            self._wrapper.tickOptionComputation,
+            req_id,
+            tick_type,
+            tick_attrib,
+            *(
+                unset if figure is None else figure
+                for figure, unset in zip(figures, self._UNSTATED_FIGURE)
+            ),
+        )
+
     def tick_price(self, req_id, tick_type, price, attrib=None):
         """A price, delivered with the size that goes with it.
 
@@ -1135,6 +1157,7 @@ class _LoopBound:
     # reached past — straight to their wrapper, and the translation skipped.
     tickPrice = tick_price
     tickSize = tick_size
+    tickOptionComputation = tick_option_computation
     histogramData = histogram_data
     tickSnapshotEnd = tick_snapshot_end
 

@@ -288,3 +288,26 @@ def test_an_executions_time_arrives_as_the_moment_their_record_declares():
     bar = ibkr_dx.BarData()
     bar.date = "20260918"
     assert _as_theirs(bar, ib.wrapper).date == "20260918", "their parser's own"
+
+
+def test_an_unstated_greek_reaches_their_wrapper_as_the_sentinel_it_reads():
+    """The engine states a figure the venue did not state as None; their
+    wrapper reads the reference client's sentinels and maps them itself —
+    keeping vega and theta raw, the one pair it never none-ifies
+    (wrapper.py:1383-1392). On Nones their own mapping left vega None, and a
+    program's `vega > 0` raised TypeError where real ib_async says False."""
+    ib = ib_async.IB()
+    wrapper = ib.wrapper
+    option = ib_async.Option("SPY", "20260918", 400, "C", "SMART", conId=12345)
+    ticker = wrapper.startTicker(1, option, "mktData")
+
+    _LoopBound(wrapper).tickOptionComputation(
+        1, 11, 0, 0.25, None, None, None, None, None, None, None
+    )
+
+    greeks = ticker.askGreeks
+    assert greeks is not None
+    assert greeks.impliedVol == 0.25, "a stated figure passes through"
+    assert greeks.delta is None, "their wrapper maps the -2.0 sentinel itself"
+    assert (greeks.vega, greeks.theta) == (-2.0, -2.0), "the quirk survives"
+    assert (greeks.vega > 0) is False, "and their range check runs"
