@@ -343,3 +343,19 @@ def test_a_ticks_moment_is_built_in_the_wrappers_own_zone():
     assert (heard[0].time.hour, heard[0].time.tzinfo) == (
         7, datetime.timezone.utc
     )
+
+
+def test_a_figure_their_record_declares_as_an_int_arrives_as_one():
+    """The engine states a ContractDetails' evMultiplier as a float, and the
+    rebuild copied it as it stands, where ib_async declares
+    `evMultiplier: int = 0` (contract.py:569) and its decoder coerces every
+    field to the type its record declares (decoder.py:185-198). A program
+    formatting the figure, serialising it or isinstance-checking it saw
+    '100.0' where real ib_async gives '100'."""
+    from ib_async_dx.bridge import _as_theirs
+
+    cd = ibkr_dx.ContractDetails()
+    cd.evMultiplier = 100.0
+    theirs = _as_theirs(cd)
+    assert theirs.evMultiplier == 100
+    assert isinstance(theirs.evMultiplier, int)

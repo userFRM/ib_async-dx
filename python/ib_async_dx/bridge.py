@@ -939,6 +939,15 @@ def _as_theirs(value, wrapper=None):
             # it onto the fill as it stands. A bar's date stays a string:
             # their wrapper re-parses it itself (wrapper.py:917).
             got = _execution_time(got, wrapper)
+        elif (
+            isinstance(got, float) and isinstance(field.default, int)
+            and not isinstance(field.default, bool)
+        ):
+            # Their decoder coerces every field to the type its record
+            # declares (decoder.py:185-198): the engine states a figure its
+            # record holds as a float where theirs declares an int, and a
+            # program formatting or serialising it reads the difference.
+            got = int(got)
         made[field.name] = got
     return theirs(**made)
 
