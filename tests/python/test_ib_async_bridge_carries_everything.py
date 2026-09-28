@@ -243,3 +243,17 @@ def test_a_record_named_as_theirs_and_not_theirs_is_rebuilt_as_theirs():
     assert _as_theirs(FamilyCode()) == ib_async.FamilyCode("DU000000", "F1")
     theirs = ib_async.FamilyCode("DU000000", "F1")
     assert _as_theirs(theirs) is theirs, "their own record is handed over as it is"
+
+
+def test_a_callback_their_wrapper_does_not_declare_reaches_nothing():
+    """The venue answers `replaceFA` with `replaceFAEnd`, and ib_async 2.1's
+    wrapper declares no handler for it — as it declares none for the display
+    groups or for the engine's own millisecond clock. Raised, the miss reached
+    the engine as a fatal error and ended the session; over a gateway their
+    decoder asks the wrapper for the handler and skips the message when there
+    is none (decoder.py:150-152)."""
+    bound = _LoopBound(ib_async.IB().wrapper)
+    assert bound.replace_fa_end(7, "") is None
+    assert bound.current_time_in_millis(0) is None
+    assert bound.display_group_list("DU1", [1]) is None
+    assert bound.display_group_updated(1, "SPY") is None

@@ -1081,13 +1081,10 @@ class _LoopBound:
             self._deliver(self._wrapper.priceSizeTick, *key, price, size)
 
     #: Where their wrapper names a callback something other than the
-    #: reference client does, and the two it does not carry at all: display
-    #: groups belong to a window, and there is none here or there.
+    #: reference client does.
     _THEIR_NAME = {
         "real_time_bar": "realtimeBar",
         "commission_and_fees_report": "commissionReport",
-        "display_group_list": None,
-        "display_group_updated": None,
     }
 
     def tick_snapshot_end(self, req_id):
@@ -1146,14 +1143,11 @@ class _LoopBound:
         # Under either spelling: this engine calls a callback by the name it
         # holds it under, and their wrapper declares the reference client's.
         if name in self._THEIR_NAME:
-            named = self._THEIR_NAME[name]
-            if named is None:
-                return lambda *args: None
             # Rebuilt on the way through, like every other callback. Handed
             # over as it stands, a fill carries this engine's own cost record
             # and ib_async's wrapper reads a field its own record spells
             # differently, so the cost is dropped.
-            method = getattr(self._wrapper, named)
+            method = getattr(self._wrapper, self._THEIR_NAME[name])
         else:
             method = getattr(self._wrapper, name, None)
             if method is None:
@@ -1161,7 +1155,14 @@ class _LoopBound:
                 camel = words[0] + "".join(w.title() for w in words[1:])
                 method = getattr(self._wrapper, camel, None)
         if method is None:
-            raise AttributeError(name)
+            # A handler their wrapper does not declare: the message reaches
+            # nothing, as it reaches nothing over a gateway, where their
+            # decoder asks the wrapper for the handler and skips the message
+            # when there is none (decoder.py:150-152). Raised instead, the
+            # miss reached the engine as a fatal error and ended the session
+            # — the answer to `replaceFA`, which ib_async 2.1's wrapper does
+            # not declare, closed a live one.
+            return lambda *args: None
 
         def carrying(*args):
             try:
