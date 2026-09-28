@@ -257,3 +257,34 @@ def test_a_callback_their_wrapper_does_not_declare_reaches_nothing():
     assert bound.current_time_in_millis(0) is None
     assert bound.display_group_list("DU1", [1]) is None
     assert bound.display_group_updated(1, "SPY") is None
+
+
+def test_an_executions_time_arrives_as_the_moment_their_record_declares():
+    """The engine hands over the venue's own string; ib_async's decoder parses
+    it, zones it as TWS states, and turns it into the wrapper's zone
+    (decoder.py:426-475), and their `Execution` declares `time: datetime` —
+    which their wrapper replays onto the fill as it stands. Handed over as a
+    string, a program's `.date()` or comparison on a fill's moment raised.
+    A bar's date stays a string: their wrapper re-parses it itself
+    (wrapper.py:917)."""
+    import datetime
+
+    from ib_async_dx.bridge import _as_theirs
+
+    ib = ib_async.IB()
+    ib.TimezoneTWS = "America/New_York"
+    seen = []
+    ib.wrapper.execDetails = lambda reqId, contract, execution: seen.append(execution)
+
+    ours = ibkr_dx.Execution()
+    ours.execId = "0001.1"
+    ours.time = "20260926  09:30:00"
+    _LoopBound(ib.wrapper).exec_details(7, ibkr_dx.Contract(), ours)
+
+    assert seen and isinstance(seen[0], ib_async.Execution)
+    assert seen[0].time == datetime.datetime(2026, 9, 26, 13, 30,
+                                             tzinfo=datetime.timezone.utc)
+
+    bar = ibkr_dx.BarData()
+    bar.date = "20260918"
+    assert _as_theirs(bar, ib.wrapper).date == "20260918", "their parser's own"

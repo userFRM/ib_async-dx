@@ -38,6 +38,7 @@ import sys
 import threading
 import time
 import weakref
+from zoneinfo import ZoneInfo
 
 from eventkit import Event
 from ib_async.client import Client as _TheirClient
@@ -841,11 +842,13 @@ def _their_type(name):
     return None
 
 
-def _field_of(value, name):
+def _field_of(value, name, wrapper=None):
     """One field of an ibkr_dx record, under whichever name it goes by.
 
     A moment is handed over as their own, because their records declare it as
-    a datetime and a number read as one is an instant in 1970.
+    a datetime and a number read as one is an instant in 1970. ``wrapper`` is
+    ib_async's wrapper the record is on its way to, whose zone a moment is
+    built in.
     """
     if name == "conjunction":
         # The engine says whether the join is an "and"; theirs says "a" or "o".
@@ -870,7 +873,21 @@ def _field_of(value, name):
     return got
 
 
-def _as_theirs(value):
+def _execution_time(got, wrapper):
+    """A venue's time string as ib_async's decoder hands an execution's over
+    (decoder.py:426-475): parsed, zoned as TWS states where the stamp states
+    no zone of its own, and turned into the wrapper's zone."""
+    from ib_async.util import parseIBDatetime
+
+    when = parseIBDatetime(got)
+    if not when.tzinfo:
+        tws = wrapper.ib.TimezoneTWS
+        if tws:
+            when = when.replace(tzinfo=ZoneInfo(str(tws)))
+    return when.astimezone(wrapper.defaultTimezone)
+
+
+def _as_theirs(value, wrapper=None):
     """An ibkr_dx object, rebuilt as the same-named `ib_async` type.
 
     Both sides carry the reference client's own field names, so the conversion
@@ -879,15 +896,18 @@ def _as_theirs(value):
     neither side needs editing when the other gains one. Anything with no type
     of that name in ib_async — a number, a string, an ibkr-dx-only type — is
     handed over as it is.
+
+    ``wrapper`` is ib_async's wrapper the value is on its way to: a moment is
+    built in the zone it declares, as ib_async's decoder builds one.
     """
     if isinstance(value, (str, bytes, int, float, bool, type(None))):
         return value
     if _is_named_tuple(type(value)):
         # A record, field by field: as a sequence it is one argument to a
         # type that takes one per field.
-        return type(value)(*[_as_theirs(v) for v in value])
+        return type(value)(*[_as_theirs(v, wrapper) for v in value])
     if isinstance(value, (list, tuple)):
-        return type(value)(_as_theirs(v) for v in value)
+        return type(value)(_as_theirs(v, wrapper) for v in value)
 
     theirs = _their_type(type(value).__name__)
     if theirs is None or isinstance(value, theirs):
@@ -898,13 +918,28 @@ def _as_theirs(value):
     # they are made and cannot be changed after. Made empty and filled one
     # field at a time, those could not be made at all.
     if _is_named_tuple(theirs):
-        return theirs(*[_as_theirs(_field_of(value, name)) for name in theirs._fields])
+        return theirs(*[
+            _as_theirs(_field_of(value, name, wrapper), wrapper)
+            for name in theirs._fields
+        ])
     # A field the engine does not state keeps their default.
-    return theirs(**{
-        field.name: _as_theirs(got)
-        for field in dataclasses.fields(theirs)
-        if (got := _field_of(value, field.name)) is not None
-    })
+    made = {}
+    for field in dataclasses.fields(theirs):
+        got = _field_of(value, field.name, wrapper)
+        if got is None:
+            continue
+        got = _as_theirs(got, wrapper)
+        if (
+            theirs.__name__ == "Execution" and field.name == "time"
+            and isinstance(got, str)
+        ):
+            # Their decoder hands an execution's time over as a moment in the
+            # wrapper's zone (decoder.py:426-475), and their wrapper replays
+            # it onto the fill as it stands. A bar's date stays a string:
+            # their wrapper re-parses it itself (wrapper.py:917).
+            got = _execution_time(got, wrapper)
+        made[field.name] = got
+    return theirs(**made)
 
 
 class _LoopBound:
@@ -1166,7 +1201,7 @@ class _LoopBound:
 
         def carrying(*args):
             try:
-                theirs = [_as_theirs(a) for a in args]
+                theirs = [_as_theirs(a, self._wrapper) for a in args]
             except Exception:
                 # As their decoder treats a message it cannot handle: said, and
                 # the session carries on without it.
