@@ -38,6 +38,7 @@ import sys
 import threading
 import time
 import weakref
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from eventkit import Event
@@ -861,11 +862,11 @@ def _field_of(value, name, wrapper=None):
         return got
     if isinstance(got, int) and not isinstance(got, bool):
         # Seconds since the epoch, which ib_async's records declare as a
-        # datetime. Parsed by ib_async's own parser, so the instant matches
-        # what the rest of ib_async reads.
-        from ib_async.util import parseIBDatetime
-
-        return parseIBDatetime(str(got))
+        # datetime — built in the wrapper's own zone, as ib_async's decoder
+        # builds a tick's (decoder.py:788). Its default is UTC, so a program
+        # that never touched the knob reads the wall clock it always did.
+        tz = timezone.utc if wrapper is None else wrapper.defaultTimezone
+        return datetime.fromtimestamp(got, tz)
     # A string is handed over as it stands. The engine writes a bar the way
     # their parser reads one — the instant on the exchange's clock with the
     # zone after it — and composing one here from the venue's own stamp, which

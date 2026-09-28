@@ -311,3 +311,35 @@ def test_an_unstated_greek_reaches_their_wrapper_as_the_sentinel_it_reads():
     assert greeks.delta is None, "their wrapper maps the -2.0 sentinel itself"
     assert (greeks.vega, greeks.theta) == (-2.0, -2.0), "the quirk survives"
     assert (greeks.vega > 0) is False, "and their range check runs"
+
+
+def test_a_ticks_moment_is_built_in_the_wrappers_own_zone():
+    """ib_async's decoder builds each historical tick's time with
+    `datetime.fromtimestamp(time, self.wrapper.defaultTimezone)`
+    (decoder.py:788, 809, 830). The bridge parsed the number with ib_async's
+    own parser instead, which is fixed to UTC (util.py:601-602): the same
+    instant in another wall clock, so `.hour`, `.strftime` and a pandas
+    resample's labels differed from the drop-in target for every tick."""
+    import datetime
+    from zoneinfo import ZoneInfo
+
+    amsterdam = ZoneInfo("Europe/Amsterdam")
+    tick = ibkr_dx.HistoricalTick(time=1758873000, price=100.5, size=10.0)
+
+    ib = ib_async.IB()
+    ib.wrapper.defaultTimezone = amsterdam
+    seen = []
+    ib.wrapper.historicalTicks = lambda reqId, ticks, done: seen.extend(ticks)
+    _LoopBound(ib.wrapper).historical_ticks(7, [tick], True)
+
+    assert seen[0].time == datetime.datetime.fromtimestamp(1758873000, amsterdam)
+    assert (seen[0].time.hour, seen[0].time.tzinfo) == (9, amsterdam)
+
+    # The knob untouched keeps the wall clock it has today: UTC.
+    untouched = ib_async.IB()
+    heard = []
+    untouched.wrapper.historicalTicks = lambda reqId, ticks, done: heard.extend(ticks)
+    _LoopBound(untouched.wrapper).historical_ticks(7, [tick], True)
+    assert (heard[0].time.hour, heard[0].time.tzinfo) == (
+        7, datetime.timezone.utc
+    )
