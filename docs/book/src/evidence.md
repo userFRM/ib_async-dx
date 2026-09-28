@@ -14,7 +14,7 @@ test, a script, or a recorded server response — not from reading the code.
 
 | Suite | Count | Needs a session |
 | --- | ---: | --- |
-| `tests/python` | 301 | 2 of them. The other 299 run offline |
+| `tests/python` | 307 | 2 of them. The other 305 run offline |
 | `tests/ib_async_upstream` | ib_async's own suite, 3 tests at 2.1.0 (`ab629f34c1`), written to run on the engine; not run against the venue at this revision | Yes |
 | `scripts/` | 3 checks against a paper account; not run against the venue at this revision | Yes |
 
