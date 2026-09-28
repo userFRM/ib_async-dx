@@ -272,7 +272,6 @@ has each of them.
 | | Today |
 | --- | --- |
 | `modelCode`, an advisor group or `AllNonProp` as `groupName`, and `All` or `AllNonProp` as the account of `reqPnL`, `reqPnLSingle`, `reqAccountUpdatesMulti` and `reqPositionsMulti`, which answer for the session's account | Taken and not applied, with a warning in the engine's log once per session. [Limits](https://userfrm.github.io/ib_async-dx/limits.html) has the account requests. |
-| `TickerExtras.statedRows`, [beyond ib_async](#beyond-ib_async) | Coming; it needs an addition to the engine first. |
 | The Rust client | [Coming](#rust). |
 | Published packages | None yet; ib_async-dx and the engine both install from git. |
 
@@ -303,7 +302,6 @@ ib_async's objects, reprs, `util.df` columns and equality stay ib_async's.
 | `positionsElsewhere()` | Holdings the venue reports that this broker does not hold itself: positions held away at another broker, and rows shown but not held. Kept out of `positions()`, so the account is not overstated |
 | `accountValuesElsewhere(held)` | The account figures for those holdings, as `AccountValue` rows, kept out of `accountValues()` |
 
-Coming, once the engine exposes what it needs: `TickerExtras.statedRows`.
 More is on
 [Beyond ib_async](https://userfrm.github.io/ib_async-dx/beyond.html).
 

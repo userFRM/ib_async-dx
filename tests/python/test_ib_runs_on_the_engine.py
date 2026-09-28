@@ -503,6 +503,14 @@ class Stating(OfflineEngine):
     def paired_figures(self, reqId, series):
         return [(0.1, 0.2)]
 
+    def stated_rows_series(self, reqId):
+        return [547]
+
+    def stated_rows(self, reqId, series):
+        # A form that states no third figure carries the engine's unset
+        # double in its place.
+        return [(150.0, 101.25, 1.7976931348623157e308)]
+
     def order_presets(self):
         return [("STK", "3", "20260901-12:00:00")]
 
@@ -520,6 +528,8 @@ def test_what_the_engine_states_is_carried_in_this_packages_types(connect, monke
     assert extras.statedFigures[310][0] == 1.0 and math.isnan(extras.statedFigures[310][1])
     assert extras.numberedFigures == {612: ({1: 42.0}, {1: 0.5})}, "whole, then fractional"
     assert extras.pairedFigures == {293: [(0.1, 0.2)]}
+    ((a, b, c),) = extras.statedRows[547]
+    assert (a, b) == (150.0, 101.25) and math.isnan(c), "an unstated figure is nan"
 
     assert ib.orderPresets() == [ib_async_dx.OrderPreset("STK", "3", "20260901-12:00:00")]
     session = ib.competingSession()
@@ -540,6 +550,7 @@ def test_the_accounts_grants_are_read_from_the_engine(connect):
     assert ib.companyData(ib_async.Stock(conId=756733)) == {}
     extras = ib.tickerExtras(ib_async.Ticker())
     assert math.isnan(extras.sharesOutstanding) and extras.statedFigures == {}
+    assert extras.statedRows == {}
 
 
 def test_priceBasedVol_is_a_bool_when_unstated():

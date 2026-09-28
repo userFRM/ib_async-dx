@@ -36,7 +36,7 @@ connected")`, as ib_async's client does.
 | --- | --- | --- |
 | `reqMktDataEx(..., marketDataType=None)` | `Ticker` | `reqMktData`'s arguments, and a market data type for this request only, numbered as `reqMarketDataType` numbers them: 1 live, 2 frozen, 3 delayed, 4 delayed frozen. `None` keeps the session's. A contract holds one subscription: asked again while subscribed, it follows the one that is up, so cancel between two types |
 | `reqCurrentTimeInMillis()`, `reqCurrentTimeInMillisAsync()` | `int` | The time in milliseconds since the epoch: a call in the documented API that ib_async does not have. It is read off the session's clock, the local clock set by the venue's to within about a second, as a gateway answers it from its own clock |
-| `tickerExtras(ticker)` | `TickerExtras` | What the venue has stated for the ticker's market data request beyond ib_async's `Ticker`, read when called: `sharesOutstanding`, `openAYearAgo`, `shortSaleRestricted` (a short-sale circuit breaker is on, not whether the contract can be shorted), and `statedFigures`, `numberedFigures` and `pairedFigures`, series by the venue's own numbering. A series is asked for by its number in `genericTickList`. A figure not stated is `nan` |
+| `tickerExtras(ticker)` | `TickerExtras` | What the venue has stated for the ticker's market data request beyond ib_async's `Ticker`, read when called: `sharesOutstanding`, `openAYearAgo`, `shortSaleRestricted` (a short-sale circuit breaker is on, not whether the contract can be shorted), and `statedFigures`, `statedRows`, `numberedFigures` and `pairedFigures`, series by the venue's own numbering. A series is asked for by its number in `genericTickList`. A figure not stated is `nan` |
 | `optionModel(ticker)` | `OptionModel` or `None` | The venue's model of the ticker's option: the eight figures of `OptionComputation` and the ten it has no field for — `calDays`, `rate`, `rho`, `fugit`, `exerciseBoundary`, `forwardCoeff`, `modelYield`, `bridgeYield`, `timeValue` and `priceBasedVol`. A figure not stated is `None`; `priceBasedVol` is always a bool, `False` when the venue did not state it |
 | `closingOptionModel(ticker)` | `OptionModel` or `None` | The same model as it stood at the close |
 | `companyData(contract)` | `dict[int, list[tuple[str, str]]]` | What the venue states about the contract's company or terms, as its own key and value pairs, by series. Asked for by number in `genericTickList`, and kept after the cancel. Empty means not entitled or nothing stated; the two cannot be told apart |
@@ -64,13 +64,3 @@ carry only what ib_async says.
 > These calls are one-way. A program that uses one cannot move back to a
 > gateway, because a gateway has no message to carry it. Everything ib_async
 > itself names moves both ways.
-
-## Coming
-
-This waits on an addition to the engine: `statedRows` needs a lister for its
-series, as the engine has for the other series. It is not on `TickerExtras`
-until then.
-
-| Call | What it will answer |
-| --- | --- |
-| `TickerExtras.statedRows` | The series the venue states as rows of three figures |

@@ -45,7 +45,7 @@ source distribution before attaching them to the release.
 | The four ib_async bug fixes | ✅ Offline | `tests/python/test_ib_runs_on_the_engine.py` and `tests/python/test_a_session_opens_and_closes_on_the_loop.py`; see [Beyond ib_async](./beyond.md#ib_asyncs-bugs-fixed) |
 | The engine's calls beyond the documented API, on `IB` | ✅ Offline | `tests/python/test_ib_runs_on_the_engine.py`; see [Beyond ib_async](./beyond.md) |
 | `reqCorporateActions`, `reqSpreadScan`, `positionsElsewhere`, `accountValuesElsewhere` | ✅ Offline | `tests/python/test_ib_runs_on_the_engine.py`; see [Beyond ib_async](./beyond.md) |
-| `TickerExtras.statedRows` | — Not yet | Waits on an addition to the engine; see [Beyond ib_async](./beyond.md#coming) |
+| `TickerExtras.statedRows` | ✅ Offline | `tests/python/test_ib_runs_on_the_engine.py`; see [Beyond ib_async](./beyond.md) |
 | `IBC` with ib_async's own `Watchdog` | ✅ Offline | A reconnect loop, connecting with its IBC's login and again when the session ends, each `Watchdog` with its own: `tests/python/test_ib_runs_on_the_engine.py` |
 | Rust client | — Not yet | Coming, on the engine's public API |
 

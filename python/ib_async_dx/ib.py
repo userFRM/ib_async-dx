@@ -47,6 +47,11 @@ class TickerExtras:
     #: A short-sale circuit breaker is on (Rule 201 style), not shortability.
     shortSaleRestricted: bool = False
     statedFigures: dict[int, list[float]] = dataclasses.field(default_factory=dict)
+    #: Per series, the rows of three figures the venue states; what the three
+    #: are is the series' own.
+    statedRows: dict[int, list[tuple[float, float, float]]] = dataclasses.field(
+        default_factory=dict
+    )
     #: Per series, the whole and the fractional table, each by the venue's own
     #: numbering.
     numberedFigures: dict[int, tuple[dict[int, float], dict[int, float]]] = (
@@ -659,6 +664,13 @@ class IB(ib_async.ib.IB):
             statedFigures={
                 series: [_stated(v) for v in eclient.stated_figures(reqId, series)]
                 for series in eclient.stated_figures_series(reqId)
+            },
+            statedRows={
+                series: [
+                    tuple(_stated(v) for v in row)
+                    for row in eclient.stated_rows(reqId, series)
+                ]
+                for series in eclient.stated_rows_series(reqId)
             },
             numberedFigures={
                 series: tuple(
