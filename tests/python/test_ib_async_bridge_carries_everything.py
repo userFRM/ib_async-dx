@@ -156,6 +156,37 @@ def test_a_size_with_no_price_beside_it_is_a_size_tick():
     assert seen == [("tickSize", 0, 400.0)], seen
 
 
+def test_a_price_only_tick_to_a_second_subscription_keeps_the_shared_ticker():
+    """Two subscriptions on one contract share one ticker (wrapper.py:400-415).
+    A price the venue moved without its size is stated alone, and a second
+    subscription's request never had a size stated under it, so the pair went
+    out with a 0 — which their wrapper's size==0 rule reads as no quote, and
+    it reset that side of the shared ticker to -1/0 (wrapper.py:980-1049).
+    Every price a gateway sends carries the size standing beside it."""
+    ib = ib_async.IB()
+    wrapper = ib.wrapper
+    spy = ib_async.Stock("SPY", "SMART", "USD", conId=756733)
+    ticker = wrapper.startTicker(1, spy, "mktData")
+    assert wrapper.startTicker(2, spy, "mktData") is ticker, "one contract, one ticker"
+
+    bound = _LoopBound(wrapper)
+    bound.tick_price(1, 1, 101.0)
+    bound.tick_size(1, 0, 300.0)
+    bound.end_pass()
+    assert (ticker.bid, ticker.bidSize) == (101.0, 300.0)
+
+    bound.tick_price(2, 1, 101.25)  # the second subscription: a price alone
+    bound.end_pass()
+    assert (ticker.bid, ticker.bidSize) == (101.25, 300.0), "the size stands"
+    assert [(t.tickType, t.price, t.size) for t in ticker.ticks] == [
+        (1, 101.0, 300.0), (1, 101.25, 300.0),
+    ], "and no empty quote was appended"
+
+    bound.tick_price(3, 1, 50.0)  # a request no ticker answers
+    bound.end_pass()  # goes out with a 0; their wrapper logs the id
+    assert (ticker.bid, ticker.bidSize) == (101.25, 300.0), "the ticker is untouched"
+
+
 def test_a_bar_carries_its_average_price():
     """The engine names it as the reference client does, `wap`; their bar
     reads `average`. Unmapped, every bar arrived with an average of nought."""

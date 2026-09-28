@@ -971,6 +971,11 @@ class _LoopBound:
     #: the same three delayed.
     _SIZE_OF = {1: 0, 2: 3, 4: 5, 66: 69, 67: 70, 68: 71}
     _PRICE_OF = {size: price for price, size in _SIZE_OF.items()}
+    #: Where each side's size stands on the ticker, for a price whose size
+    #: that request never stated: their wrapper applies a delayed price to
+    #: the live field, so a delayed side reads the same one (wrapper.py:980).
+    _STANDING_SIZE = {1: "bidSize", 66: "bidSize", 2: "askSize", 67: "askSize",
+                      4: "lastSize", 68: "lastSize"}
 
     def __init__(self, wrapper):
         self._wrapper = wrapper
@@ -1148,10 +1153,22 @@ class _LoopBound:
     def end_pass(self, req_id=None):
         """The prices this pass stated with no size beside them, of every
         request or of one, each with the size standing: the size did not
-        change, so the pass did not state it."""
+        change, so the pass did not state it.
+
+        A request whose quotes never stated that side's size — a second
+        subscription on the contract — reads it off the ticker the requests
+        share: every price a gateway sends carries the size standing beside
+        it, and a 0 here is their wrapper's "no quote", which reset the
+        shared side. A price for a request no ticker answers goes out with a
+        0, as a gateway's reaches a wrapper that logs the id it does not
+        know.
+        """
         for key in [key for key in self._priced if req_id in (None, key[0])]:
             price = self._priced.pop(key)
-            size = self._sizes.get(key[0], {}).get(self._SIZE_OF[key[1]], 0.0)
+            size = self._sizes.get(key[0], {}).get(self._SIZE_OF[key[1]])
+            if size is None:
+                ticker = self._wrapper.reqId2Ticker.get(key[0])
+                size = getattr(ticker, self._STANDING_SIZE[key[1]], 0.0)
             self._deliver(self._wrapper.priceSizeTick, *key, price, size)
 
     #: Where their wrapper names a callback something other than the
