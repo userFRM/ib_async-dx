@@ -109,6 +109,11 @@ class IbkrDxClient:
     MaxRequests = _TheirClient.MaxRequests
     RequestsInterval = _TheirClient.RequestsInterval
     events = _TheirClient.events
+    #: While the naming window behind a venue reconnect may be open, ids are
+    #: numbered from the counter alone: the engine's floor reads wait for the
+    #: naming, and that wait is a thread's, not the loop's (see `_venue_link`).
+    _ids_settling = False
+    _ids_reading = False
 
     def __init__(self, wrapper, username="", password="", paper=True,
                  session_file=None, readonly=False):
@@ -155,6 +160,7 @@ class IbkrDxClient:
         # spelling, which is the spelling ib_async's wrapper uses.
         self._callbacks = _LoopBound(wrapper)
         self._callbacks.connectionClosed = self._engine_closed
+        self._callbacks.client = self
         self._client = _ibkr_dx.EClient(self._callbacks)
 
         # Where this session is kept between runs. The venue answers a request
@@ -390,6 +396,7 @@ class IbkrDxClient:
         pass is not made, and a connect waiting on its login stops waiting."""
         self._generation += 1
         self.connState = IbkrDxClient.DISCONNECTED
+        self._ids_settling = False
         # Held for the end of a pass a handler has just ended the session in:
         # their wrapper has been cleared, as their client's buffer is.
         self._callbacks._priced.clear()
@@ -523,25 +530,28 @@ class IbkrDxClient:
     def getReqId(self):
         if not self.isConnected():
             raise ConnectionError("Not connected")
-        if sys._getframe(1).f_code in _NUMBERS_AN_ORDER:
-            # The engine refuses a new order at or below an id the account
-            # has used or saved for this client id (103). Where those fit a
-            # request, the counter below is past them and numbers the order,
-            # as their client numbers one. Where they do not, no request can
-            # carry an id past them: the order takes the engine's next order
-            # id, and the counter goes on for requests. An id the engine
-            # reserved and the order did not take only raises its counter.
-            order_id = self._client.next_order_id()
-            if order_id > WIDEST_REQUEST_ID:
-                return order_id
-        # Past every order id the venue has named, those it names after the
-        # connect among them: the history of an order that filled can come
-        # later than the wait at connect, and the venue refuses an id a fill
-        # has spent. Their wrapper raises the counter only on an open order.
-        # After the venue reconnects, the first call waits, three seconds at
-        # most, for the venue to name the working orders again, as the
-        # connect does.
-        self.updateReqId(self._client.next_shared_id())
+        if not self._ids_settling:
+            if sys._getframe(1).f_code in _NUMBERS_AN_ORDER:
+                # The engine refuses a new order at or below an id the account
+                # has used or saved for this client id (103). Where those fit a
+                # request, the counter below is past them and numbers the order,
+                # as their client numbers one. Where they do not, no request can
+                # carry an id past them: the order takes the engine's next order
+                # id, and the counter goes on for requests. An id the engine
+                # reserved and the order did not take only raises its counter.
+                order_id = self._client.next_order_id()
+                if order_id > WIDEST_REQUEST_ID:
+                    return order_id
+            # Past every order id the venue has named, those it names after the
+            # connect among them: the history of an order that filled can come
+            # later than the wait at connect, and the venue refuses an id a fill
+            # has spent. Their wrapper raises the counter only on an open order.
+            self.updateReqId(self._client.next_shared_id())
+        # While the naming window behind a venue reconnect may be open the
+        # engine's floor reads wait, three seconds at most, and that wait is
+        # not the loop's: the counter goes on from where it stands, as ib_async
+        # goes on between the nextValidId messages that raise it, and a read
+        # of its own raises it when the naming settles (see `_venue_link`).
         # Hands out the current value and then advances, as their own client
         # does, so an id seeded by `updateReqId` is the next one issued rather
         # than the one after it.
@@ -577,6 +587,49 @@ class IbkrDxClient:
         if minReqId > WIDEST_REQUEST_ID:
             return
         self._reqIdSeq = max(self._reqIdSeq, minReqId)
+
+    def _venue_link(self, up):
+        """The venue's link went (1100) or came back (1102), as the engine
+        says it.
+
+        Behind a restore the engine waits for the venue to name the account's
+        working orders again before its id floors answer, three seconds at
+        most — and both reads ``getReqId`` makes wait with it, holding the
+        loop: no pass, no timer, no task moves while it runs. So the wait is
+        a thread's, as the login's is, and while it may be open ids are
+        numbered from the counter alone; the thread's read raises the counter
+        when it lands, on the loop.
+        """
+        if not up:
+            self._ids_settling = True
+            return
+        if not self._ids_settling or self._ids_reading:
+            return
+        self._ids_reading = True
+        attempt = self._generation
+        engine = self._client
+
+        def read():
+            floor = None
+            try:
+                floor = engine.next_shared_id()
+            except Exception as why:
+                _logger.error(f"The id floor read off the loop failed: {why!r}")
+            try:
+                self._loop.call_soon_threadsafe(self._ids_read, floor, attempt)
+            except RuntimeError:
+                pass  # the loop has closed, and the session with it
+
+        threading.Thread(target=read, name="ib_async_dx id floor",
+                         daemon=True).start()
+
+    def _ids_read(self, floor, attempt):
+        """The off-loop floor read landed, on the loop."""
+        self._ids_reading = False
+        if attempt == self._generation:
+            self._ids_settling = False
+            if floor is not None:
+                self.updateReqId(floor)
 
     def connectionStats(self):
         """When the session started, how long it has run, the bytes each way
@@ -979,6 +1032,9 @@ class _LoopBound:
 
     def __init__(self, wrapper):
         self._wrapper = wrapper
+        #: The client whose id counter a venue reconnect re-settles, told of
+        #: the link going and coming back. None where no client stands behind.
+        self.client = None
         #: The size last stated for each side, by request and then tick type.
         self._sizes: dict[int, dict[int, float]] = {}
         #: Prices this pass stated whose size it has not stated yet.
@@ -1211,6 +1267,10 @@ class _LoopBound:
         after the call: delivered inside it, a refused new order had no trade
         to mark and stayed PendingSubmit.
         """
+        if code in (1100, 1102) and self.client is not None:
+            # The venue's link went or came back: the naming behind a restore
+            # is waited for off the loop (see `IbkrDxClient._venue_link`).
+            self.client._venue_link(code == 1102)
         refusal = (req_id, code, text, advanced)
         if self.asking:
             self.refused.append(refusal)

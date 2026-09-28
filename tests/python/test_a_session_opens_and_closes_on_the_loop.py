@@ -634,6 +634,38 @@ def test_timeout_bounds_the_wait_after_the_login_not_the_login(connect, monkeypa
     assert not ib.client._client.is_connected(), "and the session it opened is closed"
 
 
+def test_a_request_while_the_venue_renames_its_orders_does_not_hold_the_loop(connect):
+    """After the venue reconnects, the engine waits for the account's working
+    orders to be named again, three seconds at most — and `getReqId` ran that
+    wait on the loop: no pass, timer or task moved while it ran, and every
+    request in the window waited it out. ib_async's own `getReqId` is a
+    counter step that never blocks (client.py:162-167). Here the wait runs on
+    a thread of its own; the counter goes on from where it stands while it
+    runs, and is raised when the thread's read lands, as a nextValidId
+    arriving late raises it."""
+    ib = connect()
+    engine = ib.client._client
+    engine._test_push_venue_order(9000, "SPY", "BUY", 1.0, 1.0, "Filled")
+    engine._test_set_connection_lost()
+    engine._test_begin_order_replay()
+    ib.client._pass_once()  # the 1100 is heard: the naming window may open
+
+    # The 1102 is heard, and ib_async's own handler asks again inside it
+    # (ib.py:418 refreshes the account summary), as a program asking in the
+    # window would: the pass and the request are both due at once.
+    started = time.monotonic()
+    engine._test_set_connection_restored()
+    ib.client._pass_once()
+    ib.client.getReqId()
+    waited = time.monotonic() - started
+    assert waited < 0.5, f"the naming window held the loop for {waited:.1f}s"
+
+    engine._test_finish_order_replay()
+    ib.sleep(0.2)  # the thread's read lands on the loop
+    assert ib.client.getReqId() > 9000, \
+        "the counter is raised past the named order once the naming settles"
+
+
 def test_connecting_an_attached_ib_that_is_connected_opens_a_new_session(connect):
     """ib_async's own client closes the session it holds before it opens
     another. Here the engine refused the second login as already connected,
