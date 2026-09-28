@@ -444,3 +444,52 @@ def test_a_stored_end_a_resubscribe_replays_arrives_as_their_send_writes_it():
                             True, 1, True, None)
 
     assert c._client.ends == ["2026-09-26 09:30:00", "2026-09-26", "", ""]
+
+
+def test_a_size_the_engine_states_as_a_decimal_arrives_as_their_float():
+    """The engine, following the reference client whose decoder annotates
+    Decimal, states every size as a `decimal.Decimal`; ib_async delivers
+    float, and a program written against it computes `ticker.last *
+    ticker.lastSize` and `orderStatus.filled * avgFillPrice` without a
+    TypeError. Both ways a size crosses — alone on the explicit tick paths,
+    and as a field of a record rebuilt on the way over — it arrives as their
+    float."""
+    from datetime import timezone
+    from decimal import Decimal
+    from types import SimpleNamespace
+
+    seen = []
+
+    class Wrapper:
+        # `_execution_time` reads the wrapper's zone knobs for a stamp that
+        # states no zone of its own.
+        ib = SimpleNamespace(TimezoneTWS=None)
+        defaultTimezone = timezone.utc
+
+        def tickSize(self, reqId, tickType, size):
+            seen.append(size)
+
+        def execDetails(self, reqId, contract, execution):
+            seen.append(execution)
+
+    bound = _LoopBound(Wrapper())
+
+    # The explicit tick paths bypass the record rebuild.
+    bound.tick_size(1, 0, Decimal(400))
+    bound.end_pass()
+    assert type(seen[0]) is float and seen[0] == 400.0, seen
+
+    # A record is rebuilt field by field; a Decimal field arrives as float.
+    ours = ibkr_dx.Execution()
+    ours.execId = "0001.1"
+    ours.time = "20260928  12:00:00"
+    ours.shares = Decimal("150")
+    ours.cumQty = Decimal("150")
+    ours.avgPrice = 101.5
+    bound.execDetails(2, ib_async.Stock("SPY", "SMART", "USD"), ours)
+    execution = seen[1]
+    assert isinstance(execution, ib_async.Execution), type(execution)
+    assert type(execution.shares) is float and execution.shares == 150.0, execution
+    assert type(execution.cumQty) is float and execution.cumQty == 150.0, execution
+    # The arithmetic the issue names, on the rebuilt record.
+    assert execution.shares * execution.avgPrice == 15225.0

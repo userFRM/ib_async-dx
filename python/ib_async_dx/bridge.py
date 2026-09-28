@@ -30,6 +30,7 @@ import collections
 import contextlib
 import contextvars
 import dataclasses
+import decimal
 import inspect
 import logging
 import os
@@ -1054,6 +1055,13 @@ def _as_theirs(value, wrapper=None):
     ``wrapper`` is ib_async's wrapper the value is on its way to: a moment is
     built in the zone it declares, as ib_async's decoder builds one.
     """
+    if isinstance(value, decimal.Decimal):
+        # The engine states every size as the reference client's decoder
+        # annotates one — Decimal — and ib_async delivers float: its own
+        # decoder coerces every figure it reads. A program written against
+        # theirs multiplies a size by a price; handed a Decimal, it raises
+        # TypeError inside the user's own handler.
+        return float(value)
     if isinstance(value, (str, bytes, int, float, bool, type(None))):
         return value
     if _is_named_tuple(type(value)):
@@ -1217,6 +1225,11 @@ class _LoopBound:
             if arrived:
                 arrived()
         self.received += 1
+        # The explicit tick paths hand the engine's own figures over without
+        # the rebuild `_as_theirs` gives every record: a size stated as a
+        # Decimal is coerced here, at the one place every message crosses, as
+        # it is coerced there.
+        args = tuple(float(a) if isinstance(a, decimal.Decimal) else a for a in args)
         try:
             method(*args)
         except Exception:
