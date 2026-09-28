@@ -265,9 +265,11 @@ impl IBHandle {
     /// `req_mkt_data` with a market data type for this request alone:
     /// `reqMktDataEx`. `market_data_type` is numbered as in
     /// `req_market_data_type`: 1 live, 2 frozen, 3 delayed, 4 delayed frozen;
-    /// `None` keeps the session's, and then `mkt_data_options` is taken and
-    /// not sent. Any other number is `Err(Value)`. A contract holds one
-    /// subscription, so cancel between two types.
+    /// `None` keeps the session's. `mkt_data_options` is checked as the
+    /// engine checks it: a list it cannot read is refused under the
+    /// request's own id before subscribing, and an accepted list changes
+    /// nothing a gateway sends. Any other number is `Err(Value)`. A contract
+    /// holds one subscription, so cancel between two types.
     pub fn req_mkt_data_ex(
         &self,
         c: &Contract,
@@ -297,8 +299,20 @@ impl IBHandle {
             let ticker = ib.core().state.start_ticker(id, &contract, "mktData")?;
             let ec = e::Contract::from(&contract);
             match mode {
+                // The engine's req_mkt_data carries no option list, so the
+                // list is checked here as the engine checks it and as the
+                // ex form has the engine check it: a list it cannot read is
+                // refused under this id and never subscribes.
                 None => {
-                    client.req_mkt_data(id, &ec, &generic_tick_list, snapshot, regulatory_snapshot)
+                    if !super::market_data::options_refused(&client, id, &options) {
+                        client.req_mkt_data(
+                            id,
+                            &ec,
+                            &generic_tick_list,
+                            snapshot,
+                            regulatory_snapshot,
+                        )
+                    }
                 }
                 Some(mode) => client.req_mkt_data_ex(
                     id,
@@ -587,7 +601,7 @@ impl IBHandle {
 mod tests {
     use std::future::Future;
     use std::pin::Pin;
-    use std::sync::mpsc;
+    use std::sync::{Mutex, mpsc};
     use std::task::{Context, Poll, Waker};
     use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -596,7 +610,7 @@ mod tests {
 
     use super::*;
     use crate::engine::{Adjustment, AdjustmentKind, ControlCommand, ErrorOrigin, SharedState};
-    use crate::event::set_on_owner;
+    use crate::event::{lock, set_on_owner};
     use crate::ib::{ConnectOptions, IBConfig, StartupFetch};
     use crate::objects::IBDefaults;
     use crate::owner::Via;
@@ -732,6 +746,70 @@ mod tests {
         let other = ib.req_mkt_data_ex(&spy, "", false, false, &[], Some(5));
         assert!(matches!(other, Err(Error::Value(_))), "{other:?}");
         assert!(h.sent().is_empty());
+    }
+
+    #[test]
+    fn req_mkt_data_ex_checks_the_list_the_sessions_type_takes() {
+        let mut h = Harness::new();
+        let ib = h.handle();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let n = seen.clone();
+        ib.error_event()
+            .connect(move |e| lock(&n).push((e.0, e.1, e.2.clone(), e.3.clone())));
+        let spy = stock("SPY", 756733);
+
+        // Under no named type the list is checked as the named-type path and
+        // the Python twin check it: a key a gateway does not take is refused
+        // under the request's own id before subscribing, and the refusal
+        // names the contract the id was registered with.
+        ib.req_mkt_data_ex(
+            &spy,
+            "",
+            false,
+            false,
+            &[TagValue {
+                tag: "bogus".into(),
+                value: "x".into(),
+            }],
+            None,
+        )
+        .unwrap();
+        h.lap();
+        let sent = h.sent();
+        assert!(
+            !sent
+                .iter()
+                .any(|c| matches!(c, ControlCommand::Subscribe { .. })),
+            "{sent:?}"
+        );
+        let refused = lock(&seen).clone();
+        assert_eq!(refused.len(), 1, "{refused:?}");
+        assert_eq!(refused[0].1, 10337, "{refused:?}");
+        assert!(refused[0].2.contains("bogus"), "{refused:?}");
+        assert_eq!(refused[0].3.as_ref(), Some(&spy), "{refused:?}");
+
+        // A list a gateway reads subscribes as an empty one does, under the
+        // id next to the refused one: an accepted option changes nothing a
+        // gateway sends.
+        ib.req_mkt_data_ex(
+            &spy,
+            "",
+            false,
+            false,
+            &[TagValue {
+                tag: "manual".into(),
+                value: "1".into(),
+            }],
+            None,
+        )
+        .unwrap();
+        h.lap();
+        let sent = h.sent();
+        let [ControlCommand::Subscribe { req_id, .. }] = sent.as_slice() else {
+            panic!("{sent:?}");
+        };
+        assert_eq!(*req_id, refused[0].0 + 1, "{sent:?}");
+        assert_eq!(lock(&seen).len(), 1, "a read list refuses nothing more");
     }
 
     #[test]

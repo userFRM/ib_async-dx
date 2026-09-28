@@ -43,6 +43,29 @@ fn next_id(ib: &Shared, client: &EClient) -> Result<i64> {
     ib.core().ids.allocate(floor, 1)
 }
 
+/// The check the engine's own market-data surfaces give an option list: a
+/// list it cannot read pushes the refusal under the request's id in its
+/// place in the session's order, as the engine pushes it, and gives `true` —
+/// the request never subscribes. An accepted list gives `false` and changes
+/// nothing a gateway sends.
+pub(super) fn options_refused(client: &EClient, id: i64, options: &[e::TagValue]) -> bool {
+    match e::ClientCore::check_option_list(
+        &e::MKT_DATA_OPTIONS,
+        &e::ClientCore::written_options(options),
+        &client.enabled_features(),
+    ) {
+        Err(why) => {
+            client.refuse(
+                e::ErrorOrigin::Request { id, ends: true },
+                i64::from(why.code),
+                &why.message,
+            );
+            true
+        }
+        Ok(()) => false,
+    }
+}
+
 /// What a method's own deadline completes its waiter with.
 struct TimedOut;
 
@@ -283,28 +306,14 @@ impl IBHandle {
             let client = ready(ib)?;
             let id = next_id(ib, &client)?;
             let ticker = ib.core().state.start_ticker(id, &c, "mktData")?;
-            // The check the engine's own market-data surfaces give the list,
-            // and the refusal pushed under this id in its place in the
-            // session's order, as the engine pushes it: a list it cannot read
-            // never subscribes, and an accepted one subscribes as an empty
-            // one does.
-            match e::ClientCore::check_option_list(
-                &e::MKT_DATA_OPTIONS,
-                &e::ClientCore::written_options(&options),
-                &client.enabled_features(),
-            ) {
-                Err(why) => client.refuse(
-                    e::ErrorOrigin::Request { id, ends: true },
-                    i64::from(why.code),
-                    &why.message,
-                ),
-                Ok(()) => client.req_mkt_data(
+            if !options_refused(&client, id, &options) {
+                client.req_mkt_data(
                     id,
                     &e::Contract::from(&c),
                     &ticks,
                     snapshot,
                     regulatory_snapshot,
-                ),
+                )
             }
             ib.queue.sent(1);
             Ok(ticker)
