@@ -286,6 +286,7 @@ def test_an_executions_time_arrives_as_the_moment_their_record_declares():
     assert seen and isinstance(seen[0], ib_async.Execution)
     assert seen[0].time == datetime.datetime(2026, 9, 26, 13, 30,
                                              tzinfo=datetime.timezone.utc)
+    assert seen[0].time.tzinfo == datetime.timezone.utc, "the wrapper's zone"
 
     bar = ibkr_dx.BarData()
     bar.date = "20260918"
