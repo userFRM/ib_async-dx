@@ -533,6 +533,57 @@ def test_a_program_that_leaves_the_loop_queues_no_passes(connect, monkeypatch):
     assert passes, "and passes go on while the loop runs"
 
 
+def test_requests_past_the_rate_leave_an_interval_later(connect):
+    """ib_async's client paces what leaves it: at most `MaxRequests` per
+    `RequestsInterval`, the overflow deferred on the loop's clock, and
+    `throttleStart`/`throttleEnd` said around the wait (client.py:323-351);
+    0 disables the pacing, as the knob's own document says. The knobs were
+    dead here: a burst reached the engine all at once, and the events never
+    fired."""
+    ib = connect()
+    client = ib.client
+    client.MaxRequests = 3
+    client.RequestsInterval = 0.2
+    events = []
+    client.throttleStart += lambda: events.append("start")
+    client.throttleEnd += lambda: events.append("end")
+
+    for _ in range(5):
+        client.reqCurrentTime()
+    assert client._sent == 3, "three leave at the rate"
+    assert events == ["start"], "and the wait is said"
+    ib.sleep(0.35)
+    assert client._sent == 5, "the rest left an interval later"
+    assert events == ["start", "end"]
+
+    client.MaxRequests = 0
+    for _ in range(50):
+        client.reqCurrentTime()
+    assert client._sent == 55, "0 lets the whole burst leave at once"
+    assert events == ["start", "end"], "and nothing throttles"
+
+    # A session ended mid-throttle leaves nothing queued: their client's
+    # reset clears the queue, and what it held for one session does not
+    # depart against the next. What a message earns that does not reach the
+    # engine — a refusal, a request type nobody writes — queues with the
+    # rest, as under their client the message itself departs with them and
+    # the gateway's answer follows it back.
+    client.MaxRequests = 3
+    ib.sleep(0.3)  # the window empties; the burst's sends no longer count
+    sent = client._sent
+    for _ in range(5):
+        client.reqCurrentTime()
+    for _ in range(2):
+        client.sendMsg("92\0" "7\0" "DU000000\0")  # one field short of reqPnL
+    client.sendMsg("105\0")  # a request type nobody writes
+    assert client._sent == sent + 3, "three leave at the rate, the rest queue"
+    assert events[-1] == "start"
+    ib.disconnect()
+    ib.sleep(0.4)
+    assert client._sent == sent + 3, "nothing departed a session that has ended"
+    assert events[-1] == "start", "and a dropped queue says no end"
+
+
 def test_a_loop_closed_without_disconnect_leaves_nothing_running(monkeypatch):
     """A program whose loop ends without a disconnect, as many scripts end.
     A thread kept feeding the closed loop, and said so on every turn."""

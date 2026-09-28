@@ -104,8 +104,8 @@ class IbkrDxClient:
     DISCONNECTED, CONNECTING, CONNECTED = range(3)
     MinClientVersion = 157
     MaxClientVersion = 178
-    #: Their client's, and not applied: nothing between the program and the
-    #: venue paces requests, so there is nothing for these to set.
+    #: Their client's own: what leaves for the engine is paced by them, as
+    #: what leaves theirs for a gateway is (see `_pace`).
     MaxRequests = _TheirClient.MaxRequests
     RequestsInterval = _TheirClient.RequestsInterval
     events = _TheirClient.events
@@ -155,6 +155,11 @@ class IbkrDxClient:
         #: When the session started, and the requests sent on it.
         self._since = time.time()
         self._sent = 0
+        #: What is waiting to leave, and when what left did: their client's
+        #: own pacing queues (client.py:130-132).
+        self._msgQ = collections.deque()
+        self._timeQ = collections.deque()
+        self._isThrottling = False
 
         # The engine, with ib_async's own wrapper as the callback target: this
         # client already resolves a callback under the reference client's
@@ -402,6 +407,11 @@ class IbkrDxClient:
         self.connState = IbkrDxClient.DISCONNECTED
         self._serverVersion = 0
         self._ids_settling = False
+        # Their client's reset clears its pacing queues, and says no end:
+        # what was held for one session does not depart against the next.
+        self._msgQ.clear()
+        self._timeQ.clear()
+        self._isThrottling = False
         # Held for the end of a pass a handler has just ended the session in:
         # their wrapper has been cleared, as their client's buffer is.
         self._callbacks._priced.clear()
@@ -676,7 +686,8 @@ class IbkrDxClient:
         return self._client
 
     def _send(self, request, *args):
-        """One request to the engine, as their client writes one message.
+        """One request to the engine, as their client writes one message,
+        paced as theirs paces what it writes (see `_pace`).
 
         The engine states "not connected" inside the call where it has given
         the session up and this client has not yet heard the close. Their
@@ -684,12 +695,22 @@ class IbkrDxClient:
         so that is held for the next pass (see `_LoopBound.error`).
         """
         engine = self._connected()
-        self._sent += 1
-        self._callbacks.asking += 1
-        try:
-            return getattr(engine, request)(*args)
-        finally:
-            self._callbacks.asking -= 1
+        answered = []
+
+        def depart():
+            self._sent += 1
+            self._callbacks.asking += 1
+            try:
+                answered.append(getattr(engine, request)(*args))
+            finally:
+                self._callbacks.asking -= 1
+
+        self._pace(depart)
+        # What left at once answers as it always did. What the rate held
+        # back answers no caller: the departure is a later turn of the
+        # loop, and every answer of theirs comes back on the socket after
+        # the call anyway.
+        return answered[0] if answered else None
 
     def _send_theirs(self, request, *args):
         """A request as their client makes it, each argument rebuilt as the
@@ -705,10 +726,19 @@ class IbkrDxClient:
             ours = [_as_ours(a) for a in args]
         except ValueError as why:
             self._connected()
-            self._sent += 1
-            self._callbacks.refused.append((args[0], *_unreadable(why)))
+            self._refuse((args[0], *_unreadable(why)))
             return None
         return self._send(request, *ours)
+
+    def _refuse(self, refusal):
+        """A refusal queued as the message that earns it: under their client
+        the message departs with the rest, and the gateway's answer follows
+        it back at the pace it departs at."""
+        def depart():
+            self._sent += 1
+            self._callbacks.refused.append(refusal)
+
+        self._pace(depart)
 
     # ── their raw messages ──
 
@@ -738,13 +768,16 @@ class IbkrDxClient:
         try:
             read = _messages.read(msg)
         except _messages.Unreadable as why:
-            self._sent += 1
-            self._callbacks.refused.append((why.reqId, *_unreadable(why)))
+            self._refuse((why.reqId, *_unreadable(why)))
             return
         if read is None:
-            self._sent += 1
             named = msg.split("\0", 1)[0]
-            _logger.error(f"Invalid incoming request type - {named}")
+
+            def unanswered():
+                self._sent += 1
+                _logger.error(f"Invalid incoming request type - {named}")
+
+            self._pace(unanswered)
             return
         request, args = read
         if request == "placeOrder":
@@ -753,6 +786,45 @@ class IbkrDxClient:
             self._send_theirs("place_order", *args)
         else:
             getattr(self, request)(*args)
+
+    def _pace(self, call=None):
+        """What leaves for the engine, at their client's rate: at most
+        ``MaxRequests`` per ``RequestsInterval``, the overflow deferred on
+        the loop's clock, and ``throttleStart``/``throttleEnd`` said around
+        the wait, as their `sendMsg` paces what leaves for a gateway
+        (client.py:323-351). Called with nothing, it releases what a
+        deferral queued, as theirs re-enters `sendMsg` with no message.
+
+        The clock is the loop's — the monotonic one — read directly where
+        no session's loop stands behind: a queue overflows only on a
+        session, and a session has the loop its connect ran on.
+        """
+        loop = self._loop
+        t = loop.time() if loop is not None else time.monotonic()
+        times = self._timeQ
+        calls = self._msgQ
+        while times and t - times[0] > self.RequestsInterval:
+            times.popleft()
+
+        if call is not None:
+            calls.append(call)
+
+        while calls and (len(times) < self.MaxRequests or not self.MaxRequests):
+            due = calls.popleft()
+            due()
+            times.append(t)
+
+        if calls:
+            if not self._isThrottling:
+                self._isThrottling = True
+                self.throttleStart.emit()
+                _logger.debug("Started to throttle requests")
+            loop.call_at(times[0] + self.RequestsInterval, self._pace)
+        else:
+            if self._isThrottling:
+                self._isThrottling = False
+                self.throttleEnd.emit()
+                _logger.debug("Stopped to throttle requests")
 
     # ── requests: the same shape, all the way down ──
 
