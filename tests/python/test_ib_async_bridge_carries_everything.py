@@ -27,6 +27,7 @@ class Sent:
 
     def __init__(self):
         self.contracts = []
+        self.ends = []
 
     def _keep(self, contract):
         self.contracts.append(contract)
@@ -39,6 +40,7 @@ class Sent:
 
     def req_historical_data(self, req_id, contract, *a):
         self._keep(contract)
+        self.ends.append(a[0])
 
 
 def _client():
@@ -359,3 +361,27 @@ def test_a_figure_their_record_declares_as_an_int_arrives_as_one():
     theirs = _as_theirs(cd)
     assert theirs.evMultiplier == 100
     assert isinstance(theirs.evMultiplier, int)
+
+
+def test_a_stored_end_a_resubscribe_replays_arrives_as_their_send_writes_it():
+    """Their wrapper's error-10225 self-resubscribe replays the BarDataList's
+    end as it was stored — typed datetime|date|str|None upstream, and ib_async
+    keeps it raw (wrapper.py:1704-1721). Their client's `send` writes None as
+    "", a string as it stands and `str()` of anything else before the field
+    reaches the wire. Forwarded raw, the engine's string field raised
+    TypeError inside the wrapper's own error handler: the self-heal died and
+    the subscription stayed busted."""
+    import datetime
+
+    c = _client()
+    spy = ib_async.Stock("SPY", "SMART", "USD")
+    for req_id, end in [
+        (3, datetime.datetime(2026, 9, 26, 9, 30)),
+        (4, datetime.date(2026, 9, 26)),
+        (5, None),
+        (6, ""),
+    ]:
+        c.reqHistoricalData(req_id, spy, end, "1 D", "1 min", "TRADES",
+                            True, 1, True, None)
+
+    assert c._client.ends == ["2026-09-26 09:30:00", "2026-09-26", "", ""]

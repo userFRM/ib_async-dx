@@ -710,7 +710,14 @@ class IbkrDxClient:
                           barSizeSetting, whatToShow, useRTH, formatDate,
                           keepUpToDate, chartOptions):
         self._send_theirs(
-            "req_historical_data", reqId, contract, endDateTime, durationStr,
+            "req_historical_data", reqId, contract,
+            # Written as their client's `send` writes the field: "" for None,
+            # a string as it stands, `str()` of anything else. Their wrapper's
+            # 10225 self-resubscribe replays the end as it was stored — raw,
+            # a datetime, a date or None (wrapper.py:1704-1721) — and the
+            # engine's call takes a string.
+            "" if endDateTime is None else str(endDateTime),
+            durationStr,
             barSizeSetting, whatToShow, 1 if useRTH else 0, formatDate,
             keepUpToDate, chartOptions,
         )
