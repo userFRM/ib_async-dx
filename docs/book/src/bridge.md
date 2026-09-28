@@ -261,8 +261,9 @@ Each is what ib_async over a gateway does too.
 
 - `readonly=True` makes a read-only session, which refuses to send anything that
   places, changes or withdraws an order, as a gateway set to read-only does.
-- `serverVersion()` is 178 once connected, the version a current gateway
-  settles on with ib_async 2.1, and 0 until then, as their client answers it.
+- `serverVersion()` is 217 once connected, the level a current gateway
+  states in its handshake and the engine states as its own, and 0 until
+  then, as their client answers it.
 - `reqExecutions()` answers with the day's executions: those this session has
   seen and those the venue restated when it opened, fills on orders already
   completed among them. ib_async 2.1's request cannot ask for more.

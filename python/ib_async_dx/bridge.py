@@ -140,6 +140,7 @@ class IbkrDxClient:
         self.connectOptions = b""
         self.connState = IbkrDxClient.DISCONNECTED
         self._reqIdSeq = 1
+        self._serverVersion = 0
         self._accounts: list[str] = []
         self._loop = None
         #: Which session, or attempt at one, is the current one. Every
@@ -297,6 +298,9 @@ class IbkrDxClient:
                     "called while it was still logging in"
                 ) from None
             raise
+        # The level the session speaks, taken as their client takes what its
+        # handshake stated, and kept as theirs is until its reset.
+        self._serverVersion = self._client.server_version() or 0
         self.connState = IbkrDxClient.CONNECTED
         self._pass = self._loop.call_later(PASS_INTERVAL, self._next_pass, attempt)
         self.apiStart.emit()
@@ -396,6 +400,7 @@ class IbkrDxClient:
         pass is not made, and a connect waiting on its login stops waiting."""
         self._generation += 1
         self.connState = IbkrDxClient.DISCONNECTED
+        self._serverVersion = 0
         self._ids_settling = False
         # Held for the end of a pass a handler has just ended the session in:
         # their wrapper has been cleared, as their client's buffer is.
@@ -529,8 +534,12 @@ class IbkrDxClient:
         return self.isConnected()
 
     def serverVersion(self):
-        """178 once connected, and 0 until then, as their client answers it."""
-        return self.MaxClientVersion if self.isConnected() else 0
+        """The level the engine stated for the session, and 0 until it states
+        one, as their client answers with the level its handshake stated and
+        keeps it until its reset (client.py:387). Kept, so a request written
+        while the engine has given the session up but the pass has not said
+        so writes at it still, as theirs does until the close reaches it."""
+        return self._serverVersion
 
     def getAccounts(self):
         return list(self._accounts)

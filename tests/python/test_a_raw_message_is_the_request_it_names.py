@@ -22,6 +22,11 @@ from ib_async_dx._messages import read
 from ib_async_dx.bridge import IbkrDxClient
 
 
+#: The level a connected session states, which their client's own writer
+#: gates some of the fields it writes on.
+LEVEL = 217
+
+
 class Recording:
     """Stands in for the engine: every request it carries, recorded."""
 
@@ -50,6 +55,7 @@ def _seen(value):
 def _client():
     client = IbkrDxClient(ib_async.IB().wrapper)
     client.connState = client.CONNECTED
+    client._serverVersion = LEVEL
     client._client = Recording()
     return client
 
@@ -148,7 +154,7 @@ class Writing:
         return True
 
     def serverVersion(self):
-        return IbkrDxClient.MaxClientVersion
+        return LEVEL
 
     def sendMsg(self, msg):
         self.sent.append(msg)

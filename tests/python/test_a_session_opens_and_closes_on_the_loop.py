@@ -705,11 +705,14 @@ def test_connecting_an_attached_ib_that_is_connected_opens_a_new_session(connect
 
 
 def test_serverVersion_is_nought_until_connected(connect):
-    """As ib_async's client answers it: 0 until the handshake."""
+    """As ib_async's client answers it: 0 until the handshake, and then the
+    level the handshake stated — theirs stores whatever the gateway said
+    (client.py:387), which a program gates features on; here the engine
+    states its own level, 217, for as long as the session runs."""
     ib = ib_async_dx.attach(ib_async.IB())
     assert ib.client.serverVersion() == 0
     connect(ib=ib)
-    assert ib.client.serverVersion() == 178
+    assert ib.client.serverVersion() == 217
     ib.disconnect()
     assert ib.client.serverVersion() == 0
 

@@ -128,6 +128,11 @@ def test_every_account_the_login_holds_crosses_over():
             # counter starts from. The real client answers both.
             return 1
 
+        def server_version(self):
+            # The level the session speaks, which the real client states once
+            # its login holds.
+            return 217
+
     c._client = Several()
 
     import asyncio

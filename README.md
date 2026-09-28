@@ -237,7 +237,7 @@ connection does. `timeout` bounds each request ib_async makes as the session
 opens; the login itself is the engine's to bound, its wait of up to three
 seconds for the venue to name the working orders among it, and a live one waits
 on its second factor, as a gateway's login is made before a program connects.
-`serverVersion()` is 178 once connected and 0 before, `reqExecutions()` answers
+`serverVersion()` is 217 once connected and 0 before, `reqExecutions()` answers
 with the day's executions, `numIds` changes nothing on `reqIds`, and callbacks
 that reach nothing in ib_async over a gateway reach nothing here either.
 [Running ib_async itself](https://userfrm.github.io/ib_async-dx/bridge.html)
