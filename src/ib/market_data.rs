@@ -265,8 +265,10 @@ impl IBHandle {
     /// Subscribes to `c`'s ticks, or asks for one snapshot of them, and
     /// gives the ticker they fill: ib_async's `reqMktData`.
     ///
-    /// `mkt_data_options` is taken and not sent: the TWS API reserves it.
-    /// An unhashable contract is `Err(Value)`.
+    /// `mkt_data_options` is checked as the engine checks it: a list it
+    /// cannot read is refused under the request's own id before subscribing,
+    /// and an accepted list changes nothing a gateway sends. An unhashable
+    /// contract is `Err(Value)`.
     pub fn req_mkt_data(
         &self,
         c: &Contract,
@@ -275,19 +277,35 @@ impl IBHandle {
         regulatory_snapshot: bool,
         mkt_data_options: &[TagValue],
     ) -> Result<Live<Ticker>> {
-        let _ = mkt_data_options;
         let (c, ticks) = (c.clone(), generic_tick_list.to_owned());
+        let options: Vec<e::TagValue> = mkt_data_options.iter().map(e::TagValue::from).collect();
         self.shared.step(Class::Request, move |ib| {
             let client = ready(ib)?;
             let id = next_id(ib, &client)?;
             let ticker = ib.core().state.start_ticker(id, &c, "mktData")?;
-            client.req_mkt_data(
-                id,
-                &e::Contract::from(&c),
-                &ticks,
-                snapshot,
-                regulatory_snapshot,
-            );
+            // The check the engine's own market-data surfaces give the list,
+            // and the refusal pushed under this id in its place in the
+            // session's order, as the engine pushes it: a list it cannot read
+            // never subscribes, and an accepted one subscribes as an empty
+            // one does.
+            match e::ClientCore::check_option_list(
+                &e::MKT_DATA_OPTIONS,
+                &e::ClientCore::written_options(&options),
+                &client.enabled_features(),
+            ) {
+                Err(why) => client.refuse(
+                    e::ErrorOrigin::Request { id, ends: true },
+                    i64::from(why.code),
+                    &why.message,
+                ),
+                Ok(()) => client.req_mkt_data(
+                    id,
+                    &e::Contract::from(&c),
+                    &ticks,
+                    snapshot,
+                    regulatory_snapshot,
+                ),
+            }
             ib.queue.sent(1);
             Ok(ticker)
         })
@@ -910,6 +928,68 @@ mod tests {
         refuser.join().unwrap();
         let want = contracts.map(|c| ib.ticker(&c).unwrap().unwrap());
         assert_eq!(got, want);
+    }
+
+    #[test]
+    fn req_mkt_data_refuses_an_unreadable_option_list_under_its_own_id() {
+        capture_logs();
+        let _o = AsOwner::new();
+        let s = Session::new();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let n = seen.clone();
+        s.ib.error_event().connect(move |e| {
+            lock(&n).push((e.0, e.1, e.2.clone(), e.3.clone()));
+        });
+        let spy = stock("SPY", 756733);
+
+        // A key a gateway does not take is refused under the request's own id
+        // before subscribing, as its two sibling surfaces refuse it, and the
+        // refusal names the contract the id was registered with.
+        s.ib.req_mkt_data(
+            &spy,
+            "",
+            false,
+            false,
+            &[TagValue {
+                tag: "bogus".into(),
+                value: "x".into(),
+            }],
+        )
+        .unwrap();
+        s.lap();
+        let sent = s.sent();
+        assert!(quotes(&sent).is_empty(), "{sent:?}");
+        let refused = lock(&seen).clone();
+        assert_eq!(refused.len(), 1, "{refused:?}");
+        assert_eq!(refused[0].1, 10337, "{refused:?}");
+        assert!(refused[0].2.contains("bogus"), "{refused:?}");
+        assert_eq!(refused[0].3.as_ref(), Some(&spy), "{refused:?}");
+        assert!(
+            errors_here()
+                .iter()
+                .any(|(_, m)| m.starts_with("Error 10337, reqId ")),
+            "{:?}",
+            errors_here()
+        );
+
+        // A list a gateway reads subscribes as an empty one does, under the
+        // id next to the refused one: an accepted option changes nothing a
+        // gateway sends.
+        s.ib.req_mkt_data(
+            &spy,
+            "",
+            false,
+            false,
+            &[TagValue {
+                tag: "manual".into(),
+                value: "1".into(),
+            }],
+        )
+        .unwrap();
+        s.lap();
+        let ids = quotes(&s.sent());
+        assert_eq!(ids, [refused[0].0 + 1], "{ids:?}");
+        assert_eq!(lock(&seen).len(), 1, "a read list refuses nothing more");
     }
 
     #[test]

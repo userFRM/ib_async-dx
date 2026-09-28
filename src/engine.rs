@@ -18,6 +18,11 @@ pub(crate) use ibkr_dx::EClient;
 pub(crate) use ibkr_dx::Wrapper;
 // lib.rs:108: what `exercise_options` states beyond the instruction.
 pub(crate) use ibkr_dx::ExerciseStates;
+// lib.rs:64, `#[doc(hidden)] pub mod`: the option list a market-data request
+// takes, written as the engine writes it and checked as the engine checks it
+// (client_core/mod.rs:1865,5410,5431). The pin names one engine commit, so
+// these move only with a pin bump.
+pub(crate) use ibkr_dx::client_core::{ClientCore, MKT_DATA_OPTIONS};
 
 // The caller's model types: `api::types` is `types::model` (api/mod.rs:11).
 // Lines of types/model.rs, in order: 1797, 15, 1719, 54, 2067, 1855, 41,
