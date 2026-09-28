@@ -243,3 +243,29 @@ def test_a_record_named_as_theirs_and_not_theirs_is_rebuilt_as_theirs():
     assert _as_theirs(FamilyCode()) == ib_async.FamilyCode("DU000000", "F1")
     theirs = ib_async.FamilyCode("DU000000", "F1")
     assert _as_theirs(theirs) is theirs, "their own record is handed over as it is"
+
+
+def test_a_size_the_engine_states_as_a_decimal_arrives_as_their_float():
+    """The engine, following the reference client whose decoder annotates
+    Decimal, states every size as a `decimal.Decimal`; ib_async delivers
+    float, and a program written against it computes `ticker.last *
+    ticker.lastSize` without a TypeError. Coerced at the one place every
+    message crosses, so a size stated as a Decimal arrives as their float.
+
+    (The twin test on the main branch also states a Decimal field of a
+    rebuilt record; this engine's records coerce at assignment, so here
+    the delivery boundary is the only place one can still arrive.)"""
+    from decimal import Decimal
+
+    seen = []
+
+    class Wrapper:
+        def tickSize(self, reqId, tickType, size):
+            seen.append(size)
+
+    bound = _LoopBound(Wrapper())
+    bound.tick_size(1, 0, Decimal(400))
+    bound.end_pass()
+    assert type(seen[0]) is float and seen[0] == 400.0, seen
+    # The arithmetic the issue names.
+    assert seen[0] * 101.5 == 40600.0

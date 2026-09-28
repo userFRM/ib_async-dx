@@ -29,6 +29,7 @@ import asyncio
 import collections
 import contextvars
 import dataclasses
+import decimal
 import inspect
 import logging
 import os
@@ -938,6 +939,11 @@ class _LoopBound:
             if arrived:
                 arrived()
         self.received += 1
+        # The explicit tick paths hand the engine's own figures over without
+        # the rebuild `_as_theirs` gives every record: a size stated as a
+        # Decimal is coerced here, at the one place every message crosses, as
+        # it is coerced there.
+        args = tuple(float(a) if isinstance(a, decimal.Decimal) else a for a in args)
         try:
             method(*args)
         except Exception:
