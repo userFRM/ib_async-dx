@@ -1321,6 +1321,12 @@ class _LoopBound:
     _THEIR_NAME = {
         "real_time_bar": "realtimeBar",
         "commission_and_fees_report": "commissionReport",
+        # Under the alias the engine tries first: it asks a wrapper for the
+        # reference client's camel spelling of a callback before it calls the
+        # snake name it holds it under, and their wrapper declares no handler
+        # for that spelling — unresolved here, a charge fell to the
+        # do-nothing below and was destroyed.
+        "commissionAndFeesReport": "commissionReport",
     }
 
     def tick_snapshot_end(self, req_id):

@@ -81,7 +81,14 @@ def test_a_contract_named_by_more_than_its_symbol_keeps_the_rest():
 def test_a_fills_cost_arrives_as_the_record_their_wrapper_reads():
     """The callback is renamed on the way over, and was handed the argument
     unrebuilt. Their wrapper reads a field their own record spells its own
-    way, so every fill lost what it cost."""
+    way, so every fill lost what it cost.
+
+    Resolved the way the engine resolves it: it holds a charge under its own
+    snake name, and before it calls that name it asks the wrapper for the
+    reference client's camel spelling of it. Asked of this wrapper, that
+    spelling was no name their wrapper declares, so the lookup fell to the
+    do-nothing for a callback nothing answers, and the charge was destroyed
+    before the rename below was ever consulted."""
     seen = []
 
     class Wrapper:
@@ -93,7 +100,7 @@ def test_a_fills_cost_arrives_as_the_record_their_wrapper_reads():
     ours.execId = "0001.1"
     ours.commissionAndFees = 1.25
     ours.currency = "USD"
-    bound.commission_and_fees_report(ours)
+    getattr(bound, "commissionAndFeesReport")(ours)
 
     assert seen, "the cost reached nothing"
     assert isinstance(seen[0], ib_async.CommissionReport), type(seen[0])
