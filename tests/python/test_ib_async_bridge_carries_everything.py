@@ -292,6 +292,14 @@ def test_an_executions_time_arrives_as_the_moment_their_record_declares():
     bar.date = "20260918"
     assert _as_theirs(bar, ib.wrapper).date == "20260918", "their parser's own"
 
+    # The scope is the execution, not the field name: their TimeCondition
+    # declares `time: str` (order.py:515-519), and ib_async's parse() skips
+    # string fields (decoder.py:185-198), so a condition's time crosses as
+    # the string the engine states.
+    cond = ibkr_dx.TimeCondition()
+    cond.time = "20260926 09:30:00"
+    assert _as_theirs(cond, ib.wrapper).time == "20260926 09:30:00"
+
 
 def test_an_unstated_greek_reaches_their_wrapper_as_the_sentinel_it_reads():
     """The engine states a figure the venue did not state as None; their
