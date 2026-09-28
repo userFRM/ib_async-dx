@@ -137,8 +137,20 @@ def test_a_later_connect_retires_an_earlier_one_still_logging_in(gated, theirs):
         first, engine = await _logging_in(ib)
         gated.append(engine)
         second = asyncio.ensure_future(ib.connectAsync(fetchFields=StartupFetchNONE))
-        await asyncio.sleep(0.05)
-        latest = ib.client._client
+        # Waited on, not sampled after a fixed sleep: the later connect first
+        # retires the earlier task and waits for it to end, and only then
+        # gives itself an engine of its own — the earlier login is still in
+        # its engine, so neither can end the other's session. Read at a fixed
+        # moment, `_client` can still be the earlier engine, and the releases
+        # below free the login that was retired while the later one waits out
+        # its five seconds (the flake this test had, about one run in ten).
+        for _ in range(500):
+            await asyncio.sleep(0.01)
+            latest = ib.client._client
+            if isinstance(latest, Gated) and latest is not engine:
+                break
+        else:
+            raise AssertionError("the later connect never took an engine of its own")
         gated.append(latest)
         with pytest.raises(ConnectionError):
             await asyncio.wait_for(first, 1)
