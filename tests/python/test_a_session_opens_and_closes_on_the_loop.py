@@ -582,6 +582,31 @@ def test_a_session_that_ends_as_it_opens_fails_the_connect_and_stops(monkeypatch
     assert not ib.isConnected()
 
 
+def test_an_unexpected_end_says_peer_closed_connection_before_apiEnd(connect, caplog):
+    """As ib_async's client says a socket that closed while the API was up:
+    the error logged and stated on `apiError` before the session is reset and
+    `apiEnd` fires (client.py:418-440) — programs hook `apiError` to hear a
+    session die, and through it alone can tell an abnormal close from a
+    requested one. Here nothing was stated: the only `apiError` was a failed
+    connect."""
+    ib = connect()
+    heard, states = [], []
+
+    def on_api_error(msg):
+        heard.append(("apiError", msg))
+        states.append(ib.isConnected())
+
+    ib.client.apiError += on_api_error
+    ib.client.apiEnd += lambda: heard.append(("apiEnd",))
+    ib.client._client._test_push_stopped_event()
+    with caplog.at_level(logging.ERROR, logger="ib_async_dx"):
+        ib.client._pass_once()
+    assert heard == [("apiError", "Peer closed connection."), ("apiEnd",)]
+    assert states == [True], "stated while the session still reads connected"
+    assert [r.getMessage() for r in caplog.records
+            if r.getMessage() == "Peer closed connection."], "and logged"
+
+
 class Refused(OfflineEngine):
     def connect(self, **logon):
         raise RuntimeError("Connection failed: the password was not accepted")
