@@ -1241,9 +1241,10 @@ mod tests {
             client_id: i64::MAX,
             ..Order::default()
         };
-        // Whether the IB works the order: a refused change leaves it live,
-        // and a refused new order registers no trade.
-        for (working, status) in [(false, None), (true, Some("ValidationError"))] {
+        // Whether the IB works the order: a refused change to a working order
+        // cancels it, as ib_async classifies a refusal's code, and a refused
+        // new order registers no trade.
+        for (working, status) in [(false, None), (true, Some("Cancelled"))] {
             let (ib, client) = ib();
             let _rx = connect(&ib, &client);
             let log = Log::default();

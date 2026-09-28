@@ -1053,11 +1053,12 @@ class Run:
             # RaiseRequestErrors says
             rules.enter_context(attr(self.ib, "RaiseRequestErrors", True))
         op = origin["Order"]["op"] if isinstance(origin, dict) and "Order" in origin else None
-        want = True if op == "Modify" else False if op in ("Place", "Exercise") else warns
+        want = False if op in ("Place", "Exercise") and code == 321 else warns
         if want != warns and self.departs("X22"):
-            # X22: a refused modify takes the warning path, a refused placement or exercise the
-            # error path. ib_async's own error() runs, with its warning set (wrapper.py:1609),
-            # built by the frozenset the wrapper module names, holding or lacking the code.
+            # X22: a refused placement or exercise takes the error path even at 321; a refused
+            # modify is classified by its code alone, as ib_async classifies it. ib_async's own
+            # error() runs, with its warning set (wrapper.py:1609), built by the frozenset the
+            # wrapper module names, holding or lacking the code.
             assert not 2100 <= code < 2200 and code != 110, "no such refusal"
 
             def codes(literal):

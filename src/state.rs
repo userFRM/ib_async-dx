@@ -1761,8 +1761,8 @@ fn is_warning_code(code: i64) -> bool {
 }
 
 /// ib_async's `error` (wr:1580-1723), by the origin the engine gives:
-/// a refused modify is a warning, a refused placement or exercise an error,
-/// a request's end is its origin's to state, and the rest is by code.
+/// a refused placement or exercise is an error even at 321, a request's end
+/// is its origin's to state, and the rest is by code.
 fn error<S: Sink>(sink: &mut S, origin: ErrorOrigin, code: i64, message: String, json: String) {
     let req_id = origin.id();
     let raise = sink.raise_request_errors();
@@ -1787,12 +1787,11 @@ fn error<S: Sink>(sink: &mut S, origin: ErrorOrigin, code: i64, message: String,
             warning = false;
         }
         match origin {
-            ErrorOrigin::Order {
-                op: OrderOp::Modify,
-                ..
-            } => warning = true,
             // A refused placement or exercise is an error even at 321; a
-            // gateway's warning on an order it places anyway stays one.
+            // gateway's warning on an order it places anyway stays one. A
+            // refused modify is classified by its code alone, as ib_async
+            // classifies it: the order stays live at a warning's code and is
+            // cancelled at an error's.
             ErrorOrigin::Order {
                 op: OrderOp::Place | OrderOp::Exercise,
                 ..
@@ -2351,8 +2350,7 @@ pub(crate) mod tests {
         // (the operation, code, status before) → status after, events
         let cases = [
             // A refused placement is an error even at 321, a warning on a
-            // placement a warning; a refused modify a warning, the order
-            // still live.
+            // placement a warning.
             (OrderOp::Place, 321, "PendingSubmit", "Cancelled", true),
             (
                 OrderOp::Place,
@@ -2362,7 +2360,9 @@ pub(crate) mod tests {
                 false,
             ),
             (OrderOp::Modify, 321, "Submitted", "ValidationError", false),
-            (OrderOp::Modify, 201, "Submitted", "ValidationError", false),
+            // A refused modify is by code, as ib_async classifies it: 201 is
+            // no warning, so the trade is cancelled and says so.
+            (OrderOp::Modify, 201, "Submitted", "Cancelled", true),
             // The venue's word by ib_async's code: 110 cancels a new order
             // and warns on a working one.
             (OrderOp::Venue, 110, "PendingSubmit", "Cancelled", true),

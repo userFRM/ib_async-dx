@@ -1,5 +1,5 @@
 {
- "about": "A refused placement and a refused modify, told apart by what the engine says each error is about: the first cancels even under 321, the second leaves the order working (X22; wrapper.py:1603-1668)",
+ "about": "A refused placement and a refused modify: the placement cancels even under 321 (X22), and the modify is classified by its code as ib_async classifies it, so 201 cancels the trade (wrapper.py:1603-1668)",
  "delta": ["X22"],
  "connected": {"client_id": 1, "next_id": 1, "accounts": ["DU1"]},
  "steps": [
