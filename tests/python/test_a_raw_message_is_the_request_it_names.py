@@ -338,7 +338,7 @@ _PERCENT = (
 def test_a_margin_percent_a_gateway_refuses_is_refused_as_one(percent, stated):
     """A margin condition's percent a gateway does not take — one that does
     not parse as an integer, or parses outside 1..99 — is refused before
-    anything is sent: 320, the gateway's own text, under the order's number."""
+    anything is sent: 320, the gateway's text, under the order's number."""
     client = _client()
     heard = []
     client.wrapper.ib.errorEvent += lambda *args: heard.append(args[:3])
@@ -349,6 +349,47 @@ def test_a_margin_percent_a_gateway_refuses_is_refused_as_one(percent, stated):
     client._callbacks.begin_pass()
     assert heard == [(7, 320, _PERCENT.format(stated))]
     assert client._sent == 1
+
+
+#: A gateway's refusal of a condition value it does not parse.
+_INVALID = "Error reading request: The value you have entered {} is invalid."
+
+
+def test_a_refusal_states_a_gateways_sentence_and_nothing_else():
+    """The 320 text is what a gateway sends: the prefix, a colon, a space and
+    the sentence — a field's own display name where it does not read, the
+    invalid-value sentence for a condition's volume — and neither the raw
+    message nor a Python exception ever appears in it."""
+    client = _client()
+    heard = []
+    client.wrapper.ib.errorEvent += lambda *args: heard.append(args[:3])
+
+    order = ib_async.LimitOrder("BUY", "abc", 100.0)   # a size that is not one
+    client.placeOrder(7, CONTRACT, order)
+    order = ib_async.LimitOrder("BUY", 10, 100.0)
+    order.transmit = "x"                                # a flag that is not one
+    client.placeOrder(8, CONTRACT, order)
+    order = ib_async.LimitOrder("BUY", 10, 100.0)
+    order.conditions = [
+        ib_async.VolumeCondition(volume=1000.0, conId=756733, exch="SMART"),
+    ]                                                   # a float on a volume
+    client.placeOrder(9, CONTRACT, order)
+    client.sendMsg(_written("reqIds", "x"))             # no request number
+    client.sendMsg("92\0" "7\0" "DU000000\0")           # ends early
+    client.sendMsg("49\0" "1\0" "extra\0")              # runs past the end
+
+    assert client._client.calls == [] and heard == []
+    client._callbacks.begin_pass()
+    parse = "Error reading request: Unable to parse field: '{}' for input string: '{}'"
+    assert heard == [
+        (7, 320, parse.format("Order Size", "abc")),
+        (8, 320, parse.format("transmit", "x")),
+        (9, 320, _INVALID.format("1000.0")),
+        (-1, 320, parse.format("Num Ids", "x")),
+        (7, 320, "Error reading request: the message ends before reqPnL does"),
+        (-1, 320, "Error reading request: the message has fields past the end of reqCurrentTime"),
+    ]
+    assert client._sent == 6
 
 
 def test_a_message_naming_no_request_is_logged_and_unanswered(caplog):

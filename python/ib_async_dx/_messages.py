@@ -7,7 +7,12 @@ field in the order ib_async's client writes them (at server version 178, the
 one this client states), into the request ib_async's client names for it.
 
 Only what ib_async's client writes is read. A field is read as ib_async reads
-it: as the type of the field's default, empty for the default itself.
+it: as the type of the field's default, empty for the default itself — except
+where a gateway reads one itself. A number or flag that does not parse is
+refused in the sentence a gateway refuses it in, naming the field as a
+gateway's parse-error table names it, and a condition's percent, volume and
+change value are read from the raw field and judged as a gateway judges
+them.
 """
 
 import dataclasses
@@ -33,6 +38,142 @@ _INVALID_PERCENT = (
     "The value you have entered {} is invalid.\n"
     "Please enter percent within a range of (0, 100)."
 )
+
+
+#: A gateway's refusal of a condition value it does not parse, with the raw
+#: field it states — "null" for an empty one, which is null to a gateway.
+_INVALID_VALUE = "The value you have entered {} is invalid."
+
+
+#: A gateway's refusal of a field it does not read, stating the field by the
+#: name its parse-error table carries for it — an empty name where the table
+#: carries none.
+_PARSE = "Unable to parse field: '{}' for input string: '{}'"
+
+
+#: The name a gateway states for each field it reads, by the name ib_async's
+#: client gives it. A field a gateway reads without stating a name is absent,
+#: and its refusals carry the empty one.
+_DISPLAY = {
+    # the contract
+    "conId": "Con Id",
+    "strike": "Strike",
+    "includeExpired": "Include Expired",
+    # a combination's legs, and an order's own ratios
+    "ratio": "Ratio",
+    "shortSaleSlot": "Sshort SourceType",
+    "exemptCode": "Exempt Reason",
+    # conditions
+    "isMore": "Operator",
+    "triggerMethod": "Trigger Method",
+    # the order
+    "totalQuantity": "Order Size",
+    "lmtPrice": "Limit Price",
+    "auxPrice": "Aux Price",
+    "origin": "Origin",
+    "transmit": "transmit",
+    "parentId": "Parent Dde Id",
+    "blockOrder": "Block Order",
+    "sweepToFill": "Sweep To Fill",
+    "displaySize": "Display Size",
+    "outsideRth": "Outside Rth",
+    "hidden": "Hidden",
+    "discretionaryAmt": "Discretionary Amt",
+    "rule80A": "Slot Type",
+    "allOrNone": "All Or None",
+    "minQty": "Min Qty",
+    "percentOffset": "Percent Offset",
+    "eTradeOnly": "eTrade Only",
+    "firmQuoteOnly": "Firm Quote Only",
+    "startingPrice": "Starting Price",
+    "stockRefPrice": "Stock Ref Price",
+    "delta": "Delta",
+    "stockRangeLower": "Stock Range Lower",
+    "stockRangeUpper": "Stock Range Upper",
+    "overridePercentageConstraints": "Override Precautionary Constraints",
+    "volatility": "Volatility",
+    "volatilityType": "Volatility Type",
+    "deltaNeutralAuxPrice": "Delta Neutral Aux Price",
+    "deltaNeutralConId": "Delta Neutral Con Id",
+    "deltaNeutralShortSale": "Delta Neutral Short Sale",
+    "deltaNeutralShortSaleSlot": "deltaNeutralShortSaleSlot",
+    "continuousUpdate": "Continuous Update",
+    "referencePriceType": "Ref Price Type",
+    "trailStopPrice": "Barrier Price",
+    "trailingPercent": "Trailing Percent",
+    "scaleInitLevelSize": "Initial Component Size",
+    "scaleSubsLevelSize": "Subsequent Component Size",
+    "scalePriceIncrement": "Scale Increment",
+    "scalePriceAdjustValue": "Scale Auto Price Incr Amount",
+    "scalePriceAdjustInterval": "Scale Auto Price Incr Timeout",
+    "scaleProfitOffset": "Profit Offset",
+    "scaleAutoReset": "Scale Restore Size After Profit",
+    "scaleInitPosition": "Scale Restart Init Pos",
+    "scaleInitFillQty": "Scale Restart Filled Init Comp Size",
+    "scaleRandomPercent": "Scale Randomize Size",
+    "optOutSmartRouting": "Opt Out Smart Routing",
+    "notHeld": "Not Held",
+    "whatIf": "What If Flag",
+    "solicited": "Solicited Parameter Value",
+    "randomizeSize": "Randomize Size",
+    "randomizePrice": "Randomize Price",
+    "referenceContractId": "Reference Contract Id",
+    "isPeggedChangeAmountDecrease": "Is Pegged Change Amount Decrease",
+    "peggedChangeAmount": "Pegged Change Amount",
+    "referenceChangeAmount": "Reference Change Amount",
+    "conditionsIgnoreRth": "Ignore Rth",
+    "conditionsCancelOrder": "Cancel Order",
+    "triggerPrice": "Trigger Price",
+    "lmtPriceOffset": "Limit Offset",
+    "adjustedStopPrice": "Adjusted Stop Price",
+    "adjustedStopLimitPrice": "Adjusted Stop Limit Price",
+    "adjustedTrailingAmount": "Adjusted Trailing Amount",
+    "adjustableTrailingUnit": "Unit",
+    "cashQty": "Cash Qty",
+    "dontUseAutoPriceForHedge": "Dont Use Auto Price For Hedge",
+    "isOmsContainer": "Is Container",
+    "discretionaryUpToLimitPrice": "Discretionary Up To Limit Price",
+    "usePriceMgmtAlgo": "Use Price Mgmt Algo",
+    "duration": "Duration",
+    "postToAts": "Post To Ats",
+    "autoCancelParent": "Auto Cancel Parent",
+    "minTradeQty": "Min Trade Qty",
+    "minCompeteSize": "Min Compete Size",
+    "competeAgainstBestOffset": "Compete Against Best Offset",
+    "midOffsetAtWhole": "Mid Offset At Whole",
+    "midOffsetAtHalf": "Mid Offset At Half",
+    # an execution filter's client, which a gateway reads as its server's id
+    "clientId": "Server Id",
+    # a scanner's subscription
+    "numberOfRows": "Number Of Rows",
+    "abovePrice": "Price Above Filter",
+    "belowPrice": "Price Below Filter",
+    "aboveVolume": "Volume Above Filter",
+    "marketCapAbove": "Market Cap Above Filter",
+    "marketCapBelow": "Market Cap Below Filter",
+    "couponRateAbove": "Coupon Rate Above Filter",
+    "couponRateBelow": "Coupon Rate Below Filter",
+    "averageOptionVolumeAbove": "Avg Opt Volume Above Filter",
+    # a calendar event's filter
+    "fillWatchlist": "Fill Watchlist",
+    "fillPortfolio": "Fill Portfolio",
+    "fillCompetitors": "Fill Competitors",
+    "totalLimit": "Total Limit",
+}
+
+
+#: The fields whose name serves more than one record: a gateway names each as
+#: the field it reads it as.
+_BY_TYPE = {
+    "DeltaNeutralContract": {
+        "conId": "Under Comp Conid",
+        "delta": "Under Comp Delta",
+        "price": "Under Comp Price",
+    },
+    "ComboLeg": {"conId": "Con Id Combo Leg"},
+    "OrderComboLeg": {"price": "Leg Price"},
+    "PriceCondition": {"price": "Price"},
+}
 
 
 class Unreadable(ValueError):
@@ -63,22 +204,33 @@ class _Fields:
         """Whether every field has been read."""
         return next(self._fields, None) is None
 
-    def int(self):
+    def int(self, display):
+        """The next field as an integer, refused as a gateway refuses one it
+        does not read, under the name ``display`` states for it."""
         field = next(self)
-        return int(field) if field else 0
+        try:
+            return int(field) if field else 0
+        except ValueError:
+            raise Unreadable(_PARSE.format(display, field), self.reqId) from None
 
     def id(self):
         """The request's own number."""
-        self.reqId = self.int()
+        self.reqId = self.int("Client Req Id")
         return self.reqId
 
-    def float(self):
+    def float(self, display):
         field = next(self)
-        return math.inf if field == "Infinite" else float(field) if field else 0.0
+        try:
+            return math.inf if field == "Infinite" else float(field) if field else 0.0
+        except ValueError:
+            raise Unreadable(_PARSE.format(display, field), self.reqId) from None
 
-    def bool(self):
+    def bool(self, display):
         field = next(self)
-        return bool(int(field)) if field else False
+        try:
+            return bool(int(field)) if field else False
+        except ValueError:
+            raise Unreadable(_PARSE.format(display, field), self.reqId) from None
 
     def percent(self, raw):
         """A margin condition's percent, which a gateway does not read as the
@@ -95,6 +247,25 @@ class _Fields:
             raise Unreadable(_INVALID_PERCENT.format(value), self.reqId) from None
         return value
 
+    def volume(self, raw):
+        """A volume condition's volume, which its gateway reads as the raw
+        field — an empty one as null — and parses as an integer, with no
+        range to judge: only what does not parse is refused."""
+        try:
+            return int(raw)
+        except ValueError:
+            stated = raw if raw else "null"
+            raise Unreadable(_INVALID_VALUE.format(stated), self.reqId) from None
+
+    def change(self, raw):
+        """A percent-change condition's value, which its gateway reads as the
+        raw field — an empty one as null — and parses as a double."""
+        try:
+            return float(raw)
+        except ValueError:
+            stated = raw if raw else "null"
+            raise Unreadable(_INVALID_VALUE.format(stated), self.reqId) from None
+
     def tags(self):
         """A list of tags and values, which ib_async writes as one field."""
         return [TagValue(*pair.split("=", 1)) for pair in next(self).split(";") if pair]
@@ -102,41 +273,55 @@ class _Fields:
     def into(self, obj, names):
         """The next fields into ``obj``'s attributes of these names, each read
         as the type of its default, as ib_async's decoder reads one; empty is
-        the default."""
+        the default. A field a gateway reads itself — a condition's percent,
+        volume and change value — is judged as the gateway judges it, and a
+        number or flag that does not parse is refused naming its field."""
         fields = {f.name: f for f in dataclasses.fields(obj)}
         for name in names.split():
             field, default = next(self), fields[name].default
             if name == "percent":
-                # A margin condition's percent alone is judged as a gateway
-                # judges it, not read as the type of its default.
                 value = self.percent(field)
+            elif name == "volume":
+                value = self.volume(field)
+            elif name == "changePercent":
+                value = self.change(field)
             elif default is dataclasses.MISSING or type(default) is str:
                 value = field
             elif not field:
                 value = default
-            elif type(default) is bool:
-                value = bool(int(field))
-            elif type(default) is int:
-                value = int(field)
             else:
-                value = math.inf if field == "Infinite" else float(field)
+                display = _BY_TYPE.get(type(obj).__name__, {}).get(
+                    name, _DISPLAY.get(name, ""),
+                )
+                try:
+                    if type(default) is bool:
+                        value = bool(int(field))
+                    elif type(default) is int:
+                        value = int(field)
+                    else:
+                        value = math.inf if field == "Infinite" else float(field)
+                except ValueError:
+                    raise Unreadable(_PARSE.format(display, field), self.reqId) from None
             setattr(obj, name, value)
         return obj
 
     def contract(self, names=_CONTRACT):
         return self.into(Contract(), names)
 
-    def legs(self, contract):
-        """A combination's legs, as ib_async writes them for a quote or bars."""
+    def legs(self, contract, conId="Con Id Combo Leg"):
+        """A combination's legs, as ib_async writes them for a quote or bars.
+        ``conId`` names a leg's id as the reader states it: the bars request
+        states the plain one."""
         if contract.secType == "BAG":
             contract.comboLegs = [
-                self.into(ComboLeg(), "conId ratio action exchange")
-                for _ in range(self.int())
+                self.into(ComboLeg(conId=self.int(conId)), "ratio action exchange")
+                for _ in range(self.int("Num Legs"))
             ]
 
     def hedge(self, contract):
-        """The contract's delta-neutral hedge, if it states one."""
-        if self.bool():
+        """The contract's delta-neutral hedge, if it states one. The flag a
+        gateway reads for it carries no name."""
+        if self.bool(""):
             contract.deltaNeutralContract = self.into(
                 DeltaNeutralContract(), "conId delta price"
             )
@@ -146,7 +331,10 @@ def _mkt_data(f):
     reqId, contract = f.id(), f.contract()
     f.legs(contract)
     f.hedge(contract)
-    return reqId, contract, next(f), f.bool(), f.bool(), f.tags()
+    return (
+        reqId, contract, next(f), f.bool("Snapshot"),
+        f.bool("Regulatory Or Global Snapshot"), f.tags(),
+    )
 
 
 def _place_order(f):
@@ -163,13 +351,14 @@ def _place_order(f):
                 "conId ratio action exchange openClose shortSaleSlot "
                 "designatedLocation exemptCode"
             ))
-            for _ in range(f.int())
+            for _ in range(f.int("Num Legs"))
         ]
         order.orderComboLegs = [
-            f.into(OrderComboLeg(), "price") for _ in range(f.int())
+            f.into(OrderComboLeg(), "price")
+            for _ in range(f.int("Number Of Per Leg Prices"))
         ]
         order.smartComboRoutingParams = [
-            TagValue(next(f), next(f)) for _ in range(f.int())
+            TagValue(next(f), next(f)) for _ in range(f.int(""))
         ]
     next(f)  # shares allocation, which ib_async always writes empty
     f.into(order, (
@@ -203,7 +392,7 @@ def _place_order(f):
     f.hedge(contract)
     f.into(order, "algoStrategy")
     if order.algoStrategy:
-        order.algoParams = [TagValue(next(f), next(f)) for _ in range(f.int())]
+        order.algoParams = [TagValue(next(f), next(f)) for _ in range(f.int(""))]
     f.into(order, "algoId whatIf")
     order.orderMiscOptions = f.tags()
     f.into(order, "solicited randomizeSize randomizePrice")
@@ -212,8 +401,8 @@ def _place_order(f):
             "referenceContractId isPeggedChangeAmountDecrease "
             "peggedChangeAmount referenceChangeAmount referenceExchangeId"
         ))
-    for _ in range(f.int()):
-        condition = OrderCondition.createClass(f.int())()
+    for _ in range(f.int("NConditions")):
+        condition = OrderCondition.createClass(f.int("Condition Type"))()
         order.conditions.append(f.into(condition, " ".join(
             field.name for field in dataclasses.fields(condition)[1:]
         )))
@@ -251,10 +440,13 @@ def _historical_data(f):
     reqId, contract = f.id(), f.contract()
     f.into(contract, "includeExpired")
     end, barSize, duration, useRTH, what, formatDate = (
-        next(f), next(f), next(f), f.bool(), next(f), f.int(),
+        next(f), next(f), next(f), f.bool("Use RTH"), next(f), f.int("Format Date"),
     )
-    f.legs(contract)
-    return reqId, contract, end, duration, barSize, what, useRTH, formatDate, f.bool(), f.tags()
+    f.legs(contract, "Con Id")
+    return (
+        reqId, contract, end, duration, barSize, what, useRTH, formatDate,
+        f.bool("Keep Up To Date"), f.tags(),
+    )
 
 
 def _exercise_options(f):
@@ -263,7 +455,10 @@ def _exercise_options(f):
         "conId symbol secType lastTradeDateOrContractMonth strike right "
         "multiplier exchange currency localSymbol tradingClass"
     )
-    return reqId, contract, f.int(), f.int(), next(f), f.int()
+    return (
+        reqId, contract, f.int("Option Exercise"), f.int("Num Contracts"), next(f),
+        f.int("Override"),
+    )
 
 
 def _scanner_subscription(f):
@@ -281,40 +476,45 @@ def _fundamental_data(f):
         "conId symbol secType exchange primaryExchange currency localSymbol"
     )
     reportType = next(f)
-    f.int()  # how many options follow, which the next field states itself
+    f.int("")  # how many options follow, which the next field states itself
     return reqId, contract, reportType, f.tags()
 
 
-def _calculation(f):
-    reqId, contract, price, underPrice = f.id(), f.contract(), f.float(), f.float()
-    f.int()  # how many options follow, which the next field states itself
+def _calculation(f, figure):
+    """A calculation's request: ``figure`` names the first value as the
+    gateway reading it states it — the implied volatility names its option's
+    price, and the option price names its volatility."""
+    reqId, contract, price, underPrice = (
+        f.id(), f.contract(), f.float(figure), f.float("Under Price"),
+    )
+    f.int("")  # how many options follow, which the next field states itself
     return reqId, contract, price, underPrice, f.tags()
 
 
 def _head_time_stamp(f):
     reqId, contract = f.id(), f.contract()
     f.into(contract, "includeExpired")
-    useRTH, what = f.bool(), next(f)
-    return reqId, contract, what, useRTH, f.int()
+    useRTH, what = f.bool("Use RTH"), next(f)
+    return reqId, contract, what, useRTH, f.int("Format Date")
 
 
 def _histogram_data(f):
     reqId, contract = f.id(), f.contract()
     f.into(contract, "includeExpired")
-    return reqId, contract, f.bool(), next(f)
+    return reqId, contract, f.bool("Use RTH"), next(f)
 
 
 def _historical_ticks(f):
     reqId, contract = f.id(), f.contract()
     f.into(contract, "includeExpired")
     return (
-        reqId, contract, next(f), next(f), f.int(), next(f), f.bool(), f.bool(),
-        f.tags(),
+        reqId, contract, next(f), next(f), f.int("Number Of Ticks"), next(f),
+        f.bool("Use RTH"), f.bool("Ignore Size"), f.tags(),
     )
 
 
 def _replace_fa(f):
-    faData, cxml = f.int(), next(f)
+    faData, cxml = f.int("Fa Data Type"), next(f)
     return f.id(), faData, cxml
 
 
@@ -337,13 +537,18 @@ def _versioned(read):
     return reading
 
 
-def _scalars(kinds, versioned=True):
+def _scalars(kinds, *displays, versioned=True):
     """A message of plain fields, read in order: r the request's own number,
-    i an int, f a float, s a string, b a bool, t a list of tags."""
+    i an int, f a float, s a string, b a bool, t a list of tags. ``displays``
+    are the names a gateway states for its number reads — its ints, floats
+    and bools, in order — where it states one."""
 
     def read(f):
-        read_one = {"r": f.id, "i": f.int, "f": f.float, "s": lambda: next(f),
-                    "b": f.bool, "t": f.tags}
+        named = iter(displays)
+        read_one = {"r": f.id, "i": lambda: f.int(next(named, "")),
+                    "f": lambda: f.float(next(named, "")),
+                    "b": lambda: f.bool(next(named, "")),
+                    "s": lambda: next(f), "t": f.tags}
         return tuple([read_one[kind]() for kind in kinds])
 
     return _versioned(read) if versioned else read
@@ -357,21 +562,23 @@ REQUESTS = {
     3: ("placeOrder", _place_order),
     4: ("cancelOrder", _scalars("rs")),
     5: ("reqOpenOrders", _scalars("")),
-    6: ("reqAccountUpdates", _scalars("bs")),
+    6: ("reqAccountUpdates", _scalars("bs", "Account Request Type")),
     7: ("reqExecutions", _versioned(lambda f: (f.id(), f.into(ExecutionFilter(), (
         "clientId acctCode time symbol secType exchange side"
     ))))),
-    8: ("reqIds", _scalars("i")),
+    8: ("reqIds", _scalars("i", "Num Ids")),
     9: ("reqContractDetails", _versioned(_contract_details)),
-    10: ("reqMktDepth", _versioned(lambda f: (f.id(), f.contract(), f.int(), f.bool(), f.tags()))),
-    11: ("cancelMktDepth", _scalars("rb")),
-    12: ("reqNewsBulletins", _scalars("b")),
+    10: ("reqMktDepth", _versioned(lambda f: (
+        f.id(), f.contract(), f.int("rows"), f.bool("Is Smart Depth"), f.tags(),
+    ))),
+    11: ("cancelMktDepth", _scalars("rb", "Is Smart Depth")),
+    12: ("reqNewsBulletins", _scalars("b", "Download Days Msgs")),
     13: ("cancelNewsBulletins", _scalars("")),
-    14: ("setServerLogLevel", _scalars("i")),
-    15: ("reqAutoOpenOrders", _scalars("b")),
+    14: ("setServerLogLevel", _scalars("i", "Log Level")),
+    15: ("reqAutoOpenOrders", _scalars("b", "autoBind")),
     16: ("reqAllOpenOrders", _scalars("")),
     17: ("reqManagedAccts", _scalars("")),
-    18: ("requestFA", _scalars("i")),
+    18: ("requestFA", _scalars("i", "Fa Data Type")),
     19: ("replaceFA", _versioned(_replace_fa)),
     20: ("reqHistoricalData", _historical_data),
     21: ("exerciseOptions", _versioned(_exercise_options)),
@@ -381,17 +588,18 @@ REQUESTS = {
     25: ("cancelHistoricalData", _scalars("r")),
     49: ("reqCurrentTime", _scalars("")),
     50: ("reqRealTimeBars", _versioned(lambda f: (
-        f.id(), f.contract(), f.int(), next(f), f.bool(), f.tags(),
+        f.id(), f.contract(), f.int("barSize"), next(f), f.bool("Use RTH"),
+        f.tags(),
     ))),
     51: ("cancelRealTimeBars", _scalars("r")),
     52: ("reqFundamentalData", _versioned(_fundamental_data)),
     53: ("cancelFundamentalData", _scalars("r")),
-    54: ("calculateImpliedVolatility", _versioned(_calculation)),
-    55: ("calculateOptionPrice", _versioned(_calculation)),
+    54: ("calculateImpliedVolatility", _versioned(lambda f: _calculation(f, "Option Price"))),
+    55: ("calculateOptionPrice", _versioned(lambda f: _calculation(f, "Volatility"))),
     56: ("cancelCalculateImpliedVolatility", _scalars("r")),
     57: ("cancelCalculateOptionPrice", _scalars("r")),
     58: ("reqGlobalCancel", _scalars("")),
-    59: ("reqMarketDataType", _scalars("i")),
+    59: ("reqMarketDataType", _scalars("i", "Market Data Type")),
     61: ("reqPositions", _scalars("")),
     62: ("reqAccountSummary", _scalars("rss")),
     63: ("cancelAccountSummary", _scalars("r")),
@@ -399,7 +607,7 @@ REQUESTS = {
     65: ("verifyRequest", _scalars("ss")),
     66: ("verifyMessage", _scalars("s")),
     67: ("queryDisplayGroups", _scalars("r")),
-    68: ("subscribeToGroupEvents", _scalars("ri")),
+    68: ("subscribeToGroupEvents", _scalars("ri", "Group Id")),
     69: ("updateDisplayGroup", _scalars("rs")),
     70: ("unsubscribeFromGroupEvents", _scalars("r")),
     71: ("startApi", _versioned(_start_api)),
@@ -407,9 +615,9 @@ REQUESTS = {
     73: ("verifyAndAuthMessage", _scalars("ss")),
     74: ("reqPositionsMulti", _scalars("rss")),
     75: ("cancelPositionsMulti", _scalars("r")),
-    76: ("reqAccountUpdatesMulti", _scalars("rssb")),
+    76: ("reqAccountUpdatesMulti", _scalars("rssb", "Ledger And NLV")),
     77: ("cancelAccountUpdatesMulti", _scalars("r")),
-    78: ("reqSecDefOptParams", _scalars("rsssi", versioned=False)),
+    78: ("reqSecDefOptParams", _scalars("rsssi", "Underlying Con Id", versioned=False)),
     79: ("reqSoftDollarTiers", _scalars("r", versioned=False)),
     80: ("reqFamilyCodes", _scalars("", versioned=False)),
     81: ("reqMatchingSymbols", _scalars("rs", versioned=False)),
@@ -417,20 +625,23 @@ REQUESTS = {
     83: ("reqSmartComponents", _scalars("rs", versioned=False)),
     84: ("reqNewsArticle", _scalars("rsst", versioned=False)),
     85: ("reqNewsProviders", _scalars("", versioned=False)),
-    86: ("reqHistoricalNews", _scalars("risssit", versioned=False)),
+    86: ("reqHistoricalNews", _scalars("risssit", "Con Id", "Total Results", versioned=False)),
     87: ("reqHeadTimeStamp", _head_time_stamp),
     88: ("reqHistogramData", _histogram_data),
     89: ("cancelHistogramData", _scalars("r", versioned=False)),
     90: ("cancelHeadTimeStamp", _scalars("r", versioned=False)),
-    91: ("reqMarketRule", _scalars("i", versioned=False)),
+    91: ("reqMarketRule", _scalars("i", "Market Rule Id", versioned=False)),
     92: ("reqPnL", _scalars("rss", versioned=False)),
     93: ("cancelPnL", _scalars("r", versioned=False)),
     94: ("reqPnLSingle", _scalars("rssi", versioned=False)),
     95: ("cancelPnLSingle", _scalars("r", versioned=False)),
     96: ("reqHistoricalTicks", _historical_ticks),
-    97: ("reqTickByTickData", lambda f: (f.id(), f.contract(), next(f), f.int(), f.bool())),
+    97: ("reqTickByTickData", lambda f: (
+        f.id(), f.contract(), next(f), f.int("Number Of Ticks"),
+        f.bool("Ignore Size"),
+    )),
     98: ("cancelTickByTickData", _scalars("r", versioned=False)),
-    99: ("reqCompletedOrders", _scalars("b", versioned=False)),
+    99: ("reqCompletedOrders", _scalars("b", "Api Only", versioned=False)),
     100: ("reqWshMetaData", _scalars("r", versioned=False)),
     101: ("cancelWshMetaData", _scalars("r", versioned=False)),
     102: ("reqWshEventData", lambda f: (f.id(), f.into(WshEventData(), (
@@ -465,11 +676,13 @@ def read(msg):
         # read so far: its text stands as it is.
         raise
     except StopIteration:
-        raise Unreadable(f"the message {msg!r} ends before {request} does", f.reqId) from None
+        raise Unreadable(f"the message ends before {request} does", f.reqId) from None
     except (KeyError, ValueError, TypeError) as why:
-        raise Unreadable(
-            f"the message {msg!r} does not read as {request}: {why!r}", f.reqId,
-        ) from why
+        # A plain statement, as a gateway states one: neither the raw message
+        # nor a Python exception ever reaches a program.
+        raise Unreadable(f"the message does not read as {request}", f.reqId) from why
     if not f.done():
-        raise Unreadable(f"the message {msg!r} has fields past the end of {request}", f.reqId)
+        raise Unreadable(
+            f"the message has fields past the end of {request}", f.reqId,
+        )
     return request, args
