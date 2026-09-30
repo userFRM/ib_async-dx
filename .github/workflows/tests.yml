@@ -68,6 +68,11 @@ jobs:
             rm -rf "$RUNNER_TEMP/venv"
             echo "::endgroup::"
           done
+      - name: The published test counts state what the suite collects
+        run: |
+          python -m venv "$RUNNER_TEMP/counts"
+          "$RUNNER_TEMP/counts/bin/pip" install -q dist/ibkr_dx-*.whl pkg/ib_async_dx-*.whl pytest pytest-asyncio
+          "$RUNNER_TEMP/counts/bin/python" scripts/check_published_counts.py
 
   # The wheel beside the engine as a release builds it: without the test
   # hooks, which the suite needs and a user's install never has.

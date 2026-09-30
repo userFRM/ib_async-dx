@@ -22,11 +22,12 @@ CI builds the engine from source with its test hooks, at the engine commit this
 package is tested against (`c1852350`), and runs `tests/python` on every push
 to `main` and every pull request, on Python 3.11, 3.13 and free-threaded
 3.14t, against this package installed from the wheel and from the source
-distribution it builds, never from the checkout. It also installs the wheel
-beside the engine built as a release builds it, without its test hooks, and
-imports it. The workflow passes no credentials, so there the two live tests are
-skipped; they run against the venue locally, with `IB_USERNAME` and
-`IB_PASSWORD` set.
+distribution it builds, never from the checkout. The same runs fail when a
+test count the book or the README publishes differs from what the suite
+collects. It also installs the wheel beside the engine built as a release
+builds it, without its test hooks, and imports it. The workflow passes no
+credentials, so there the two live tests are skipped; they run against the
+venue locally, with `IB_USERNAME` and `IB_PASSWORD` set.
 
 A release is the Python package and the Rust client together. Its workflow
 refuses a tag until the Rust client is in the repository and nothing on this
