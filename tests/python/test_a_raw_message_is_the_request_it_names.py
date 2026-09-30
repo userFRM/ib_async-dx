@@ -321,6 +321,36 @@ def test_a_message_that_does_not_read_is_refused_as_320(caplog):
     assert client._sent == 3
 
 
+#: A gateway's refusal of a margin percent, with the value it states.
+_PERCENT = (
+    "Error reading request: The value you have entered {} is invalid.\n"
+    "Please enter percent within a range of (0, 100)."
+)
+
+
+@pytest.mark.parametrize("percent,stated", [
+    (0, "0"),          # their dataclass default, which no gateway takes
+    (150, "150"),
+    (-5, "-5"),
+    (None, "null"),    # an empty field is null to a gateway, and it says so
+    (10.0, "10.0"),    # a float on a field typed as an int
+])
+def test_a_margin_percent_a_gateway_refuses_is_refused_as_one(percent, stated):
+    """A margin condition's percent a gateway does not take — one that does
+    not parse as an integer, or parses outside 1..99 — is refused before
+    anything is sent: 320, the gateway's own text, under the order's number."""
+    client = _client()
+    heard = []
+    client.wrapper.ib.errorEvent += lambda *args: heard.append(args[:3])
+    order = ib_async.LimitOrder("BUY", 10, 100.0)
+    order.conditions = [ib_async.MarginCondition(percent=percent)]
+    client.placeOrder(7, CONTRACT, order)
+    assert client._client.calls == [] and heard == []
+    client._callbacks.begin_pass()
+    assert heard == [(7, 320, _PERCENT.format(stated))]
+    assert client._sent == 1
+
+
 def test_a_message_naming_no_request_is_logged_and_unanswered(caplog):
     """As a gateway treats a request type it does not know: said in its log,
     and nothing answers it. An empty message is nothing to send."""

@@ -1449,7 +1449,7 @@ _UNSET_INTEGER = 2147483647
 def _unreadable(why):
     """A request a gateway could not read off their client's message, as it
     refuses one: code, text and no advanced reject."""
-    return 320, f"Error reading request:{why}", ""
+    return 320, f"Error reading request: {why}", ""
 
 
 #: How their order conditions say one joins the next, as the engine says it:

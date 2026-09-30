@@ -25,6 +25,16 @@ _CONTRACT = (
 )
 
 
+#: A gateway's refusal of a margin percent it does not take, with the value
+#: it states: the raw field where it does not parse, the number where it
+#: parses outside the range, and "null" for an empty field, which is null to
+#: a gateway.
+_INVALID_PERCENT = (
+    "The value you have entered {} is invalid.\n"
+    "Please enter percent within a range of (0, 100)."
+)
+
+
 class Unreadable(ValueError):
     """A message that does not read as the request it names.
 
@@ -70,6 +80,21 @@ class _Fields:
         field = next(self)
         return bool(int(field)) if field else False
 
+    def percent(self, raw):
+        """A margin condition's percent, which a gateway does not read as the
+        type of its default: it takes the raw field — an empty one as null —
+        parses it as an integer and requires it strictly inside (0, 100), and
+        refuses what it does not take with the percent-range text under the
+        number read so far."""
+        try:
+            value = int(raw)
+        except ValueError:
+            stated = raw if raw else "null"
+            raise Unreadable(_INVALID_PERCENT.format(stated), self.reqId) from None
+        if not 0 < value < 100:
+            raise Unreadable(_INVALID_PERCENT.format(value), self.reqId) from None
+        return value
+
     def tags(self):
         """A list of tags and values, which ib_async writes as one field."""
         return [TagValue(*pair.split("=", 1)) for pair in next(self).split(";") if pair]
@@ -81,7 +106,11 @@ class _Fields:
         fields = {f.name: f for f in dataclasses.fields(obj)}
         for name in names.split():
             field, default = next(self), fields[name].default
-            if default is dataclasses.MISSING or type(default) is str:
+            if name == "percent":
+                # A margin condition's percent alone is judged as a gateway
+                # judges it, not read as the type of its default.
+                value = self.percent(field)
+            elif default is dataclasses.MISSING or type(default) is str:
                 value = field
             elif not field:
                 value = default
@@ -431,6 +460,10 @@ def read(msg):
     f = _Fields(fields[1:])
     try:
         args = reading(f)
+    except Unreadable:
+        # A field already refused as a gateway refuses it, under the number
+        # read so far: its text stands as it is.
+        raise
     except StopIteration:
         raise Unreadable(f"the message {msg!r} ends before {request} does", f.reqId) from None
     except (KeyError, ValueError, TypeError) as why:
