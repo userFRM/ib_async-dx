@@ -76,8 +76,10 @@ ib_async's own, so the [bugs fixed](./beyond.md#ib_asyncs-bugs-fixed) on
 - **A login that fails raises `ConnectionError`**, `apiError` says why, and the
   client reads disconnected, as their client fails a connect.
 - **A session the engine ends as it opens** fails the connect, with nothing
-  said on `disconnectedEvent`: their client says nothing of a socket that
-  closed before the API was ready either.
+  said on `disconnectedEvent`. Their client does state such a close, on
+  `apiError` and with a client-id sentence asking whether the id is already
+  in use, and skips only the end signals; failing the connect is this
+  bridge's choice.
 - **A session the engine ends once open** is handled as their client handles a
   dropped socket, once: every waiting request fails, `disconnectedEvent`
   fires, and delivery stops. A pass that raises ends the session the same way,

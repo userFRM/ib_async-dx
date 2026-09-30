@@ -553,9 +553,10 @@ class EndsAtOnce(OfflineEngine):
 
 
 def test_a_session_that_ends_as_it_opens_fails_the_connect_and_stops(monkeypatch):
-    """The connect raises, ib_async's apiError says why, and nothing more is
-    done for the session: no passes, and no disconnectedEvent for a session
-    that never opened, as ib_async's client says nothing of one either."""
+    """The connect raises, ib_async's apiError says why, and nothing follows
+    for the session: no passes, and no disconnectedEvent for a session that
+    never opened — ib_async's client skips only the end signals on such a
+    close; failing the connect is this bridge's choice."""
     monkeypatch.setattr(ibkr_dx, "EClient", EndsAtOnce)
     passes = _counting_passes(monkeypatch)
     ib = ib_async_dx.attach(ib_async.IB())

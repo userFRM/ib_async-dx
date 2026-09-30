@@ -395,8 +395,10 @@ class IbkrDxClient:
         socket closes. The close is logged and stated on ``apiError``, waiting
         requests fail, and ``apiEnd`` fires, which their ``IB`` hears as
         ``disconnectedEvent``. Said once; and of a session still opening, not
-        at all: the connect fails instead, as their client says nothing of a
-        socket that closed before the API was ready.
+        at all: the connect fails instead. That is this bridge's choice —
+        their client does state such a close, on ``apiError`` and with a
+        client-id sentence asking whether the id is already in use, and
+        skips only the end signals (client.py:418-440).
 
         The prices this pass stated before the end reach their tickers first,
         as what a socket carried before it closed is read before the close.
