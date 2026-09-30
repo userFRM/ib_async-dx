@@ -198,7 +198,11 @@ A few details are worth knowing:
 - A request made while not connected raises `ConnectionError("Not connected")`,
   as their client's does. A request reached by name on `ib.client` takes its
   arguments as their client's method does, by position or by keyword; `connect`
-  and `run` on it are their client's own, and `reset` ends the session.
+  and `run` on it are their client's own, and `reset` ends the session. What
+  leaves for the engine is paced as their client paces what it writes to a
+  gateway: at most `MaxRequests` per `RequestsInterval` on the loop's clock,
+  `throttleStart` and `throttleEnd` said around a wait, and 0 disables the
+  pacing.
 - Request ids stop at the widest a request can carry: the rest of the range
   is the engine's own. An account whose ids reach it has `getReqId()` raise
   `OverflowError` rather than number a request the engine refuses.
@@ -245,11 +249,8 @@ Some of what their `IB` reads off its client answers for a transport that has
 no socket. `connectionStats()` counts the messages each way, as their client
 does: a request is one sent, and what reaches their wrapper one received, over
 the session since it opened. Its byte counts are the engine's count of the
-session's protocol bytes with the venue. `throttleStart` and `throttleEnd` never
-fire, and `MaxRequests` and `RequestsInterval` are theirs and set nothing:
-their client paces what it writes to a gateway's socket, and nothing between
-the program and the venue paces requests here. And their client's `conn`, the
-socket connection, is not there.
+session's protocol bytes with the venue. And their client's `conn`, the socket
+connection, is not there.
 
 Everything on their `IB` is routed. The rest of what differs is in
 [Limits](./limits.md).
