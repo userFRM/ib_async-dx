@@ -109,10 +109,10 @@ the one layer that knew there was a socket.
 
 ## Status
 
-Under active development. The Python package is here with its suite: 311
-tests, 309 of which run offline on every push to `main` and every pull
-request, on Python 3.11, 3.13 and free-threaded 3.14t, and 2 that need a live
-login. ib_async's own
+Under active development. The Python package is here with its suite: 318
+tests, 315 of which run offline on every push to `main` and every pull
+request, on Python 3.11, 3.13 and free-threaded 3.14t, 2 that need a live
+login, and 1 a Python version condition excludes. ib_async's own
 suite is written to run against the engine too, and has not been run against
 the venue at this revision; see [Evidence](./evidence.md).
 
