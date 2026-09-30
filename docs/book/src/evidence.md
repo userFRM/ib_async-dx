@@ -14,7 +14,7 @@ test, a script, or a recorded server response — not from reading the code.
 
 | Suite | Count | Needs a session |
 | --- | ---: | --- |
-| `tests/python` | 303 | 2 of them. The other 301 run offline |
+| `tests/python` | 305 | 2 of them. The other 303 run offline |
 | `tests/ib_async_upstream` | ib_async's own suite, 3 tests at 2.1.0 (`ab629f34c1`), written to run on the engine; not run against the venue at this revision | Yes |
 | `scripts/` | 3 checks against a paper account; not run against the venue at this revision | Yes |
 
@@ -149,6 +149,7 @@ a disconnect counted during a login drops the session it opens.
 | A program away from its loop queues no passes, and passes go on while the loop runs | `test_a_program_that_leaves_the_loop_queues_no_passes` |
 | A loop closed without `disconnect()` leaves no pass running | `test_a_loop_closed_without_disconnect_leaves_nothing_running` |
 | A session that ends as it opens fails the connect, says why on `apiError`, and nothing more is done for it | `test_a_session_that_ends_as_it_opens_fails_the_connect_and_stops` |
+| A session the engine ends once open says "Peer closed connection." on `apiError` and logs it while the session still reads connected, before `apiEnd` | `test_an_unexpected_end_says_peer_closed_connection_before_apiEnd` |
 | A refused login raises `ConnectionError`, says why on `apiError`, and leaves the client disconnected | `test_a_login_refused_raises_ConnectionError_and_says_so` |
 | `timeout` does not bound the login; were the engine to wait for the next id after it, `timeout` would bound that (a guard: the engine answers at once) | `test_timeout_bounds_the_wait_after_the_login_not_the_login` |
 | Connecting an attached `IB` that is connected ends that session and opens a new one | `test_connecting_an_attached_ib_that_is_connected_opens_a_new_session` |

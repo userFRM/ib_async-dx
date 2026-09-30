@@ -392,11 +392,11 @@ class IbkrDxClient:
 
     def _session_ended(self):
         """The engine ended the session: what ib_async's client does when its
-        socket closes. Waiting requests fail, and ``apiEnd`` fires, which
-        their ``IB`` hears as ``disconnectedEvent``. Said once; and of a
-        session still opening, not at all: the connect fails instead, as
-        their client says nothing of a socket that closed before the API was
-        ready.
+        socket closes. The close is logged and stated on ``apiError``, waiting
+        requests fail, and ``apiEnd`` fires, which their ``IB`` hears as
+        ``disconnectedEvent``. Said once; and of a session still opening, not
+        at all: the connect fails instead, as their client says nothing of a
+        socket that closed before the API was ready.
 
         The prices this pass stated before the end reach their tickers first,
         as what a socket carried before it closed is read before the close.
@@ -410,6 +410,14 @@ class IbkrDxClient:
             self.connState = IbkrDxClient.DISCONNECTED
             return
         self._callbacks.end_pass()
+        # As their client says a socket the peer closed while the API was up:
+        # the error logged and stated before the end, while the session still
+        # reads connected (client.py:418-440). A caller who asked to stop
+        # hears none of it: a disconnect retires the session first, and this
+        # is not reached.
+        msg = "Peer closed connection."
+        _logger.error(msg)
+        self.apiError.emit(msg)
         self._retire()
         self.wrapper.setEventsDone()
         self.wrapper.connectionClosed()

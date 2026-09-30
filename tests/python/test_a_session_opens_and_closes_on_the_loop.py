@@ -576,6 +576,39 @@ def test_a_session_that_ends_as_it_opens_fails_the_connect_and_stops(monkeypatch
     assert not ib.isConnected()
 
 
+def test_an_unexpected_end_says_peer_closed_connection_before_apiEnd(monkeypatch, caplog):
+    """As ib_async's client says a socket that closed while the API was up:
+    the error logged and stated on `apiError` before the session is reset and
+    `apiEnd` fires — programs hook `apiError` to hear a session die, and
+    through it alone can tell an abnormal close from a requested one."""
+    monkeypatch.setattr(ibkr_dx, "EClient", OfflineEngine)
+    monkeypatch.delenv("IB_USERNAME", raising=False)
+    monkeypatch.delenv("IB_PASSWORD", raising=False)
+    ib = ib_async_dx.attach(ib_async.IB())
+    heard, states = [], []
+
+    def on_api_error(msg):
+        heard.append(("apiError", msg))
+        states.append(ib.isConnected())
+
+    ib.client.apiError += on_api_error
+    ib.client.apiEnd += lambda: heard.append(("apiEnd",))
+
+    async def main():
+        await ib.connectAsync(fetchFields=StartupFetchNONE)
+        ib.client._client._test_end_session()
+        await asyncio.sleep(0.1)
+
+    with caplog.at_level(logging.ERROR, logger="ib_async_dx"):
+        asyncio.run(main())
+    assert heard == [("apiError", "Peer closed connection."), ("apiEnd",)]
+    assert states == [True], "stated while the session still reads connected"
+    assert [
+        r for r in caplog.records if r.getMessage() == "Peer closed connection."
+    ], "and logged"
+    assert not ib.isConnected()
+
+
 class Refused(OfflineEngine):
     def connect(self, **logon):
         raise RuntimeError("Connection failed: the password was not accepted")
