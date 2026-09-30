@@ -9,6 +9,7 @@ reach the engine exactly as the same request made by name does.
 
 import copy
 import dataclasses
+import decimal
 import inspect
 import logging
 import math
@@ -41,7 +42,12 @@ class Recording:
 
 def _seen(value):
     """An engine object as the fields it holds, so two can be compared."""
-    if isinstance(value, (str, bytes, int, float, bool, type(None))):
+    if isinstance(
+        value, (str, bytes, int, float, bool, decimal.Decimal, type(None))
+    ):
+        # A decimal — the engine states an order's sizes as one — is a
+        # figure, not an object to walk: its own attributes are figures
+        # again, without end.
         return value
     if isinstance(value, (list, tuple)):
         return [_seen(v) for v in value]
