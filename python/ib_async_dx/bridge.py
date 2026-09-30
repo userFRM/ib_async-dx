@@ -27,6 +27,7 @@ started in the same context, or to `IB_USERNAME` and `IB_PASSWORD`.
 
 import asyncio
 import collections
+import contextlib
 import contextvars
 import dataclasses
 import decimal
@@ -144,7 +145,7 @@ class IbkrDxClient:
         # client already resolves a callback under the reference client's
         # spelling, which is the spelling ib_async's wrapper uses.
         self._callbacks = _LoopBound(wrapper)
-        self._callbacks.connectionClosed = self._session_ended
+        self._callbacks.connectionClosed = self._engine_closed
         self._client = _ibkr_dx.EClient(self._callbacks)
 
         # Where this session is kept between runs. The venue answers a request
@@ -371,6 +372,7 @@ class IbkrDxClient:
         # their wrapper has been cleared, as their client's buffer is.
         self._callbacks._priced.clear()
         self._callbacks.refused.clear()
+        self._callbacks.held.clear()
         if self._pass is not None:
             self._pass.cancel()
             self._pass = None
@@ -403,15 +405,30 @@ class IbkrDxClient:
         self.wrapper.connectionClosed()
         self.apiEnd.emit()
 
+    def _engine_closed(self):
+        """The engine's `connectionClosed`: the session ended, heard on the
+        loop. A login given up on closes the session it opened on an engine
+        of its own, which says so on the login's thread: that is not the
+        session this client holds."""
+        self._callbacks.hear(self._session_ended)
+
     def _ended_underneath(self):
         """The session ends as one does when the gateway a program is
         connected to is stopped: as `_session_ended` says it. A login still
-        running is let go of."""
-        if self.isConnected():
-            self._client.disconnect()
-            self._session_ended()
-        else:
+        running is let go of.
+
+        The engine says the close inside its disconnect, heard once the call
+        has returned; ended from another thread, it is said here. A handler
+        that connected again on hearing it has a session of its own, which
+        this leaves alone."""
+        if not self.isConnected():
             self.disconnect()
+            return
+        attempt = self._generation
+        with self._callbacks.after_the_call():
+            self._client.disconnect()
+        if attempt == self._generation:
+            self._session_ended()
 
     def _next_pass(self, attempt):
         """A pass, on the loop, and the next one after it, for as long as the
@@ -420,18 +437,19 @@ class IbkrDxClient:
         A pass that raises ends the session, as their transport closes a
         socket whose data it could not handle: once, with every waiting
         request failed.
+
+        The next is due before this one is made. A handler that waits on the
+        session, as a blocking call does under ``util.startLoop()``, turns
+        the loop inside this pass, and what it waits for comes on the next.
         """
         if attempt != self._generation:
             return
+        self._pass = self._loop.call_later(PASS_INTERVAL, self._next_pass, attempt)
         try:
             self._pass_once()
         except Exception:
             _logger.exception("The session's delivery failed, and the session is ended")
-            self._client.disconnect()
-            self._session_ended()
-        finally:
-            if attempt == self._generation:
-                self._pass = self._loop.call_later(PASS_INTERVAL, self._next_pass, attempt)
+            self._ended_underneath()
 
     def _pass_once(self):
         """One dispatch, then the boundary ib_async flushes on.
@@ -449,8 +467,9 @@ class IbkrDxClient:
         """
         if self.connState == IbkrDxClient.DISCONNECTED:
             return
-        self._callbacks.begin_pass()
-        self._client.poll()
+        with self._callbacks.after_the_call():
+            self._callbacks.begin_pass()
+            self._client.poll()
         self._callbacks.end_pass()
         if self._callbacks.arrived:
             self._callbacks.arrived = False
@@ -901,6 +920,10 @@ class _LoopBound:
         self.asking = 0
         #: Refusals stated inside a request call, for the next pass.
         self.refused = collections.deque()
+        #: Whether the engine is inside a call that says things, and what it
+        #: said there, to be heard once it has returned.
+        self.holding = False
+        self.held = collections.deque()
         #: The thread running the loop, set as a session opens. Nothing is
         #: delivered from any other.
         self.thread = threading.get_ident()
@@ -911,6 +934,7 @@ class _LoopBound:
         self._sizes.clear()
         self._priced.clear()
         self.refused.clear()
+        self.held.clear()
         self.arrived = False
         self.received = 0
 
@@ -931,8 +955,42 @@ class _LoopBound:
         are made again on the loop. A login given up on can still announce its
         session there, after another session has opened.
         """
+        self.hear(lambda: self._hand(method, args))
+
+    def hear(self, call):
+        """What the engine said, on the loop's thread, once the engine call
+        it was said in has returned (see `after_the_call`)."""
         if threading.get_ident() != self.thread:
             return
+        if self.holding:
+            self.held.append(call)
+        else:
+            call()
+
+    @contextlib.contextmanager
+    def after_the_call(self):
+        """What the engine says inside a pass or a close, heard in its order
+        once the call has returned.
+
+        The engine holds the session's turn while it reads and while it
+        closes, and calls back inside that. A handler run there that waited on
+        the session waited on a turn its own caller held: a connect made on
+        hearing the session end never logged in, and a blocking request under
+        ``util.startLoop()`` was never answered, since a read inside a read
+        delivers nothing.
+        """
+        if self.holding or threading.get_ident() != self.thread:
+            yield
+            return
+        self.holding = True
+        try:
+            yield
+        finally:
+            self.holding = False
+            while self.held:
+                self.held.popleft()()
+
+    def _hand(self, method, args):
         if not self.arrived:
             self.arrived = True
             arrived = getattr(self._wrapper, "tcpDataArrived", None)

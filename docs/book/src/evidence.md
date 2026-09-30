@@ -142,7 +142,7 @@ a disconnect counted during a login drops the session it opens.
 | Of three connects made at once, the last is left open | `test_of_three_connects_at_once_the_last_is_left_open` |
 | A `disconnect()` from a handler the connect runs ends the connect | `test_a_disconnect_from_a_handler_during_the_connect_ends_it` |
 | A login given up on does not hold the program open | `test_a_login_given_up_on_does_not_hold_the_program_open` |
-| A login given up on reaches nothing and keeps nothing, when the engine installs its session after the disconnect | `test_a_login_given_up_on_reaches_nothing_and_keeps_nothing` (2) |
+| A login given up on reaches nothing and keeps nothing, when the engine installs its session after the disconnect, and its engine's close does not end the later session | `test_a_login_given_up_on_reaches_nothing_and_keeps_nothing` (2) |
 | An interrupted `connect()` opens nothing later | `test_an_interrupted_connect_opens_nothing_later` |
 | A handler that ends the session ends the pass: no held price and no held refusal reaches the cleared wrapper | `test_a_handler_that_ends_the_session_mid_pass_ends_the_pass`, `test_a_handler_that_ends_the_session_leaves_the_refusals_behind_it` |
 | Their wrapper is called on the loop's thread only, what the engine announces from inside the login among it, and hears `connectAck`, `managedAccounts` and `nextValidId` there | `test_their_wrapper_is_called_on_the_loops_thread_only` |

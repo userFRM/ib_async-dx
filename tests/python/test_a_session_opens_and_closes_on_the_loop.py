@@ -121,8 +121,20 @@ def test_a_later_connect_retires_an_earlier_one_still_logging_in(gated, theirs):
         first, engine = await _logging_in(ib)
         gated.append(engine)
         second = asyncio.ensure_future(ib.connectAsync(fetchFields=StartupFetchNONE))
-        await asyncio.sleep(0.05)
-        latest = ib.client._client
+        # Waited on, not sampled after a fixed sleep: the later connect first
+        # retires the earlier task and waits for it to end, and only then
+        # gives itself an engine of its own — the earlier login is still in
+        # its engine, so neither can end the other's session. Read at a fixed
+        # moment, `_client` can still be the earlier engine, and the releases
+        # below free the login that was retired while the later one waits out
+        # its five seconds (the flake this test had, about one run in ten).
+        for _ in range(500):
+            await asyncio.sleep(0.01)
+            latest = ib.client._client
+            if isinstance(latest, Gated) and latest is not engine:
+                break
+        else:
+            raise AssertionError("the later connect never took an engine of its own")
         gated.append(latest)
         with pytest.raises(ConnectionError):
             await asyncio.wait_for(first, 1)
@@ -306,7 +318,11 @@ asyncio.run(main())
 class InstallsLate(OfflineEngine):
     """The first login installs its session and announces it after a
     disconnect has reached the engine, as the engine can when the disconnect
-    lands between its check and the install."""
+    lands between its check and the install.
+
+    Its disconnect says the close inside the call, on the caller's thread, as
+    the engine line the dependency range admits does: the login that drops the
+    session says so from there."""
 
     first = []
 
@@ -325,13 +341,19 @@ class InstallsLate(OfflineEngine):
         self.callbacks.managed_accounts("DU_EARLIER")
         self.callbacks.next_valid_id(1)
 
+    def disconnect(self):
+        super().disconnect()
+        self.callbacks.connectionClosed()
+
 
 @pytest.mark.parametrize("theirs", [False, True], ids=["IB", "attached ib_async.IB"])
 def test_a_login_given_up_on_reaches_nothing_and_keeps_nothing(monkeypatch, theirs):
     """Given up on, a login went on inside the engine, and what it announced
     from its thread reached the wrapper the later session shares. Its session
     is closed by the login that opened it, on an engine of its own: on the
-    later session's engine, that closed the later session."""
+    later session's engine, that closed the later session — as did the close
+    its engine said inside that disconnect, on the login's thread, wherever
+    the close was heard off the loop."""
     monkeypatch.setattr(ibkr_dx, "EClient", InstallsLate)
     monkeypatch.setattr(InstallsLate, "first", [])
     ib = ib_async_dx.attach(ib_async.IB()) if theirs else ib_async_dx.IB()
