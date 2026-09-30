@@ -14,7 +14,7 @@ test, a script, or a recorded server response — not from reading the code.
 
 | Suite | Count | Needs a session |
 | --- | ---: | --- |
-| `tests/python` | 302 | 2 of them. The other 300 run offline |
+| `tests/python` | 303 | 2 of them. The other 301 run offline |
 | `tests/ib_async_upstream` | ib_async's own suite, 3 tests at 2.1.0 (`ab629f34c1`), written to run on the engine; not run against the venue at this revision | Yes |
 | `scripts/` | 3 checks against a paper account; not run against the venue at this revision | Yes |
 
@@ -156,6 +156,7 @@ a disconnect counted during a login drops the session it opens.
 | `attach` to a connected `IB` ends its session first, and unties the old client | `test_attach_to_a_connected_ib_ends_its_session_first` |
 | `attach` names no client id | `test_attach_names_no_client_id` |
 | `connect`, `run`, `reset`, `MaxRequests`, `RequestsInterval` and `events` on the client mean what they mean on theirs | `test_the_client_level_names_mean_what_they_mean_in_ib_async` |
+| What leaves for the engine is paced: at most `MaxRequests` per `RequestsInterval`, the overflow deferred on the loop's clock, `throttleStart` and `throttleEnd` said around the wait, 0 letting the whole burst leave at once, and a session ended mid-throttle leaving nothing queued for the next | `test_requests_past_the_rate_leave_an_interval_later` |
 | A request reached by name on the client takes keywords | `test_a_request_reached_by_name_takes_keywords` |
 | A pass that raises ends the session once | `test_a_pass_that_raises_ends_the_session_once` |
 | What one pass delivers is one batch, on the loop | `test_what_one_pass_delivers_is_one_batch` |

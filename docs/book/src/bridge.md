@@ -232,11 +232,8 @@ Some of what their `IB` reads off its client answers for a transport that has
 no socket. `connectionStats()` counts the messages each way, as their client
 does: a request is one sent, and what reaches their wrapper one received, over
 the session since it opened. Its byte counts are zero: the engine does not
-count the bytes of its connections. `throttleStart` and `throttleEnd` never
-fire, and `MaxRequests` and `RequestsInterval` are theirs and set nothing:
-their client paces what it writes to a gateway's socket, and nothing between
-the program and the venue paces requests here. And their client's `conn`, the
-socket connection, is not there.
+count the bytes of its connections. And their client's `conn`, the socket
+connection, is not there.
 
 Everything on their `IB` is routed. The rest of what differs is in
 [Limits](./limits.md).
