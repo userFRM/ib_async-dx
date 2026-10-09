@@ -141,7 +141,7 @@ request numberable. On such an account no request can be numbered past the
 account's order ids, so a new order, a bracket and a what-if take the engine's
 next order id, which the engine accepts, and requests go on from the counter.
 The engine keeps that saved id in a file of its own, and
-[its documentation](https://userfrm.github.io/ibkr-dx/reference/venue-behaviour.html#order-ids-across-sessions)
+[its documentation](https://userfrm.github.io/ib-dx/reference/venue-behaviour.html#order-ids-across-sessions)
 says where and how to move it.
 
 **Their client's own messages are the requests they name.** `send` is their

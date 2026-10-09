@@ -201,7 +201,7 @@ All offline, in `tests/python`.
 
 These were measured on the engine this package runs on, with the client this
 package uses, and are recorded with the engine in
-[ibkr-dx's evidence](https://github.com/userFRM/ibkr-dx/blob/6878c2e91795d9d52ccae7c8e18088da91b627c6/docs/evidence.md),
+[ib-dx's evidence](https://github.com/userFRM/ib-dx/blob/6878c2e91795d9d52ccae7c8e18088da91b627c6/docs/evidence.md),
 as it stood when they were taken.
 
 | Capability | Status | What was seen |

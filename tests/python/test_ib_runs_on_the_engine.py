@@ -12,14 +12,14 @@ import pathlib
 import time
 
 import ib_async
-import ibkr_dx
+import ib_dx
 import pytest
 
 import ib_async_dx
 from ib_async_dx import StartupFetch, StartupFetchNONE
 
 
-class OfflineEngine(ibkr_dx.EClient):
+class OfflineEngine(ib_dx.EClient):
     """The engine, with its test session in place of a logon."""
 
     def connect(self, **logon):
@@ -44,7 +44,7 @@ class OfflineEngine(ibkr_dx.EClient):
 @pytest.fixture
 def connect(monkeypatch):
     """Connect an IB (a new ib_async_dx.IB unless one is given) offline."""
-    monkeypatch.setattr(ibkr_dx, "EClient", OfflineEngine)
+    monkeypatch.setattr(ib_dx, "EClient", OfflineEngine)
     monkeypatch.delenv("IB_USERNAME", raising=False)
     monkeypatch.delenv("IB_PASSWORD", raising=False)
     opened = []
@@ -80,7 +80,7 @@ def test_the_login_comes_from_the_environment_when_connect_names_none(connect, m
     logon = connect().client._client.logon
     assert (logon["username"], logon["password"]) == ("envuser", "envpass")
     # The session file is the bridge's, named for the account.
-    home = pathlib.Path.home() / ".ibkr_dx"
+    home = pathlib.Path.home() / ".ib_dx"
     assert logon["session_file"] == str(home / "session-envuser-paper")
 
 
@@ -226,7 +226,7 @@ def test_a_what_if_refused_with_321_ends_with_the_refusal(connect):
 def test_321_on_an_order_already_working_stays_a_warning(connect, monkeypatch):
     """A modification refused leaves the order live at the venue, which is
     why ib_async counts 321 as a warning: the trade is marked, and kept."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Placing)
+    monkeypatch.setattr(ib_dx, "EClient", Placing)
     ib = connect()
     heard = _heard(ib)
     trade = ib.placeOrder(SPY, ib_async.LimitOrder("BUY", 1, 1.0))
@@ -519,7 +519,7 @@ class Stating(OfflineEngine):
 
 
 def test_what_the_engine_states_is_carried_in_this_packages_types(connect, monkeypatch):
-    monkeypatch.setattr(ibkr_dx, "EClient", Stating)
+    monkeypatch.setattr(ib_dx, "EClient", Stating)
     ib = connect()
     extras = ib.tickerExtras(ib_async.Ticker())
     assert extras.sharesOutstanding == 1.5e9
@@ -689,9 +689,9 @@ def test_a_completed_connect_is_not_failed_by_what_follows_it(connect, monkeypat
     """ib_async's connect returns once it has emitted connectedEvent. The
     competing-session warning that followed failed it: a stamp that did not
     parse raised, and so did a handler that had disconnected."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Malformed)
+    monkeypatch.setattr(ib_dx, "EClient", Malformed)
     assert connect().isConnected(), "a stamp that does not parse"
-    monkeypatch.setattr(ibkr_dx, "EClient", Stating)
+    monkeypatch.setattr(ib_dx, "EClient", Stating)
     ib = ib_async_dx.IB()
     ib.connectedEvent += ib.disconnect
     assert connect(ib=ib) is ib
@@ -703,7 +703,7 @@ def test_the_competing_session_warning_is_this_packages_own(connect, monkeypatch
     carries only what ib_async itself says."""
     import logging
 
-    monkeypatch.setattr(ibkr_dx, "EClient", Stating)
+    monkeypatch.setattr(ib_dx, "EClient", Stating)
     with caplog.at_level(logging.WARNING):
         connect()
     [warning] = [r for r in caplog.records if "Another session" in r.getMessage()]
@@ -879,7 +879,7 @@ class Unanswered(Answering):
 
 
 def test_reqCorporateActions_asks_by_the_contracts_id_and_takes_the_answer(connect, monkeypatch):
-    monkeypatch.setattr(ibkr_dx, "EClient", Answering)
+    monkeypatch.setattr(ib_dx, "EClient", Answering)
     ib = connect()
     [action] = ib.reqCorporateActions(SPY, "20260101", "20261231")
     assert action == ib_async_dx.CorporateAction(
@@ -891,7 +891,7 @@ def test_reqCorporateActions_asks_by_the_contracts_id_and_takes_the_answer(conne
 
 
 def test_reqCorporateActions_given_up_withdraws_the_query(connect, monkeypatch):
-    monkeypatch.setattr(ibkr_dx, "EClient", Unanswered)
+    monkeypatch.setattr(ib_dx, "EClient", Unanswered)
     ib = connect()
     ib.RequestTimeout = 0.1
     with pytest.raises(TimeoutError):
@@ -908,7 +908,7 @@ def test_reqCorporateActions_needs_the_contracts_id(connect):
 
 
 def test_reqSpreadScan_takes_the_first_answer_and_cancels(connect, monkeypatch):
-    monkeypatch.setattr(ibkr_dx, "EClient", Answering)
+    monkeypatch.setattr(ib_dx, "EClient", Answering)
     ib = connect()
     scan = ib_async_dx.SpreadScan()
     [found] = ib.reqSpreadScan(SPY, scan)
@@ -924,7 +924,7 @@ def test_reqSpreadScan_takes_the_first_answer_and_cancels(connect, monkeypatch):
 
 
 def test_reqSpreadScan_unanswered_in_time_found_nothing(connect, monkeypatch):
-    monkeypatch.setattr(ibkr_dx, "EClient", Unanswered)
+    monkeypatch.setattr(ib_dx, "EClient", Unanswered)
     ib = connect()
     assert ib.reqSpreadScan(SPY, ib_async_dx.SpreadScan(), timeout=0.1) == []
     assert ib.client._client.asked[-1][0] == "cancel_mkt_data"
@@ -947,7 +947,7 @@ class Refusing(Answering):
 def test_reqSpreadScan_refused_cancels_nothing(connect, monkeypatch):
     """A subscription the venue refused is not up, so nothing is cancelled:
     the cancel would only be refused in turn."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Refusing)
+    monkeypatch.setattr(ib_dx, "EClient", Refusing)
     ib = connect()
     heard = _heard(ib)
     assert ib.reqSpreadScan(SPY, ib_async_dx.SpreadScan()) == []
@@ -966,7 +966,7 @@ def test_a_request_the_program_disconnects_under_ends_with_the_session(
     these waiting then ends as a request made while not connected does, and
     withdraws nothing: the session it was asked on is gone, and the number
     may already be the next session's."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Unanswered)
+    monkeypatch.setattr(ib_dx, "EClient", Unanswered)
     ib = connect()
     engine = ib.client._client
 
@@ -984,7 +984,7 @@ def test_a_request_the_program_disconnects_under_ends_with_the_session(
 
 
 def test_holdings_elsewhere_are_kept_apart(connect, monkeypatch):
-    monkeypatch.setattr(ibkr_dx, "EClient", Answering)
+    monkeypatch.setattr(ib_dx, "EClient", Answering)
     ib = connect()
     assert ib.positionsElsewhere() == [
         ib_async_dx.PositionElsewhere(265598, "AAPL", "STK", "USD", 10.0, 150.5, "Away"),

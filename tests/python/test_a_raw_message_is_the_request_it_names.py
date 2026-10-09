@@ -15,7 +15,7 @@ import logging
 import math
 
 import ib_async
-import ibkr_dx
+import ib_dx
 import pytest
 from ib_async.client import Client
 
@@ -35,7 +35,7 @@ class Recording:
         self.calls = []
 
     def __getattr__(self, name):
-        if not hasattr(ibkr_dx.EClient, name):
+        if not hasattr(ib_dx.EClient, name):
             raise AttributeError(name)
         return lambda *args: self.calls.append((name, [_seen(a) for a in args]))
 
@@ -293,7 +293,7 @@ def test_an_order_carries_what_their_client_writes_and_nothing_else():
     order.imbalanceOnly = True
     client.placeOrder(7, CONTRACT, order)
     [(name, (orderId, contract, placed))] = client._client.calls
-    unset = ibkr_dx.Order()
+    unset = ib_dx.Order()
     assert (name, orderId) == ("place_order", 7)
     assert placed["volatility"] == unset.volatility
     assert order.volatility is None, "cleared on the program's order, as their client clears it"

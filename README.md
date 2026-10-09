@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python version">
   <a href="https://github.com/userFRM/ib_async-dx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License"></a>
   <a href="https://userfrm.github.io/ib_async-dx/"><img src="https://img.shields.io/badge/docs-book-green.svg" alt="Docs"></a>
-  <a href="https://github.com/userFRM/ibkr-dx"><img src="https://img.shields.io/badge/engine-ibkr--dx-red.svg" alt="Engine: ibkr-dx"></a>
+  <a href="https://github.com/userFRM/ib-dx"><img src="https://img.shields.io/badge/engine-ibkr--dx-red.svg" alt="Engine: ib-dx"></a>
 </p>
 
 ## Contents
@@ -25,14 +25,14 @@
 
 **The honest parts** — [Questions](#questions) · [Testing](#testing)
 
-**Around it** — [Relationship to ibkr-dx](#relationship-to-ibkr-dx) · [Documentation](#documentation) · [Contributing](#contributing) · [Security](#security) · [Not affiliated](#not-affiliated) · [License and credits](#license-and-credits)
+**Around it** — [Relationship to ib-dx](#relationship-to-ib-dx) · [Documentation](#documentation) · [Contributing](#contributing) · [Security](#security) · [Not affiliated](#not-affiliated) · [License and credits](#license-and-credits)
 
 ## The two lines that change
 
 A program written against [ib_async](https://github.com/ib-api-reloaded/ib_async)
 talks to IB Gateway or Trader Workstation over a socket on localhost, and that
 process talks to the venue. ib_async-dx puts the
-[ibkr-dx](https://github.com/userFRM/ibkr-dx) engine where the socket was: it
+[ib-dx](https://github.com/userFRM/ib-dx) engine where the socket was: it
 logs in itself, holds the session inside your process, and the program above it
 stays as it is.
 
@@ -113,7 +113,7 @@ The engine first, then this package:
 ```bash
 # The engine, at the commit this package is tested against. It compiles
 # from source, so it needs the Rust toolchain.
-pip install "git+https://github.com/userFRM/ibkr-dx@c18523506144df7b9f81fdbb82b68405f24f13ea"
+pip install "git+https://github.com/userFRM/ib-dx@c18523506144df7b9f81fdbb82b68405f24f13ea"
 
 # This package, which brings ib_async 2.1 with it.
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
@@ -122,7 +122,7 @@ pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
 > [!NOTE]
 > Neither ib_async-dx nor the engine is on PyPI or crates.io yet, so both
 > install from their repositories.
-> The order matters: ib_async-dx names the engine (`ibkr-dx`) as a dependency,
+> The order matters: ib_async-dx names the engine (`ib-dx`) as a dependency,
 > and pip finds it only once the first line has installed it. The engine has no
 > release yet, so the line names the engine commit the suite runs against on
 > every push.
@@ -311,7 +311,7 @@ Coming: ib_async's model in Rust spelling — the same `IB`, the same calls and
 the same objects, named the way Rust names things — built on the engine's public
 API, so a call answers the same in both languages. It is not in this repository
 yet, and nothing above depends on it. Until it lands, a Rust program reaches the
-engine through [ibkr-dx](https://github.com/userFRM/ibkr-dx) directly.
+engine through [ib-dx](https://github.com/userFRM/ib-dx) directly.
 
 ## Notebooks
 
@@ -332,7 +332,7 @@ opens a paper session.
 
 ```bash
 git clone https://github.com/userFRM/ib_async-dx && cd ib_async-dx
-pip install "git+https://github.com/userFRM/ibkr-dx@c18523506144df7b9f81fdbb82b68405f24f13ea"
+pip install "git+https://github.com/userFRM/ib-dx@c18523506144df7b9f81fdbb82b68405f24f13ea"
 pip install -e . jupyter python-dotenv pandas
 jupyter lab notebooks
 ```
@@ -393,7 +393,7 @@ you need both at once.
 Yes. The session lives in your process, so it ends with it; a gateway held its
 login while a program restarted, and here each start is a login — on a live
 account, one that waits on the second factor. The session is kept in
-`~/.ibkr_dx/session-<user>-<paper|live>`, owner only and sealed with the
+`~/.ib_dx/session-<user>-<paper|live>`, owner only and sealed with the
 password, and a start naming a session the venue still holds is answered with a
 challenge rather than a full login. The venue lets a session go soon after its
 process ends, so that covers a quick restart only. `connect(sessionFile=...)`
@@ -460,10 +460,10 @@ release builds it.
 Locally:
 
 ```bash
-git clone https://github.com/userFRM/ibkr-dx
-git -C ibkr-dx checkout c18523506144df7b9f81fdbb82b68405f24f13ea
+git clone https://github.com/userFRM/ib-dx
+git -C ib-dx checkout c18523506144df7b9f81fdbb82b68405f24f13ea
 pip install maturin
-maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
+maturin build -m ib-dx/Cargo.toml --features python,extension-module,test-helpers -o dist
 pip install dist/*.whl
 pip install -e . pytest pytest-asyncio
 pytest tests/python -q
@@ -479,9 +479,9 @@ places, changes and withdraws a limit far from the market, and
 `order_round_trip.py` does the same on a contract that trades nearly around the
 clock.
 
-## Relationship to ibkr-dx
+## Relationship to ib-dx
 
-[ibkr-dx](https://github.com/userFRM/ibkr-dx) is the engine: it logs in, holds
+[ib-dx](https://github.com/userFRM/ib-dx) is the engine: it logs in, holds
 the connections a session runs on, speaks the venue's protocol, and exposes the
 TWS API's `EClient` and `EWrapper` in Rust and Python — plus the calls beyond the
 documented API. ib_async-dx is ib_async's API on top of it, and holds no
@@ -490,7 +490,7 @@ protocol code of its own.
 | Your program is written against | Use |
 | --- | --- |
 | ib_async | ib_async-dx |
-| The TWS API (`ibapi`, `EClient` / `EWrapper`) | [ibkr-dx](https://github.com/userFRM/ibkr-dx) |
+| The TWS API (`ibapi`, `EClient` / `EWrapper`) | [ib-dx](https://github.com/userFRM/ib-dx) |
 
 A fix to the engine reaches this package by reinstalling the engine.
 
@@ -552,7 +552,7 @@ registered trademarks of Interactive Brokers Group, Inc.
 
 ## License and credits
 
-[AGPL-3.0](https://github.com/userFRM/ib_async-dx/blob/main/LICENSE), the same as ibkr-dx.
+[AGPL-3.0](https://github.com/userFRM/ib_async-dx/blob/main/LICENSE), the same as ib-dx.
 
 ib_async's code is not copied, vendored or modified here: ib_async-dx runs the
 copy pip installs, as a dependency, under its own BSD-2-Clause licence. ib_async
@@ -560,7 +560,7 @@ continues [ib_insync](https://github.com/erdewit/ib_insync) by Ewald de Wit and
 is maintained by [ib-api-reloaded](https://github.com/ib-api-reloaded); thank
 you to all of them for the API worth keeping.
 
-Built on [ibkr-dx](https://github.com/userFRM/ibkr-dx), which began as a fork of
+Built on [ib-dx](https://github.com/userFRM/ib-dx), which began as a fork of
 [ibx](https://github.com/deepentropy/ibx) by DeepEntropy and Odyssée.
 
 - ib_async-dx: Copyright (C) 2026 userFRM

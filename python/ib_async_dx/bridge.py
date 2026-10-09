@@ -46,7 +46,7 @@ from eventkit import Event
 from ib_async.client import Client as _TheirClient
 from ib_async.ib import IB as _TheirIB
 
-import ibkr_dx as _ibkr_dx
+import ib_dx as _ib_dx
 
 from . import _messages
 
@@ -168,7 +168,7 @@ class IbkrDxClient:
         self._callbacks = _LoopBound(wrapper)
         self._callbacks.connectionClosed = self._engine_closed
         self._callbacks.client = self
-        self._client = _ibkr_dx.EClient(self._callbacks)
+        self._client = _ib_dx.EClient(self._callbacks)
 
         # Where this session is kept between runs. The venue answers a request
         # that names a session it still holds with a challenge rather than a
@@ -231,7 +231,7 @@ class IbkrDxClient:
             # The last login is still inside its engine, which drops what it
             # opens. This one gets an engine of its own, so neither can end
             # the other's session.
-            self._client = _ibkr_dx.EClient(self._callbacks)
+            self._client = _ib_dx.EClient(self._callbacks)
         engine = self._client
 
         def login():
@@ -361,7 +361,7 @@ class IbkrDxClient:
         session_file = self._session_file
         if session_file is None:
             kind = "paper" if paper else "live"
-            session_file = str(pathlib.Path.home() / ".ibkr_dx" / f"session-{username}-{kind}")
+            session_file = str(pathlib.Path.home() / ".ib_dx" / f"session-{username}-{kind}")
         elif session_file is False:
             session_file = None
         return username, password, paper, session_file
@@ -977,7 +977,7 @@ def _is_named_tuple(t):
 
     Their historical ticks are `NamedTuple`s rather than dataclasses, so a
     conversion that only knows dataclasses hands those straight through — and
-    a caller reading `tick.priceBid` off an ibkr_dx record finds a field spelled
+    a caller reading `tick.priceBid` off an ib_dx record finds a field spelled
     the other way.
     """
     return isinstance(t, type) and issubclass(t, tuple) and hasattr(t, "_fields")
@@ -998,7 +998,7 @@ def _their_type(name):
 
 
 def _field_of(value, name, wrapper=None):
-    """One field of an ibkr_dx record, under whichever name it goes by.
+    """One field of an ib_dx record, under whichever name it goes by.
 
     A moment is handed over as their own, because their records declare it as
     a datetime and a number read as one is an instant in 1970. ``wrapper`` is
@@ -1043,13 +1043,13 @@ def _execution_time(got, wrapper):
 
 
 def _as_theirs(value, wrapper=None):
-    """An ibkr_dx object, rebuilt as the same-named `ib_async` type.
+    """An ib_dx object, rebuilt as the same-named `ib_async` type.
 
     Both sides carry the reference client's own field names, so the conversion
     is driven by the `ib_async` dataclass rather than written out per type or
     per callback: a field only `ib_async` declares keeps its default, and
     neither side needs editing when the other gains one. Anything with no type
-    of that name in ib_async — a number, a string, an ibkr-dx-only type — is
+    of that name in ib_async — a number, a string, an ib-dx-only type — is
     handed over as it is.
 
     ``wrapper`` is ib_async's wrapper the value is on its way to: a moment is
@@ -1116,7 +1116,7 @@ def _as_theirs(value, wrapper=None):
 class _LoopBound:
     """ib_async's wrapper, reached under the names this engine calls.
 
-    A callback carries an ibkr_dx object; the `ib_async` wrapper expects its own.
+    A callback carries an ib_dx object; the `ib_async` wrapper expects its own.
     Every argument is rebuilt on the way through, by its own type name, so a
     callback nobody thought to list is carried too.
     """
@@ -1486,7 +1486,7 @@ def _as_ours(value):
         # A tag and its value is a record they spell as a tuple. Read as a
         # sequence it becomes two loose strings, which is not what either side
         # means by one; read as a record it is the pair this engine holds.
-        rebuilt = getattr(_ibkr_dx, type(value).__name__, None)
+        rebuilt = getattr(_ib_dx, type(value).__name__, None)
         return value if rebuilt is None else rebuilt(*value)
 
     if not dataclasses.is_dataclass(value):
@@ -1498,7 +1498,7 @@ def _as_ours(value):
         (
             found
             for kind in type(value).__mro__
-            if (found := getattr(_ibkr_dx, kind.__name__, None)) is not None
+            if (found := getattr(_ib_dx, kind.__name__, None)) is not None
         ),
         None,
     )
@@ -1552,7 +1552,7 @@ def attach(ib, username="", password="", paper=True, session_file=None,
     new one shares.
 
     The session is kept between runs, under this account's own file in
-    ``~/.ibkr_dx``. A venue answers a request that names a session it still holds
+    ``~/.ib_dx``. A venue answers a request that names a session it still holds
     with a challenge rather than a whole handshake. It lets a session go soon
     after the process holding it ends, so this covers a quick restart; a program
     started again later logs in afresh. Name another path to move it, or pass

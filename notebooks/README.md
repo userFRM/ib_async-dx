@@ -2,7 +2,7 @@
 
 Eight notebooks, one on each of ib_async's own subjects, written against
 [`ib_async`](https://github.com/ib-api-reloaded/ib_async) itself — its `IB`, its
-contracts, its events, its `util.df` — and run on the ibkr-dx engine instead of
+contracts, its events, its `util.df` — and run on the ib-dx engine instead of
 on a gateway.
 
 `ib_async` (BSD-2-Clause) is not copied or modified here: it is a dependency,
@@ -27,7 +27,7 @@ the login.
 ## Running them
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx@c18523506144df7b9f81fdbb82b68405f24f13ea"
+pip install "git+https://github.com/userFRM/ib-dx@c18523506144df7b9f81fdbb82b68405f24f13ea"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx" \
     jupyter python-dotenv pandas
 git clone https://github.com/userFRM/ib_async-dx

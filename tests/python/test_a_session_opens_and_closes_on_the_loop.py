@@ -15,7 +15,7 @@ import threading
 import time
 
 import ib_async
-import ibkr_dx
+import ib_dx
 import pytest
 from test_ib_runs_on_the_engine import SPY, OfflineEngine, connect  # noqa: F401  (a fixture)
 
@@ -58,7 +58,7 @@ async def _logging_in(ib, **kwargs):
 
 @pytest.fixture
 def gated(monkeypatch):
-    monkeypatch.setattr(ibkr_dx, "EClient", Gated)
+    monkeypatch.setattr(ib_dx, "EClient", Gated)
     monkeypatch.delenv("IB_USERNAME", raising=False)
     monkeypatch.delenv("IB_PASSWORD", raising=False)
     engines = []
@@ -105,7 +105,7 @@ def test_a_disconnect_during_the_login_ends_it(gated, monkeypatch):
     close. The connect ends with ConnectionError, and nothing stays open. And
     the disconnect returns at once: made on the loop, the engine's wait for a
     login holding its turn held the loop."""
-    monkeypatch.setattr(ibkr_dx, "EClient", HoldsItsTurn)
+    monkeypatch.setattr(ib_dx, "EClient", HoldsItsTurn)
     ib = ib_async_dx.IB()
 
     async def disconnected():
@@ -188,7 +188,7 @@ def test_a_connect_overtaken_after_its_login_leaves_the_later_session_open(monke
     waiting after a later connect had overtaken it, failed once the later
     one had opened, and ib_async's disconnect on its way out closed the
     later one's session."""
-    monkeypatch.setattr(ibkr_dx, "EClient", SlowToNameTheOrders)
+    monkeypatch.setattr(ib_dx, "EClient", SlowToNameTheOrders)
     monkeypatch.setattr(SlowToNameTheOrders, "named", [])
     ib = ib_async_dx.attach(ib_async.IB()) if theirs else ib_async_dx.IB()
     ended = []
@@ -229,7 +229,7 @@ def test_a_connect_overtaken_in_its_startup_sync_fails_and_leaves_the_later_open
     """The earlier connect waited out its timeout on requests the later
     one's disconnect had dropped, then reported success on the later
     session, or failed and closed it."""
-    monkeypatch.setattr(ibkr_dx, "EClient", SlowFirstSync)
+    monkeypatch.setattr(ib_dx, "EClient", SlowFirstSync)
     monkeypatch.setattr(SlowFirstSync, "opened", [])
     ib = ib_async_dx.IB()
     connected = []
@@ -255,7 +255,7 @@ def test_a_connect_overtaken_in_its_startup_sync_fails_and_leaves_the_later_open
 
 
 def test_of_three_connects_at_once_the_last_is_left_open(monkeypatch):
-    monkeypatch.setattr(ibkr_dx, "EClient", SlowLogin)
+    monkeypatch.setattr(ib_dx, "EClient", SlowLogin)
     ib = ib_async_dx.IB()
 
     async def thrice():
@@ -286,7 +286,7 @@ def test_a_disconnect_from_a_handler_during_the_connect_ends_it(monkeypatch):
     """A notice the connect delivers, and a handler that disconnects on it:
     the disconnect was taken for ib_async's own on a failed connect, which
     does nothing while connecting, and the session opened anyway."""
-    monkeypatch.setattr(ibkr_dx, "EClient", NoticeOnTheFirstPass)
+    monkeypatch.setattr(ib_dx, "EClient", NoticeOnTheFirstPass)
     ib = ib_async_dx.IB()
     ib.errorEvent += lambda reqId, code, text, contract: code == 10197 and ib.disconnect()
 
@@ -306,7 +306,7 @@ def test_a_login_given_up_on_does_not_hold_the_program_open():
     child = f"""
 import asyncio, sys, time
 sys.path.insert(0, {str(pathlib.Path(__file__).parent)!r})
-import ibkr_dx
+import ib_dx
 from test_ib_runs_on_the_engine import OfflineEngine
 import ib_async_dx
 
@@ -314,7 +314,7 @@ class SecondFactor(OfflineEngine):
     def connect(self, **logon):
         time.sleep(20)
 
-ibkr_dx.EClient = SecondFactor
+ib_dx.EClient = SecondFactor
 
 async def main():
     try:
@@ -347,7 +347,7 @@ def test_a_handler_can_wait_on_the_session_under_startLoop():
     child = f"""
 import sys
 sys.path.insert(0, {str(pathlib.Path(__file__).parent)!r})
-import ib_async, ibkr_dx
+import ib_async, ib_dx
 from test_ib_runs_on_the_engine import SPY, OfflineEngine
 import ib_async_dx
 
@@ -356,7 +356,7 @@ class TakesItsTurn(OfflineEngine):
         self.disconnect()  # the engine's login takes the session's turn first
         super().connect(**logon)
 
-ibkr_dx.EClient = TakesItsTurn
+ib_dx.EClient = TakesItsTurn
 ib_async.util.startLoop()
 ibc = ib_async_dx.IBC(1012, gateway=True, tradingMode="paper", userid="u", password="p")
 ibc.start()
@@ -423,7 +423,7 @@ def test_a_login_given_up_on_reaches_nothing_and_keeps_nothing(monkeypatch, thei
     from its thread reached the wrapper the later session shares. Its session
     is closed by the login that opened it, on an engine of its own: on the
     later session's engine, that closed the later session."""
-    monkeypatch.setattr(ibkr_dx, "EClient", InstallsLate)
+    monkeypatch.setattr(ib_dx, "EClient", InstallsLate)
     monkeypatch.setattr(InstallsLate, "first", [])
     ib = ib_async_dx.attach(ib_async.IB()) if theirs else ib_async_dx.IB()
     heard = []
@@ -499,7 +499,7 @@ def test_their_wrapper_is_called_on_the_loops_thread_only(connect, monkeypatch):
     """The login runs off the loop, and the engine announces the session from
     it. Delivered there, their wrapper was called on another thread, beside
     the loop that owns it."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Announcing)
+    monkeypatch.setattr(ib_dx, "EClient", Announcing)
     ib = ib_async_dx.IB()
     threads = []
     for name in ("connectAck", "managedAccounts", "nextValidId", "tcpDataArrived"):
@@ -599,7 +599,7 @@ def test_requests_past_the_rate_leave_an_interval_later(connect):
 def test_a_loop_closed_without_disconnect_leaves_nothing_running(monkeypatch):
     """A program whose loop ends without a disconnect, as many scripts end.
     A thread kept feeding the closed loop, and said so on every turn."""
-    monkeypatch.setattr(ibkr_dx, "EClient", OfflineEngine)
+    monkeypatch.setattr(ib_dx, "EClient", OfflineEngine)
     raised = []
     monkeypatch.setattr(threading, "excepthook", raised.append)
     before = set(threading.enumerate())
@@ -625,7 +625,7 @@ def test_a_session_that_ends_as_it_opens_fails_the_connect_and_stops(monkeypatch
     """The connect raises, ib_async's apiError says why, and nothing more is
     done for the session: no passes, and no disconnectedEvent for a session
     that never opened, as ib_async's client says nothing of one either."""
-    monkeypatch.setattr(ibkr_dx, "EClient", EndsAtOnce)
+    monkeypatch.setattr(ib_dx, "EClient", EndsAtOnce)
     passes = _counting_passes(monkeypatch)
     ib = ib_async_dx.attach(ib_async.IB())
     said, ended = [], []
@@ -679,7 +679,7 @@ def test_a_login_refused_raises_ConnectionError_and_says_so(monkeypatch):
     """As ib_async's client fails a connect: a ConnectionError a program
     retrying on one catches, apiError said, and the client disconnected. It
     raised the engine's RuntimeError and stayed connecting."""
-    monkeypatch.setattr(ibkr_dx, "EClient", Refused)
+    monkeypatch.setattr(ib_dx, "EClient", Refused)
     ib = ib_async_dx.attach(ib_async.IB())
     said = []
     ib.client.apiError += said.append
@@ -709,10 +709,10 @@ def test_timeout_bounds_the_wait_after_the_login_not_the_login(connect, monkeypa
     engine answers the next id at once after its login, which has already
     waited for the venue to name the working orders; were it to wait, the
     wait would be bounded by `timeout`, which is what this guards."""
-    monkeypatch.setattr(ibkr_dx, "EClient", SlowLogin)
+    monkeypatch.setattr(ib_dx, "EClient", SlowLogin)
     assert connect(timeout=0.1).isConnected(), "a login slower than timeout"
 
-    monkeypatch.setattr(ibkr_dx, "EClient", SlowAfter)
+    monkeypatch.setattr(ib_dx, "EClient", SlowAfter)
     ib = ib_async_dx.IB()
     started = time.monotonic()
     with pytest.raises(TimeoutError):
@@ -916,7 +916,7 @@ def test_a_handler_that_ends_the_session_mid_pass_ends_the_pass(monkeypatch, cap
     """As their client drops what it had read once a handler disconnects:
     a price held for the end of the pass reached a wrapper the disconnect
     had cleared, which logged it as a request it did not know."""
-    monkeypatch.setattr(ibkr_dx, "EClient", NoticeAfterQuotes)
+    monkeypatch.setattr(ib_dx, "EClient", NoticeAfterQuotes)
     ib = ib_async_dx.IB()
     ib.connect(fetchFields=StartupFetchNONE)
     engine = ib.client._client
@@ -939,7 +939,7 @@ def test_an_interrupted_connect_opens_nothing_later(monkeypatch):
     """An interrupt leaves ib_async's loop with the connect still on it, and
     the next call that ran the loop finished it: the session the program had
     been stopped from opening opened."""
-    monkeypatch.setattr(ibkr_dx, "EClient", SlowLogin)
+    monkeypatch.setattr(ib_dx, "EClient", SlowLogin)
     ib = ib_async_dx.IB()
 
     def interrupt():

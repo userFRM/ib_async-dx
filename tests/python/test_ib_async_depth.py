@@ -73,9 +73,9 @@ def test_a_commission_report_reaches_them_as_their_own_type():
 
     from ib_async.objects import CommissionReport
 
-    import ibkr_dx
+    import ib_dx
 
-    ours = ibkr_dx.CommissionAndFeesReport()
+    ours = ib_dx.CommissionAndFeesReport()
     ours.execId = "0000e1a7.68a1b2c3.01.01"
     ours.commission = 1.25
     ours.currency = "USD"
@@ -128,10 +128,10 @@ def test_a_historical_tick_is_handed_over_as_their_own_record():
     """
     from ib_async.objects import HistoricalTickBidAsk, HistoricalTickLast
 
-    import ibkr_dx
+    import ib_dx
     import ib_async_dx.bridge
 
-    quote = ibkr_dx.HistoricalTickBidAsk(
+    quote = ib_dx.HistoricalTickBidAsk(
         time=1_786_795_200, price_bid=1.5, price_ask=1.6, size_bid=10.0, size_ask=20.0,
     )
     theirs = ib_async_dx.bridge._as_theirs(quote)
@@ -142,7 +142,7 @@ def test_a_historical_tick_is_handed_over_as_their_own_record():
     assert theirs.time.year == 2026, "and a moment, not a number"
     assert theirs.time.tzinfo is not None, "aware, which their frame conversion needs"
 
-    trade = ibkr_dx.HistoricalTickLast(
+    trade = ib_dx.HistoricalTickLast(
         time=1_786_795_200, price=2.5, size=3.0, exchange="ARCA",
     )
     theirs = ib_async_dx.bridge._as_theirs(trade)

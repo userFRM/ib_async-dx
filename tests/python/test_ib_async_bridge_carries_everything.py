@@ -10,7 +10,7 @@ cost arrived as a type their wrapper cannot read.
 import ib_async
 import pytest
 
-import ibkr_dx
+import ib_dx
 from ib_async_dx.bridge import IbkrDxClient, _LoopBound
 
 
@@ -97,7 +97,7 @@ def test_a_fills_cost_arrives_as_the_record_their_wrapper_reads():
             seen.append(report)
 
     bound = _LoopBound(Wrapper())
-    ours = ibkr_dx.CommissionAndFeesReport()
+    ours = ib_dx.CommissionAndFeesReport()
     ours.execId = "0001.1"
     ours.commissionAndFees = 1.25
     ours.currency = "USD"
@@ -211,7 +211,7 @@ def test_a_bar_carries_its_average_price():
     reads `average`. Unmapped, every bar arrived with an average of nought."""
     from ib_async_dx.bridge import _as_theirs
 
-    bar = ibkr_dx.BarData()
+    bar = ib_dx.BarData()
     bar.date, bar.close, bar.wap, bar.barCount = "20260918", 101.0, 100.75, 12
     theirs = _as_theirs(bar)
     assert isinstance(theirs, ib_async.BarData)
@@ -223,7 +223,7 @@ def test_a_condition_arrives_saying_how_it_joins_the_next():
     or "o". Unmapped, an or arrived as their default, an and."""
     from ib_async_dx.bridge import _as_theirs
 
-    joined = ibkr_dx.PriceCondition()
+    joined = ib_dx.PriceCondition()
     joined.isConjunctionConnection = False
     assert _as_theirs(joined).conjunction == "o"
     joined.isConjunctionConnection = True
@@ -236,11 +236,11 @@ def test_a_record_theirs_builds_whole_arrives_whole():
     time, neither could be made at all."""
     from ib_async_dx.bridge import _as_theirs
 
-    code = ibkr_dx.FamilyCode()
+    code = ib_dx.FamilyCode()
     code.accountID, code.familyCodeStr = "DU000000", "F1"
     assert _as_theirs(code) == ib_async.FamilyCode("DU000000", "F1")
 
-    component = ibkr_dx.SmartComponent()
+    component = ib_dx.SmartComponent()
     component.bitNumber, component.exchange, component.exchangeLetter = 4, "ARCA", "P"
     assert _as_theirs(component) == ib_async.SmartComponent(4, "ARCA", "P")
 
@@ -328,17 +328,17 @@ def test_an_executions_time_arrives_as_the_moment_their_record_declares():
     seen = []
     ib.wrapper.execDetails = lambda reqId, contract, execution: seen.append(execution)
 
-    ours = ibkr_dx.Execution()
+    ours = ib_dx.Execution()
     ours.execId = "0001.1"
     ours.time = "20260926  09:30:00"
-    _LoopBound(ib.wrapper).exec_details(7, ibkr_dx.Contract(), ours)
+    _LoopBound(ib.wrapper).exec_details(7, ib_dx.Contract(), ours)
 
     assert seen and isinstance(seen[0], ib_async.Execution)
     assert seen[0].time == datetime.datetime(2026, 9, 26, 13, 30,
                                              tzinfo=datetime.timezone.utc)
     assert seen[0].time.tzinfo == datetime.timezone.utc, "the wrapper's zone"
 
-    bar = ibkr_dx.BarData()
+    bar = ib_dx.BarData()
     bar.date = "20260918"
     assert _as_theirs(bar, ib.wrapper).date == "20260918", "their parser's own"
 
@@ -346,7 +346,7 @@ def test_an_executions_time_arrives_as_the_moment_their_record_declares():
     # declares `time: str` (order.py:515-519), and ib_async's parse() skips
     # string fields (decoder.py:185-198), so a condition's time crosses as
     # the string the engine states.
-    cond = ibkr_dx.TimeCondition()
+    cond = ib_dx.TimeCondition()
     cond.time = "20260926 09:30:00"
     assert _as_theirs(cond, ib.wrapper).time == "20260926 09:30:00"
 
@@ -385,7 +385,7 @@ def test_a_ticks_moment_is_built_in_the_wrappers_own_zone():
     from zoneinfo import ZoneInfo
 
     amsterdam = ZoneInfo("Europe/Amsterdam")
-    tick = ibkr_dx.HistoricalTick(time=1758873000, price=100.5, size=10.0)
+    tick = ib_dx.HistoricalTick(time=1758873000, price=100.5, size=10.0)
 
     ib = ib_async.IB()
     ib.wrapper.defaultTimezone = amsterdam
@@ -415,7 +415,7 @@ def test_a_figure_their_record_declares_as_an_int_arrives_as_one():
     would give '100.0'."""
     from ib_async_dx.bridge import _as_theirs
 
-    cd = ibkr_dx.ContractDetails()
+    cd = ib_dx.ContractDetails()
     cd.evMultiplier = 100
     theirs = _as_theirs(cd)
     assert theirs.evMultiplier == 100
@@ -480,7 +480,7 @@ def test_a_size_the_engine_states_as_a_decimal_arrives_as_their_float():
     assert type(seen[0]) is float and seen[0] == 400.0, seen
 
     # A record is rebuilt field by field; a Decimal field arrives as float.
-    ours = ibkr_dx.Execution()
+    ours = ib_dx.Execution()
     ours.execId = "0001.1"
     ours.time = "20260928  12:00:00"
     ours.shares = Decimal("150")

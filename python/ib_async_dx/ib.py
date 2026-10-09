@@ -1,4 +1,4 @@
-"""ib_async's ``ib`` module, with :class:`IB` running on the ibkr-dx engine.
+"""ib_async's ``ib`` module, with :class:`IB` running on the ib-dx engine.
 
 Every other name ib_async's module has is ib_async's own object here.
 :class:`TickerExtras`, :class:`OptionModel`, :class:`OrderPreset`,
@@ -24,7 +24,7 @@ from ib_async.objects import AccountValue, Position, TradeLogEntry
 from ib_async.order import OrderStatus
 from ib_async.ticker import Ticker
 from ib_async.wrapper import RequestError
-from ibkr_dx import SpreadScan
+from ib_dx import SpreadScan
 
 from .bridge import PASS_INTERVAL, IbkrDxClient, attach
 
@@ -188,7 +188,7 @@ def _current_task() -> asyncio.Task | None:
 
 
 class IB(ib_async.ib.IB):
-    """ib_async's IB, with the ibkr-dx engine as its transport.
+    """ib_async's IB, with the ib-dx engine as its transport.
 
     ib_async's own code does everything: :meth:`connect` puts the engine in
     place of ib_async's Client (see :func:`ib_async_dx.bridge.attach`), then
@@ -244,7 +244,7 @@ class IB(ib_async.ib.IB):
                 ``IBC`` holds is used, its ``tradingMode`` decides instead:
                 live where it is ``'live'``, and paper otherwise.
             sessionFile: Where the session is kept between runs. ``None`` is
-                ``~/.ibkr_dx/session-{username}-{paper|live}``; ``False``
+                ``~/.ib_dx/session-{username}-{paper|live}``; ``False``
                 keeps nothing.
 
         The other arguments are ib_async's.

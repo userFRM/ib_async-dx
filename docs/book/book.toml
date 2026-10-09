@@ -1,6 +1,6 @@
 [book]
 title = "ib_async-dx"
-description = "ib_async without the gateway, on the ibkr-dx engine."
+description = "ib_async without the gateway, on the ib-dx engine."
 authors = ["ib_async-dx contributors"]
 language = "en"
 src = "src"
