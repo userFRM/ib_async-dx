@@ -1,4 +1,4 @@
-//! ib_async in Rust: its model and names in Rust spelling, on the ibkr-dx
+//! ib_async in Rust: its model and names in Rust spelling, on the ib-dx
 //! engine, with no gateway in between.
 //!
 //! [`IB`] is ib_async's `IB`. The types ib_async exports, from `Contract` and

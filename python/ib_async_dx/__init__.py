@@ -1,4 +1,4 @@
-"""ib_async on the ibkr-dx engine, without a gateway.
+"""ib_async on the ib-dx engine, without a gateway.
 
 This is ib_async's public API unchanged: the same names, the same objects and
 the same submodules, run by ib_async's own code as a dependency. The

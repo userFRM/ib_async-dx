@@ -52,9 +52,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          repository: userFRM/ibkr-dx
+          repository: userFRM/ib-dx
           ref: ${{ env.ENGINE_REF }}
-          path: ibkr-dx
+          path: ib-dx
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -62,13 +62,13 @@ jobs:
       - name: Build
         run: |
           python -m pip install maturin build
-          maturin build -m ibkr-dx/Cargo.toml --features python,extension-module,test-helpers -o engine
+          maturin build -m ib-dx/Cargo.toml --features python,extension-module,test-helpers -o engine
           python -m build --outdir dist
       - name: The wheel and the source distribution each pass the suite
         run: |
           for artifact in dist/ib_async_dx-*.whl dist/ib_async_dx-*.tar.gz; do
             python -m venv "$RUNNER_TEMP/check"
-            "$RUNNER_TEMP/check/bin/pip" install engine/ibkr_dx-*.whl "$artifact" pytest pytest-asyncio
+            "$RUNNER_TEMP/check/bin/pip" install engine/ib_dx-*.whl "$artifact" pytest pytest-asyncio
             "$RUNNER_TEMP/check/bin/python" -m pytest tests/python -q -p no:cacheprovider
             rm -rf "$RUNNER_TEMP/check"
           done

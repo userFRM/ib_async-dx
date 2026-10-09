@@ -94,7 +94,7 @@ so.
 The session lives in the program's process and ends with it. A gateway held
 its login while a program restarted; here each start logs in, and on a live
 account that login waits on the second factor. The session is kept in
-`~/.ibkr_dx/session-<user>-<paper|live>` unless `connect` is given another
+`~/.ib_dx/session-<user>-<paper|live>` unless `connect` is given another
 `sessionFile`, and a start naming a session the venue still holds is answered
 with a challenge rather than a full login. The venue lets a session go soon
 after its process ends, so that covers a quick restart only.
@@ -122,4 +122,4 @@ program meeting one for the first time reads it as a fault here.
 * **The protocol is not published.** The venue can change it without notice.
 
 The engine's own limits — what it measures, and what no session has settled
-yet — are set out in [ibkr-dx's documentation](https://userfrm.github.io/ibkr-dx/).
+yet — are set out in [ib-dx's documentation](https://userfrm.github.io/ib-dx/).

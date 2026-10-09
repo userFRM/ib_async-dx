@@ -9,7 +9,7 @@ cost arrived as a type their wrapper cannot read.
 
 import ib_async
 
-import ibkr_dx
+import ib_dx
 from ib_async_dx.bridge import IbkrDxClient, _LoopBound
 
 
@@ -87,7 +87,7 @@ def test_a_fills_cost_arrives_as_the_record_their_wrapper_reads():
             seen.append(report)
 
     bound = _LoopBound(Wrapper())
-    ours = ibkr_dx.CommissionAndFeesReport()
+    ours = ib_dx.CommissionAndFeesReport()
     ours.execId = "0001.1"
     ours.commissionAndFees = 1.25
     ours.currency = "USD"
@@ -159,7 +159,7 @@ def test_a_bar_carries_its_average_price():
     reads `average`. Unmapped, every bar arrived with an average of nought."""
     from ib_async_dx.bridge import _as_theirs
 
-    bar = ibkr_dx.BarData()
+    bar = ib_dx.BarData()
     bar.date, bar.close, bar.wap, bar.barCount = "20260918", 101.0, 100.75, 12
     theirs = _as_theirs(bar)
     assert isinstance(theirs, ib_async.BarData)
@@ -171,7 +171,7 @@ def test_a_condition_arrives_saying_how_it_joins_the_next():
     or "o". Unmapped, an or arrived as their default, an and."""
     from ib_async_dx.bridge import _as_theirs
 
-    joined = ibkr_dx.PriceCondition()
+    joined = ib_dx.PriceCondition()
     joined.isConjunctionConnection = False
     assert _as_theirs(joined).conjunction == "o"
     joined.isConjunctionConnection = True
@@ -184,11 +184,11 @@ def test_a_record_theirs_builds_whole_arrives_whole():
     time, neither could be made at all."""
     from ib_async_dx.bridge import _as_theirs
 
-    code = ibkr_dx.FamilyCode()
+    code = ib_dx.FamilyCode()
     code.accountID, code.familyCodeStr = "DU000000", "F1"
     assert _as_theirs(code) == ib_async.FamilyCode("DU000000", "F1")
 
-    component = ibkr_dx.SmartComponent()
+    component = ib_dx.SmartComponent()
     component.bitNumber, component.exchange, component.exchangeLetter = 4, "ARCA", "P"
     assert _as_theirs(component) == ib_async.SmartComponent(4, "ARCA", "P")
 

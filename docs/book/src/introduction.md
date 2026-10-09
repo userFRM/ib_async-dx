@@ -21,7 +21,7 @@
 A program written against [ib_async](https://github.com/ib-api-reloaded/ib_async)
 talks to IB Gateway or Trader Workstation over a socket on localhost, and that
 process talks to the venue. ib_async-dx puts the
-[ibkr-dx](https://github.com/userFRM/ibkr-dx) engine where the gateway was: it
+[ib-dx](https://github.com/userFRM/ib-dx) engine where the gateway was: it
 logs in, holds the trading, market-data, historical and security-definition
 connections open, and answers every call ib_async makes.
 

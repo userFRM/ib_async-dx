@@ -170,7 +170,7 @@ def test_every_call_their_library_makes_is_carried():
     import inspect
     import re
 
-    import ibkr_dx
+    import ib_dx
 
     src = inspect.getsource(ib_async.ib)
     called = sorted(set(re.findall(r"self\.client\.(\w+)\(", src)))
@@ -180,7 +180,7 @@ def test_every_call_their_library_makes_is_carried():
     unrouted = [
         name for name in called
         if name not in spelled_out
-        and not hasattr(ibkr_dx.EClient, ib_async_dx.bridge._our_name_for(name, ibkr_dx.EClient))
+        and not hasattr(ib_dx.EClient, ib_async_dx.bridge._our_name_for(name, ib_dx.EClient))
     ]
     assert not unrouted, f"their library calls what this engine does not carry: {unrouted}"
 
@@ -267,13 +267,13 @@ def test_a_field_at_their_default_is_carried():
     terms the program never stated: `openClose` is "O" there and empty here.
     What their client sends as an empty field — None, an empty string or list,
     their unset number — is what is left to the engine."""
-    import ibkr_dx
+    import ib_dx
 
     ours = ib_async_dx.bridge._as_ours(ib_async.LimitOrder("BUY", 1, 1.0))
     assert ours.openClose == "O"
     assert ours.usePriceMgmtAlgo == 0, "theirs is False, and the engine's own None"
     assert ours.lmtPrice == 1.0
-    assert ours.auxPrice == ibkr_dx.Order().auxPrice, "their unset is the engine's own"
+    assert ours.auxPrice == ib_dx.Order().auxPrice, "their unset is the engine's own"
     assert ours.algoParams == [], "an empty list states nothing"
 
 

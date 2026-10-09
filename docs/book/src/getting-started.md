@@ -16,7 +16,7 @@ repositories.
 ## Install
 
 ```bash
-pip install "git+https://github.com/userFRM/ibkr-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
+pip install "git+https://github.com/userFRM/ib-dx@6cfe6f134a069228bbd4035b7eae2ac5b31159e9"
 pip install "ib_async-dx @ git+https://github.com/userFRM/ib_async-dx"
 ```
 
@@ -131,7 +131,7 @@ which refuses to send anything that places, changes or withdraws an order, as a
 gateway set to read-only does.
 
 **The session is kept between runs.** With `sessionFile=None` it is kept in
-`~/.ibkr_dx/session-<user>-<paper|live>`: readable by its owner only, sealed
+`~/.ib_dx/session-<user>-<paper|live>`: readable by its owner only, sealed
 with the password, and refused if it names another account. A start that names
 a session the venue still holds is answered with a challenge rather than a full
 login. The venue lets a session go soon after the process holding it ends, so

@@ -29,22 +29,22 @@ from ib_async_dx import Contract, Order
 #: A share can be named instead, which is worth doing during a session or in the
 #: hours either side of one — the order path is the same and the venues are not:
 #:
-#:     IBKR_DX_RT_SYMBOL=SPY IBKR_DX_RT_SEC_TYPE=STK IBKR_DX_RT_EXCHANGE=SMART \
-#:     IBKR_DX_RT_PRICE=400 IBKR_DX_RT_OUTSIDE_RTH=1 python scripts/order_round_trip.py
-SYMBOL = os.environ.get("IBKR_DX_RT_SYMBOL", "MES")
-SEC_TYPE = os.environ.get("IBKR_DX_RT_SEC_TYPE", "FUT")
-EXCHANGE = os.environ.get("IBKR_DX_RT_EXCHANGE", "CME")
-EXPIRY = os.environ.get("IBKR_DX_RT_EXPIRY", "202612")
+#:     IB_DX_RT_SYMBOL=SPY IB_DX_RT_SEC_TYPE=STK IB_DX_RT_EXCHANGE=SMART \
+#:     IB_DX_RT_PRICE=400 IB_DX_RT_OUTSIDE_RTH=1 python scripts/order_round_trip.py
+SYMBOL = os.environ.get("IB_DX_RT_SYMBOL", "MES")
+SEC_TYPE = os.environ.get("IB_DX_RT_SEC_TYPE", "FUT")
+EXCHANGE = os.environ.get("IB_DX_RT_EXCHANGE", "CME")
+EXPIRY = os.environ.get("IB_DX_RT_EXPIRY", "202612")
 
 #: Far enough under the market that it cannot trade whatever the market is
 #: doing, and on the contract's own increment. Stated rather than read off a
 #: quote: this check is about the order path, and asking for a quote makes it
 #: need an entitlement it does not otherwise use.
-RESTS_AT = float(os.environ.get("IBKR_DX_RT_PRICE", "6000"))
+RESTS_AT = float(os.environ.get("IB_DX_RT_PRICE", "6000"))
 
 #: Whether the order may work outside the regular session. A share resting
 #: before the bell needs this said; a future does not have the distinction.
-OUTSIDE_RTH = os.environ.get("IBKR_DX_RT_OUTSIDE_RTH", "") not in ("", "0")
+OUTSIDE_RTH = os.environ.get("IB_DX_RT_OUTSIDE_RTH", "") not in ("", "0")
 
 #: How long the venue is given to answer each step.
 ANSWER = 20

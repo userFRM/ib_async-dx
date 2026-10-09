@@ -63,7 +63,7 @@ def engine_wrapper():
         capture_output=True,
         text=True,
     )
-    pkg = next(p for p in json.loads(meta.stdout)["packages"] if p["name"] == "ibkr-dx")
+    pkg = next(p for p in json.loads(meta.stdout)["packages"] if p["name"] == "ib-dx")
     return Path(pkg["manifest_path"]).parent / "src" / "api" / "wrapper.rs"
 
 

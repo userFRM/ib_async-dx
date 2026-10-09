@@ -74,9 +74,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Only src/engine.rs names the engine
         run: |
-          named=$(grep -rl --include='*.rs' 'ibkr_dx' src | grep -v -e '^src/engine\.rs$' -e '^src/tests/' || true)
+          named=$(grep -rl --include='*.rs' 'ib_dx' src | grep -v -e '^src/engine\.rs$' -e '^src/tests/' || true)
           if [ -n "$named" ]; then
-            echo "these files name ibkr_dx outside src/engine.rs:"; echo "$named"; exit 1
+            echo "these files name ib_dx outside src/engine.rs:"; echo "$named"; exit 1
           fi
       - name: Every engine callback is recorded
         run: python3 scripts/check_record.py
